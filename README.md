@@ -1,6 +1,6 @@
 # POJO-actor
 
-A lightweight, GraalVM-native compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead.
+A lightweight, GraalVM-native compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead. Built with just ~800 lines of code, POJO-actor delivers a complete actor model implementation without sacrificing functionality or performance.
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
