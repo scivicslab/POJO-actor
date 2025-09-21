@@ -1,0 +1,1 @@
+typeSearchIndex = [{"p":"com.scivicslab.pojoactor","l":"ActorRef"},{"p":"com.scivicslab.pojoactor","l":"ActorSystem"},{"l":"All Classes and Interfaces","u":"allclasses-index.html","k":"18"},{"p":"com.scivicslab.pojoactor","l":"ActorSystem.Builder"},{"p":"com.scivicslab.pojoactor.pojo","l":"Root"}];updateSearchResults();
