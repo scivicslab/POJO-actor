@@ -4,7 +4,7 @@ A lightweight, GraalVM-native compatible actor model library for Java that turns
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-1.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-1.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 ## Architecture
 

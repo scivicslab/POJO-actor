@@ -9,8 +9,8 @@ dest=$PWD/docs
 mkdir -p ${dest}
 
 # Remove existing docs if they exist
-rm -Rf ${dest}/POJO-actor
+rm -Rf ${dest}/*
 
 # Move generated javadoc to destination
-mv target/site/apidocs ${dest}/POJO-actor
+mv target/site/apidocs/* ${dest}/
 
