@@ -3,7 +3,7 @@
 export LANG=en_US.UTF-8
 mvn javadoc:javadoc
 
-dest=$PWD/doc
+dest=$PWD/docs
 
 # Create destination directory if it doesn't exist
 mkdir -p ${dest}
