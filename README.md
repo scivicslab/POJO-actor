@@ -338,7 +338,11 @@ POJO-actor was inspired by Alexander Zakusylo's [`actr`](https://medium.com/@zak
 
 We acknowledge the foundational work done by the `actr` library team in making actor model programming more accessible to Java developers.
 
+## Future Plans
+
+- `tellNow`: add an API that can bypass the actor's virtual-thread mailbox and execute a message immediately when the caller needs synchronous semantics.
+- Clear pending messages: provide a utility that resets an actor's message queue to simplify test setups and restart scenarios.
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
