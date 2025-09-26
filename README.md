@@ -1,6 +1,6 @@
 # POJO-actor
 
-A lightweight, GraalVM-native compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead. Built with just ~800 lines of code, POJO-actor delivers a complete actor model implementation without sacrificing functionality or performance.
+A lightweight, GraalVM Native Image compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead. 
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -8,7 +8,8 @@ A lightweight, GraalVM-native compatible actor model library for Java that turns
 
 ## Architecture
 
-POJO-actor implements a simplified actor model built on modern Java features:
+POJO-actor implements a simplified actor model built on modern Java features.
+Built with just ~800 lines of code, POJO-actor delivers a practical actor model implementation without sacrificing functionality or performance.
 
 - **ActorSystem**: Manages actor lifecycle and configurable work-stealing thread pools
 - **ActorRef**: Reference to an actor that provides `tell()` and `ask()` messaging interface  
@@ -337,6 +338,8 @@ POJO-actor was inspired by Alexander Zakusylo's [`actr`](https://medium.com/@zak
 
 
 We acknowledge the foundational work done by the `actr` library team in making actor model programming more accessible to Java developers.
+
+We also acknowledge [`Comedy.js`](https://github.com/untu/comedy), a Node.js actor framework, which inspired POJO-actor's basic architecture design, particularly the **ActorSystem** and **ActorRef** concepts. While Comedy.js uses one process or one real thread per actor, POJO-actor leverages Java's virtual threads to enable thousands of lightweight actors.
 
 ## Future Plans
 
