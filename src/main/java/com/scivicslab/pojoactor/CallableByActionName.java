@@ -117,6 +117,7 @@ package com.scivicslab.pojoactor;
  * <h2>Comparison with Reflection Approach</h2>
  *
  * <table border="1">
+ * <caption>Comparison of CallableByActionName vs Reflection</caption>
  * <tr>
  *   <th>Aspect</th>
  *   <th>CallableByActionName</th>

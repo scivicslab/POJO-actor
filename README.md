@@ -23,6 +23,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Actor-Level Job Management**: Track and cancel CPU-bound jobs per actor independently
 - **Immediate Execution**: `tellNow()` and `askNow()` bypass message queues for urgent operations
 - **Dynamic Actor Loading**: Load actors from external JARs at runtime using standard URLClassLoader
+- **Workflow Engine**: Integrated YAML/JSON-based workflow orchestration for data-driven actor coordination
 - **Plugin Architecture**: ServiceLoader-based plugin system for automatic actor registration
 - **Production Ready**: Enhanced error handling and resource management for real-world applications
 
@@ -231,6 +232,189 @@ ActorRef<ChildActor> child = parent.createChild("child", new ChildActor());
 Set<String> children = parent.getNamesOfChildren();
 ```
 
+### Workflow Engine (YAML/JSON-Based Actor Orchestration)
+
+POJO-actor v2.0.0 includes an integrated workflow engine that allows you to define and execute actor-based workflows using YAML or JSON files. This enables data-driven, configuration-based actor orchestration without hardcoding workflow logic.
+
+#### Key Components
+
+- **`IIActorSystem`**: Extended ActorSystem that manages workflow-compatible actors
+- **`IIActorRef`**: Actor reference that can be invoked by string-based action names
+- **`Interpreter`**: Workflow execution engine that reads YAML/JSON and orchestrates actors
+- **`CallableByActionName`**: Interface that plugins implement for string-based invocation
+
+#### Basic Workflow Example
+
+**1. Define Workflow-Compatible Actor:**
+
+```java
+import com.scivicslab.pojoactor.workflow.*;
+import com.scivicslab.pojoactor.*;
+
+// Your actor implements CallableByActionName
+public class DataProcessor implements CallableByActionName {
+    private int processedCount = 0;
+
+    @Override
+    public ActionResult callByActionName(String actionName, String args) {
+        switch (actionName) {
+            case "process":
+                processedCount++;
+                return new ActionResult(true, "Processed: " + args);
+
+            case "getCount":
+                return new ActionResult(true, String.valueOf(processedCount));
+
+            default:
+                return new ActionResult(false, "Unknown action: " + actionName);
+        }
+    }
+}
+```
+
+**2. Create Workflow-Compatible Actor Reference:**
+
+```java
+// Create IIActorRef (Interpreter-Interfaced ActorRef)
+public class DataProcessorIIAR extends IIActorRef<DataProcessor> {
+
+    public DataProcessorIIAR(String actorName, DataProcessor object, IIActorSystem system) {
+        super(actorName, object, system);
+    }
+
+    @Override
+    public ActionResult callByActionName(String actionName, String args) {
+        try {
+            // Delegate to the actor object
+            return this.ask(obj -> obj.callByActionName(actionName, args)).get();
+        } catch (Exception e) {
+            return new ActionResult(false, "Error: " + e.getMessage());
+        }
+    }
+}
+```
+
+**3. Define Workflow in YAML:**
+
+```yaml
+# workflow.yaml
+name: DataProcessingWorkflow
+
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [processor, process, "data1.csv"]
+      - [processor, process, "data2.csv"]
+
+  - states: ["1", "2"]
+    actions:
+      - [processor, getCount, ""]
+      - [logger, log, "Processing complete"]
+
+  - states: ["2", "end"]
+    actions:
+      - [system, shutdown, ""]
+```
+
+**4. Execute Workflow:**
+
+```java
+// Create workflow-compatible actor system
+IIActorSystem system = new IIActorSystem("workflowSystem");
+
+// Register actors
+DataProcessorIIAR processor = new DataProcessorIIAR(
+    "processor",
+    new DataProcessor(),
+    system
+);
+system.addIIActor(processor);
+
+// Create and configure interpreter
+Interpreter interpreter = new Interpreter.Builder()
+    .loggerName("WorkflowInterpreter")
+    .team(system)
+    .build();
+
+// Load workflow from YAML
+try (InputStream input = new FileInputStream("workflow.yaml")) {
+    interpreter.readYaml(input);
+}
+
+// Execute workflow step by step
+ActionResult result = interpreter.execCode();  // Executes state 0 -> 1
+System.out.println("Step 1: " + result.getResult());
+
+result = interpreter.execCode();  // Executes state 1 -> 2
+System.out.println("Step 2: " + result.getResult());
+
+result = interpreter.execCode();  // Executes state 2 -> end
+System.out.println("Step 3: " + result.getResult());
+
+system.terminate();
+```
+
+#### Workflow Format
+
+Each workflow consists of a **matrix** of rows, where each row defines:
+- **states**: `[currentState, nextState]` - State transition
+- **actions**: List of `[actorName, actionName, arguments]` - Actions to execute
+
+**State Transitions:**
+```
+[0] ---> [1] ---> [2] ---> [end]
+  |        |        |
+  actions  actions  actions
+```
+
+#### Benefits of Workflow Engine
+
+- **Configuration-Driven**: Change behavior without recompiling
+- **Visual Workflow Design**: YAML/JSON files are human-readable
+- **Distributed System Ready**: All messages are strings (network-serializable)
+- **Hot Reload**: Load new workflows at runtime
+- **Testing**: Easy to test workflows in isolation
+- **Version Control**: Workflows are text files (git-friendly)
+
+#### JSON Workflow Format
+
+You can also use JSON instead of YAML:
+
+```json
+{
+  "name": "DataProcessingWorkflow",
+  "matrix": [
+    {
+      "states": ["0", "1"],
+      "actions": [
+        ["processor", "process", "data1.csv"],
+        ["processor", "process", "data2.csv"]
+      ]
+    },
+    {
+      "states": ["1", "end"],
+      "actions": [
+        ["processor", "getCount", ""]
+      ]
+    }
+  ]
+}
+```
+
+```java
+// Load from JSON
+try (InputStream input = new FileInputStream("workflow.json")) {
+    interpreter.readJson(input);
+}
+```
+
+#### Use Cases
+
+- **Data Pipelines**: ETL workflows with multiple processing stages
+- **State Machines**: Complex state transitions with side effects
+- **Business Processes**: Multi-step approval workflows
+- **Batch Processing**: Scheduled jobs with dependencies
+- **Integration Flows**: Coordinating multiple services/actors
 
 ## GraalVM Native Image Support
 
@@ -255,16 +439,58 @@ native-image -jar target/POJO-actor-2.0.0-fat.jar -o pojo-actor-native
 
 **No additional configuration files or reflection hints are required for core features.**
 
-### Dynamic Actor Loading: Limited Support ⚠️
+### Dynamic Actor Loading: Improved Compatibility ✅
 
-The **Dynamic Actor Loader** feature (optional) uses URLClassLoader and Reflection for runtime extensibility. This feature has limitations in Native Image mode:
+The **Dynamic Actor Loader** feature (optional, new in v2.0.0) uses the **actor-WF approach** with string-based action invocation, significantly improving Native Image compatibility compared to traditional reflection-based approaches.
 
-- Requires `reflect-config.json` for plugin classes
-- Plugin methods are invoked via Reflection API
-- Full dynamic class loading is restricted in Native Image
-- **Recommended**: Use JIT mode for complete dynamic loading capabilities
+**How it works**:
+- **Plugin Loading**: Uses URLClassLoader to load external JARs (one-time reflection for class instantiation)
+- **Action Invocation**: Uses `CallableByActionName` interface with **switch statements** (zero reflection at runtime)
+- **String-Based Messaging**: All actions are invoked via action names and string arguments
 
-**Conclusion**: POJO-actor core remains fully Native Image ready. Dynamic Actor Loading is an optional feature designed primarily for JIT mode.
+**Native Image Compatibility**:
+
+| Component | Reflection Used | Frequency | Native Image Support |
+|-----------|----------------|-----------|---------------------|
+| Class Loading | ✅ Yes (Class.newInstance) | Once per plugin | Configurable via reflect-config.json |
+| Action Invocation | ❌ No (switch statement) | Every call | ✅ Fully compatible |
+
+**Example: Reflection-Free Action Invocation**
+```java
+// Plugin implements CallableByActionName
+public class MathPlugin implements CallableByActionName {
+    @Override
+    public ActionResult callByActionName(String actionName, String args) {
+        switch (actionName) {  // ← No reflection, Native Image friendly!
+            case "add": return handleAdd(args);
+            case "multiply": return handleMultiply(args);
+            default: return new ActionResult(false, "Unknown action");
+        }
+    }
+}
+
+// String-based invocation (serializable, network-ready)
+mathActor.tell(m -> m.callByActionName("add", "5,3"));
+```
+
+**Benefits for Native Image**:
+- ✅ **Action invocation is reflection-free**: switch statements compile to native code
+- ✅ **Minimal configuration**: Only need to register plugin class constructors, not individual methods
+- ✅ **Distributed system ready**: String-based messages can be sent across network boundaries
+- ✅ **YAML/JSON workflow support**: Actions can be defined in external configuration files
+
+**Configuration**:
+```json
+// reflect-config.json (minimal, only for class loading)
+[
+  {
+    "name": "com.example.MathPlugin",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  }
+]
+```
+
+**Conclusion**: With the actor-WF approach, Dynamic Actor Loading is **Native Image compatible** for runtime action invocation. Only the initial plugin class loading requires minimal reflection configuration. For complete dynamic loading from external JARs, JIT mode is still recommended.
 
 ## Performance
 
@@ -331,8 +557,16 @@ processor.tell(p -> p.logStatus()); // This won't be blocked by heavy computatio
 
 ## Dependencies
 
-- **Runtime**: JDK standard library only
-- **Testing**: JUnit 5, Apache Commons Math (test scope only)
+### Core Features
+- **Runtime**: JDK 21+ standard library only (zero external dependencies)
+
+### Workflow Engine (optional)
+- **SnakeYAML 1.33**: YAML parsing for workflow definitions
+- **Jackson Databind 2.13.0**: JSON parsing for workflow definitions
+
+### Testing
+- **JUnit 5**: Unit testing framework
+- **Apache Commons Math 3.6.1**: Matrix operations in performance tests (test scope only)
 
 ## Building
 
@@ -401,34 +635,77 @@ int cancelled = processor.clearPendingMessages();
 // ✅ Both message queue and WorkerPool jobs are cancelled!
 ```
 
-### Dynamic Actor Loading
+### Dynamic Actor Loading (actor-WF Approach)
 - **Runtime Extensibility**: Load actors from external JARs without restarting the application
-- **OSGi-like Plugins**: Achieve plugin functionality using only JDK standard APIs (URLClassLoader)
+- **String-Based Action Invocation**: Use `CallableByActionName` interface for reflection-free method calls
+- **Distributed System Ready**: All messages are string-based, enabling network serialization
+- **YAML/JSON Workflows**: Execute actions defined in external configuration files
 - **ServiceLoader Integration**: Automatic actor registration via Java's ServiceLoader mechanism
-- **Reflection-based Invocation**: Plugin methods invoked via Reflection API (Native Image support limited, JIT mode recommended)
+- **Native Image Compatible**: Action invocation uses switch statements (zero reflection at runtime)
 
 ### Example: Load Actor from External JAR
 ```java
 // Load a plugin class from external JAR and create an actor
 Path pluginJar = Paths.get("plugins/math-plugin.jar");
-ActorRef<Object> mathActor = DynamicActorLoader.loadActor(
+ActorRef<MathPlugin> mathActor = DynamicActorLoader.loadActor(
     pluginJar,
     "com.example.plugin.MathPlugin",
     "mathActor"
 );
 
-// Use the dynamically loaded actor
-mathActor.tell(obj -> {
-    // Invoke plugin methods via reflection
-    Method add = obj.getClass().getMethod("add", int.class, int.class);
-    int result = (int) add.invoke(obj, 5, 3);
-    System.out.println("Result: " + result); // Prints: Result: 8
-});
+// String-based action invocation (no reflection, serializable)
+CompletableFuture<ActionResult> addResult = mathActor.ask(m ->
+    m.callByActionName("add", "5,3")
+);
+
+ActionResult outcome = addResult.get();
+if (outcome.isSuccess()) {
+    System.out.println("Result: " + outcome.getResult()); // Prints: Result: 8
+}
+
+// Workflow-like sequential execution
+mathActor.ask(m -> m.callByActionName("add", "10,5")).get();
+mathActor.ask(m -> m.callByActionName("multiply", "3,4")).get();
+ActionResult finalResult = mathActor.ask(m -> m.callByActionName("getLastResult", "")).get();
+System.out.println("Final: " + finalResult.getResult()); // Prints: Final: 12
 ```
+
+**Why actor-WF approach?**
+- ✅ No reflection overhead during action invocation
+- ✅ Messages can be sent across network boundaries
+- ✅ Foundation for future distributed actor systems
+- ✅ GraalVM Native Image compatible (action execution)
+- ✅ YAML/JSON workflow engines can invoke actions directly
+
+### Workflow Engine Integration
+
+POJO-actor v2.0.0 integrates the actor-WF workflow engine, enabling YAML/JSON-based actor orchestration:
+
+- **`IIActorSystem`**: Extended ActorSystem for workflow-compatible actors
+- **`IIActorRef`**: Actor references callable by string-based action names
+- **`Interpreter`**: YAML/JSON workflow execution engine
+- **State Machine Workflows**: Define complex state transitions in external files
+- **Data-Driven Execution**: Change workflow behavior without recompiling
+
+```yaml
+# Example: workflow.yaml
+name: DataPipeline
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [processor, process, "data.csv"]
+      - [validator, validate, ""]
+  - states: ["1", "end"]
+    actions:
+      - [reporter, generate, "report.pdf"]
+```
+
+This foundation enables future distributed actor systems where workflows can span multiple nodes.
 
 ### Architecture Changes
 - **Direction Shift**: From minimal implementation (~800 lines) to production-ready features
 - **Enhanced Control**: Per-actor job management prevents resource waste
+- **Workflow Integration**: Actor-WF engine merged into core for unified workflow execution
 - **Plugin System**: Runtime-extensible architecture for modular applications
 - **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
 
