@@ -104,6 +104,15 @@ public class IIActorSystem extends ActorSystem {
     }
 
     /**
+     * Returns the number of interpreter-interfaced actors in this system.
+     *
+     * @return the count of IIActorRef instances
+     */
+    public int getIIActorCount() {
+        return iiActors.size();
+    }
+
+    /**
      * Terminates all interpreter-interfaced actors managed by this system.
      *
      * <p>This method closes all registered IIActorRef instances, releasing
