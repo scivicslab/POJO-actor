@@ -166,6 +166,33 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
 
+    /**
+     * Sends a message to the actor, bypassing the mailbox and executing immediately.
+     * Unlike tell(), which queues messages in the actor's single-threaded executor,
+     * tellNow() executes the action immediately on a separate virtual thread, allowing it to
+     * run concurrently with queued messages.
+     *
+     * This method is useful when:
+     * - An urgent task needs to skip the queue
+     * - Concurrent execution with queued messages is desired
+     *
+     * @param action the action to execute on this actor's object
+     * @return a CompletableFuture that completes when the action finishes
+     */
+    public CompletableFuture<Void> tellNow(Consumer<T> action) {
+        T target = this.object;
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Thread.startVirtualThread(() -> {
+            try {
+                action.accept(target);
+                future.complete(null);
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        return future;
+    }
+
 
     /**
      * Sends a message to actor and returns a CompletableFuture to be completed with the response value.
@@ -185,6 +212,35 @@ public class ActorRef<T> implements AutoCloseable {
             = CompletableFuture.supplyAsync(()->{ return action.apply(target);}, executor);
 
         return task;
+    }
+
+
+    /**
+     * Sends a message to the actor and returns a response, bypassing the mailbox and executing immediately.
+     * Unlike ask(), which queues messages in the actor's single-threaded executor,
+     * askNow() executes the function immediately on a separate virtual thread, allowing it to
+     * run concurrently with queued messages.
+     *
+     * This method is useful when:
+     * - You need to query the actor's state immediately without waiting for queued messages
+     * - Concurrent execution with queued messages is desired
+     *
+     * @param <R> the type of the response
+     * @param action the function to execute on this actor's object
+     * @return a CompletableFuture that completes with the function's result
+     */
+    public <R> CompletableFuture<R> askNow(Function<T, R> action) {
+        T target = this.object;
+        CompletableFuture<R> future = new CompletableFuture<>();
+        Thread.startVirtualThread(() -> {
+            try {
+                R result = action.apply(target);
+                future.complete(result);
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        return future;
     }
 
 
