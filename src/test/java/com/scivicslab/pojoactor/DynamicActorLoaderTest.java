@@ -176,4 +176,92 @@ public class DynamicActorLoaderTest {
 
         mathActor.close();
     }
+
+    /**
+     * Test string-based action invocation using CallableByActionName.
+     */
+    @Test
+    @DisplayName("Should invoke actions using string-based callByActionName")
+    public void testStringBasedInvocation() throws Exception {
+        ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
+
+        // Test add action
+        CompletableFuture<ActionResult> addResult = mathActor.ask(m -> m.callByActionName("add", "5,3"));
+        ActionResult addOutcome = addResult.get();
+        assertTrue(addOutcome.isSuccess(), "add action should succeed");
+        assertEquals("8", addOutcome.getResult(), "add should return 8");
+
+        // Test multiply action
+        CompletableFuture<ActionResult> multiplyResult = mathActor.ask(m -> m.callByActionName("multiply", "4,2"));
+        ActionResult multiplyOutcome = multiplyResult.get();
+        assertTrue(multiplyOutcome.isSuccess(), "multiply action should succeed");
+        assertEquals("8", multiplyOutcome.getResult(), "multiply should return 8");
+
+        // Test getLastResult action
+        CompletableFuture<ActionResult> lastResult = mathActor.ask(m -> m.callByActionName("getLastResult", ""));
+        ActionResult lastOutcome = lastResult.get();
+        assertTrue(lastOutcome.isSuccess(), "getLastResult action should succeed");
+        assertEquals("8", lastOutcome.getResult(), "getLastResult should return 8");
+
+        // Test greet action
+        CompletableFuture<ActionResult> greetResult = mathActor.ask(m -> m.callByActionName("greet", "World"));
+        ActionResult greetOutcome = greetResult.get();
+        assertTrue(greetOutcome.isSuccess(), "greet action should succeed");
+        assertEquals("Hello, World from MathPlugin!", greetOutcome.getResult());
+
+        mathActor.close();
+    }
+
+    /**
+     * Test error handling in string-based invocation.
+     */
+    @Test
+    @DisplayName("Should handle errors in string-based invocation")
+    public void testStringBasedInvocationErrors() throws Exception {
+        ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
+
+        // Test unknown action
+        CompletableFuture<ActionResult> unknownResult = mathActor.ask(m -> m.callByActionName("unknown", ""));
+        ActionResult unknownOutcome = unknownResult.get();
+        assertFalse(unknownOutcome.isSuccess(), "unknown action should fail");
+        assertTrue(unknownOutcome.getResult().contains("Unknown action"));
+
+        // Test invalid argument format
+        CompletableFuture<ActionResult> invalidResult = mathActor.ask(m -> m.callByActionName("add", "invalid"));
+        ActionResult invalidOutcome = invalidResult.get();
+        assertFalse(invalidOutcome.isSuccess(), "invalid args should fail");
+
+        // Test missing required argument
+        CompletableFuture<ActionResult> missingResult = mathActor.ask(m -> m.callByActionName("greet", ""));
+        ActionResult missingOutcome = missingResult.get();
+        assertFalse(missingOutcome.isSuccess(), "missing args should fail");
+
+        mathActor.close();
+    }
+
+    /**
+     * Test workflow-like sequential actions using string-based invocation.
+     */
+    @Test
+    @DisplayName("Should execute workflow-like action sequences")
+    public void testWorkflowSequence() throws Exception {
+        ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
+
+        // Simulate a workflow: add -> multiply -> getLastResult
+        // This pattern is common in YAML/JSON workflows
+
+        // Step 1: add 10 + 5 = 15
+        mathActor.ask(m -> m.callByActionName("add", "10,5")).get();
+
+        // Step 2: multiply 3 * 4 = 12 (overwrites lastResult)
+        mathActor.ask(m -> m.callByActionName("multiply", "3,4")).get();
+
+        // Step 3: get the last result (should be 12)
+        ActionResult finalResult = mathActor.ask(m -> m.callByActionName("getLastResult", "")).get();
+
+        assertTrue(finalResult.isSuccess());
+        assertEquals("12", finalResult.getResult(), "Should return result of last operation");
+
+        mathActor.close();
+    }
 }
