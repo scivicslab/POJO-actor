@@ -314,33 +314,72 @@ public class ActorRef<T> implements AutoCloseable {
         return future;
     }
 
+    /**
+     * Sends a message to the actor and returns a response, bypassing the mailbox and executing immediately.
+     * Unlike ask(), which queues messages in the actor's message queue,
+     * askNow() executes the function immediately on a separate virtual thread, allowing it to
+     * run concurrently with queued messages.
+     *
+     * This method is useful when:
+     * - You need to query the actor's state immediately without waiting for queued messages
+     * - Concurrent execution with queued messages is desired
+     *
+     * @param <R> the type of the response
+     * @param action the function to execute on this actor's object
+     * @return a CompletableFuture that completes with the function's result
+     */
+    public <R> CompletableFuture<R> askNow(Function<T, R> action) {
+        T target = this.object;
+        return CompletableFuture.supplyAsync(() -> action.apply(target),
+                                            Executors.newVirtualThreadPerTaskExecutor());
+    }
+
 
     /**
      * Sends a message to this actor using a specific executor service.
      * The action is executed asynchronously on the provided executor service,
      * and the result is processed in this actor's thread context.
-     * 
+     *
      * @param action the action to execute on this actor's object
      * @param ws the executor service to use for executing the action
      * @return a CompletableFuture that completes when the action is processed
      */
     public CompletableFuture<Void> tell(Consumer<T> action, ExecutorService ws) {
         T target = this.object;
-        CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
-        return CompletableFuture.runAsync(() -> {
-            try {
-                task.get();
-            } catch (InterruptedException | ExecutionException e) {
-                logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
-            }
-        }, Executors.newVirtualThreadPerTaskExecutor());
+
+        // If using ControllableWorkStealingPool, register the job with actor name
+        if (ws instanceof ControllableWorkStealingPool) {
+            ControllableWorkStealingPool pool = (ControllableWorkStealingPool) ws;
+            CompletableFuture<Void> future = new CompletableFuture<>();
+
+            pool.submitForActor(this.actorName, () -> {
+                try {
+                    action.accept(target);
+                    future.complete(null);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            });
+
+            return future;
+        } else {
+            // Original implementation for other ExecutorServices
+            CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
+            return CompletableFuture.runAsync(() -> {
+                try {
+                    task.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
+                }
+            }, Executors.newVirtualThreadPerTaskExecutor());
+        }
     }
 
     /**
      * Sends a message to this actor and returns a response using a specific executor service.
      * The action is executed asynchronously on the provided executor service,
      * and the result is processed in this actor's thread context.
-     * 
+     *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
      * @param ws the executor service to use for executing the action
@@ -348,19 +387,38 @@ public class ActorRef<T> implements AutoCloseable {
      */
     public <R> CompletableFuture<R> ask(Function<T, R> action, ExecutorService ws) {
         T target = this.object;
-        CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> {
-            return action.apply(target);
-        }, ws);
 
-        return CompletableFuture.supplyAsync(() -> {
-            R result = null;
-            try {
-                result = task.get();
-            } catch (InterruptedException | ExecutionException e) {
-                logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
-            }
-            return result;
-        }, Executors.newVirtualThreadPerTaskExecutor());
+        // If using ControllableWorkStealingPool, register the job with actor name
+        if (ws instanceof ControllableWorkStealingPool) {
+            ControllableWorkStealingPool pool = (ControllableWorkStealingPool) ws;
+            CompletableFuture<R> future = new CompletableFuture<>();
+
+            pool.submitForActor(this.actorName, () -> {
+                try {
+                    R result = action.apply(target);
+                    future.complete(result);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            });
+
+            return future;
+        } else {
+            // Original implementation for other ExecutorServices
+            CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> {
+                return action.apply(target);
+            }, ws);
+
+            return CompletableFuture.supplyAsync(() -> {
+                R result = null;
+                try {
+                    result = task.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
+                }
+                return result;
+            }, Executors.newVirtualThreadPerTaskExecutor());
+        }
     }
     
 
@@ -419,14 +477,18 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * Clears all pending messages from this actor's message queue.
+     * Clears all pending messages from this actor's message queue and WorkStealingPool.
      *
      * This method removes all messages that are currently waiting to be processed
      * by this actor, without affecting other actors in the system.
      * The currently running message will complete normally.
      * Only affects messages sent via tell() and ask() - tellNow() messages are not queued.
      *
-     * @return the number of messages that were cleared
+     * When using ActorSystem's WorkStealingPool (ControllableWorkStealingPool),
+     * this method will also cancel CPU-bound jobs that are waiting in the pool's queue.
+     * Jobs that are already executing will continue to completion.
+     *
+     * @return the total number of messages and jobs that were cleared
      *
      * <p><b>Usage Example:</b></p>
      * <pre>{@code
@@ -439,9 +501,15 @@ public class ActorRef<T> implements AutoCloseable {
      * counter.tell(c -> c.increment()); // Queued
      * counter.ask(c -> c.getValue());   // Queued
      *
-     * // Clear pending messages (keeps the running one)
+     * // Queue CPU-bound jobs
+     * for (int i = 0; i < 100; i++) {
+     *     counter.tell(c -> c.heavyComputation(), system.getWorkStealingPool());
+     * }
+     *
+     * // Clear all pending messages and jobs
      * int cleared = counter.clearPendingMessages();
-     * System.out.println("Cleared " + cleared + " messages"); // Should print 3
+     * System.out.println("Cleared " + cleared + " messages and jobs");
+     * // Clears both message queue and WorkStealingPool jobs
      *
      * // Use cases:
      * // 1. Cancel batch operations
@@ -454,10 +522,24 @@ public class ActorRef<T> implements AutoCloseable {
      * }</pre>
      */
     public int clearPendingMessages() {
-        int clearedCount = messageQueue.size();
+        // Clear message queue
+        int clearedFromQueue = messageQueue.size();
         messageQueue.clear();
-        logger.log(Level.INFO, "Cleared " + clearedCount + " pending messages from actor: " + actorName);
-        return clearedCount;
+
+        // Cancel WorkStealingPool jobs if using ControllableWorkStealingPool
+        int clearedFromPool = 0;
+        if (this.actorSystem != null) {
+            ExecutorService pool = this.actorSystem.getWorkStealingPool();
+            if (pool instanceof ControllableWorkStealingPool) {
+                ControllableWorkStealingPool controllablePool = (ControllableWorkStealingPool) pool;
+                clearedFromPool = controllablePool.cancelJobsForActor(this.actorName);
+            }
+        }
+
+        int total = clearedFromQueue + clearedFromPool;
+        logger.log(Level.INFO, "Cleared " + total + " pending messages from actor: " + actorName +
+                   " (queue: " + clearedFromQueue + ", pool: " + clearedFromPool + ")");
+        return total;
     }
 
 }

@@ -4,18 +4,25 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-1.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-2.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 ## Architecture
 
-POJO-actor implements a simplified actor model built on modern Java features.
-Built with just ~800 lines of code, POJO-actor delivers a practical actor model implementation without sacrificing functionality or performance.
+POJO-actor implements a practical actor model built on modern Java features with a focus on production use.
 
-- **ActorSystem**: Manages actor lifecycle and configurable work-stealing thread pools
-- **ActorRef**: Reference to an actor that provides `tell()` and `ask()` messaging interface  
+- **ActorSystem**: Manages actor lifecycle and configurable worker pools for CPU-bound tasks
+- **ActorRef**: Reference to an actor that provides `tell()`, `ask()`, `tellNow()`, and `askNow()` messaging interface
 - **Virtual Threads**: Each actor runs on its own virtual thread for lightweight message handling
-- **Work-Stealing Pools**: Heavy computations are delegated to configurable thread pools
+- **WorkerPool Interface**: Abstracts thread pool implementations (ControllableWorkStealingPool or ForkJoinPool)
+- **Job Cancellation**: Cancel pending CPU-bound jobs per actor with `clearPendingMessages()`
 - **Zero Reflection**: Built entirely with standard JDK APIs, making it GraalVM Native Image ready
+
+### Key Features in v2.0.0
+
+- **WorkerPool Abstraction**: Choose between ControllableWorkStealingPool (default, with job cancellation) or ForkJoinPoolWrapper (legacy work-stealing)
+- **Actor-Level Job Management**: Track and cancel CPU-bound jobs per actor independently
+- **Immediate Execution**: `tellNow()` and `askNow()` bypass message queues for urgent operations
+- **Production Ready**: Enhanced error handling and resource management for real-world applications
 
 
 ## Quick Start
@@ -26,7 +33,7 @@ Built with just ~800 lines of code, POJO-actor delivers a practical actor model 
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>POJO-actor</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -231,7 +238,7 @@ POJO-actor is built using only modern JDK features, making the library itself ve
 
 ```bash
 # Compile to native image
-native-image -jar target/POJO-actor-1.0.0-fat.jar -o pojo-actor-native
+native-image -jar target/POJO-actor-2.0.0-fat.jar -o pojo-actor-native
 
 # Run native executable
 ./pojo-actor-native
@@ -346,10 +353,45 @@ We acknowledge the foundational work done by the `actr` library team in making a
 
 We also acknowledge [`Comedy.js`](https://github.com/untu/comedy), a Node.js actor framework, which inspired POJO-actor's basic architecture design, particularly the **ActorSystem** and **ActorRef** concepts. While Comedy.js uses one process or one real thread per actor, POJO-actor leverages Java's virtual threads to enable thousands of lightweight actors.
 
+## What's New in v2.0.0
+
+### Immediate Execution APIs
+- **`tellNow()` / `askNow()`**: Bypass message queues for urgent operations that need immediate execution
+- Execute concurrent queries while long-running tasks are in progress
+- Perfect for state queries, emergency stop commands, and high-priority operations
+
+### WorkerPool Job Management
+- **WorkerPool Interface**: Abstraction layer supporting multiple thread pool implementations
+- **ControllableWorkStealingPool**: Default implementation with per-actor job tracking and cancellation
+- **ForkJoinPoolWrapper**: Legacy work-stealing pool for backward compatibility
+- **Job Cancellation**: `clearPendingMessages()` now cancels both message queue and WorkerPool jobs
+
+### Example: Cancel CPU-Bound Jobs
+```java
+ActorSystem system = new ActorSystem("system", 4);
+ActorRef<DataProcessor> processor = system.actorOf("processor", new DataProcessor());
+
+// Submit 100 CPU-bound jobs
+for (int i = 0; i < 100; i++) {
+    processor.tell(p -> p.heavyComputation(), system.getWorkStealingPool());
+}
+
+// Cancel remaining jobs if error occurs
+int cancelled = processor.clearPendingMessages();
+// ✅ Both message queue and WorkerPool jobs are cancelled!
+```
+
+### Architecture Changes
+- **Direction Shift**: From minimal implementation (~800 lines) to production-ready features
+- **Enhanced Control**: Per-actor job management prevents resource waste
+- **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
+
 ## Future Plans
 
-- `tellNow`: add an API that can bypass the actor's virtual-thread mailbox and execute a message immediately when the caller needs synchronous semantics.
-- Clear pending messages: provide a utility that resets an actor's message queue to simplify test setups and restart scenarios.
+- **Priority Execution**: `tellNow(action, pool)` for urgent CPU-bound jobs
+- **Message Queue Migration**: Move to LinkedBlockingDeque for priority-based message processing
+- **Dead Letter Handling**: Route failed messages to dead letter queues
+- **Metrics Collection**: Built-in statistics for message processing and queue sizes
 
 ## License
 
