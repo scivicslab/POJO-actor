@@ -15,13 +15,15 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Virtual Threads**: Each actor runs on its own virtual thread for lightweight message handling
 - **WorkerPool Interface**: Abstracts thread pool implementations (ControllableWorkStealingPool or ForkJoinPool)
 - **Job Cancellation**: Cancel pending CPU-bound jobs per actor with `clearPendingMessages()`
-- **Zero Reflection**: Built entirely with standard JDK APIs, making it GraalVM Native Image ready
+- **Zero Reflection Core**: Core features built entirely with standard JDK APIs, making them GraalVM Native Image ready
 
 ### Key Features in v2.0.0
 
 - **WorkerPool Abstraction**: Choose between ControllableWorkStealingPool (default, with job cancellation) or ForkJoinPoolWrapper (legacy work-stealing)
 - **Actor-Level Job Management**: Track and cancel CPU-bound jobs per actor independently
 - **Immediate Execution**: `tellNow()` and `askNow()` bypass message queues for urgent operations
+- **Dynamic Actor Loading**: Load actors from external JARs at runtime using standard URLClassLoader
+- **Plugin Architecture**: ServiceLoader-based plugin system for automatic actor registration
 - **Production Ready**: Enhanced error handling and resource management for real-world applications
 
 
@@ -234,7 +236,14 @@ Set<String> children = parent.getNamesOfChildren();
 
 Traditional actor model frameworks rely heavily on reflection for message routing, serialization, and dynamic proxy generation, making them incompatible with GraalVM Native Image compilation. These frameworks require extensive configuration files and reflection hints to work with native compilation, if at all.
 
-POJO-actor is built using only modern JDK features, making the library itself very simple and easy to understand. It uses no reflection whatsoever. As a result, code written with POJO-actor compiles seamlessly to GraalVM Native Images without any obstacles:
+### Core Features: Fully Compatible ✅
+
+**POJO-actor's core features** are built using only modern JDK features with **zero reflection**, making them seamlessly compatible with GraalVM Native Images:
+
+- ActorSystem, ActorRef
+- WorkerPool (ControllableWorkStealingPool, ForkJoinPoolWrapper)
+- tellNow(), askNow()
+- Job cancellation (clearPendingMessages)
 
 ```bash
 # Compile to native image
@@ -244,7 +253,18 @@ native-image -jar target/POJO-actor-2.0.0-fat.jar -o pojo-actor-native
 ./pojo-actor-native
 ```
 
-No additional configuration files or reflection hints are required.
+**No additional configuration files or reflection hints are required for core features.**
+
+### Dynamic Actor Loading: Limited Support ⚠️
+
+The **Dynamic Actor Loader** feature (optional) uses URLClassLoader and Reflection for runtime extensibility. This feature has limitations in Native Image mode:
+
+- Requires `reflect-config.json` for plugin classes
+- Plugin methods are invoked via Reflection API
+- Full dynamic class loading is restricted in Native Image
+- **Recommended**: Use JIT mode for complete dynamic loading capabilities
+
+**Conclusion**: POJO-actor core remains fully Native Image ready. Dynamic Actor Loading is an optional feature designed primarily for JIT mode.
 
 ## Performance
 
@@ -381,9 +401,35 @@ int cancelled = processor.clearPendingMessages();
 // ✅ Both message queue and WorkerPool jobs are cancelled!
 ```
 
+### Dynamic Actor Loading
+- **Runtime Extensibility**: Load actors from external JARs without restarting the application
+- **OSGi-like Plugins**: Achieve plugin functionality using only JDK standard APIs (URLClassLoader)
+- **ServiceLoader Integration**: Automatic actor registration via Java's ServiceLoader mechanism
+- **Reflection-based Invocation**: Plugin methods invoked via Reflection API (Native Image support limited, JIT mode recommended)
+
+### Example: Load Actor from External JAR
+```java
+// Load a plugin class from external JAR and create an actor
+Path pluginJar = Paths.get("plugins/math-plugin.jar");
+ActorRef<Object> mathActor = DynamicActorLoader.loadActor(
+    pluginJar,
+    "com.example.plugin.MathPlugin",
+    "mathActor"
+);
+
+// Use the dynamically loaded actor
+mathActor.tell(obj -> {
+    // Invoke plugin methods via reflection
+    Method add = obj.getClass().getMethod("add", int.class, int.class);
+    int result = (int) add.invoke(obj, 5, 3);
+    System.out.println("Result: " + result); // Prints: Result: 8
+});
+```
+
 ### Architecture Changes
 - **Direction Shift**: From minimal implementation (~800 lines) to production-ready features
 - **Enhanced Control**: Per-actor job management prevents resource waste
+- **Plugin System**: Runtime-extensible architecture for modular applications
 - **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
 
 ## Future Plans
