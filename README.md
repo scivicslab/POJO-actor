@@ -316,9 +316,14 @@ mvn clean test
 # Build JAR
 mvn clean package
 
-# Generate Javadoc
+# Generate Javadoc and copy to docs/ directory for GitHub Pages
+mvn clean verify
+
+# Or generate Javadoc only (without copying to docs/)
 mvn javadoc:javadoc
 ```
+
+**Note**: The `mvn verify` command automatically generates Javadoc and copies it to the `docs/` directory, which is used by GitHub Pages to serve the [online documentation](https://scivicslab.github.io/POJO-actor/).
 
 ## Contributing
 
