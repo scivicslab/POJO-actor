@@ -54,24 +54,51 @@ import java.util.logging.Logger;
  * }</pre>
  *
  * <h2>Usage Example</h2>
- * <pre>{@code
- * // Node 1: Host math actor
- * DistributedActorSystem system1 =
- *     new DistributedActorSystem("node1", "localhost", 8081);
- * MathIIAR mathActor = new MathIIAR("math", new MathPlugin(), system1);
- * system1.addIIActor(mathActor);
  *
- * // Node 2: Call remote math actor
- * DistributedActorSystem system2 =
- *     new DistributedActorSystem("node2", "localhost", 8082);
- * system2.registerRemoteNode("node1", "localhost", 8081);
- * RemoteActorRef remoteMath = system2.getRemoteActor("node1", "math");
- * ActionResult result = remoteMath.callByActionName("add", "5,3");
+ * <p><strong>Node 1 Program (ServerNode.java) - Deploy to host1:8081</strong></p>
+ * <pre>{@code
+ * public class ServerNode {
+ *     public static void main(String[] args) throws IOException {
+ *         // Create distributed actor system on this node
+ *         DistributedActorSystem system =
+ *             new DistributedActorSystem("node1", "0.0.0.0", 8081);
+ *
+ *         // Register math actor on this node
+ *         MathPlugin math = new MathPlugin();
+ *         MathIIAR mathActor = new MathIIAR("math", math, system);
+ *         system.addIIActor(mathActor);
+ *
+ *         System.out.println("Server node ready on port 8081");
+ *         // Keep running to accept requests
+ *         Thread.currentThread().join();
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p><strong>Node 2 Program (ClientNode.java) - Deploy to host2:8082</strong></p>
+ * <pre>{@code
+ * public class ClientNode {
+ *     public static void main(String[] args) throws IOException {
+ *         // Create distributed actor system on this node
+ *         DistributedActorSystem system =
+ *             new DistributedActorSystem("node2", "0.0.0.0", 8082);
+ *
+ *         // Register remote node1 (must know its address)
+ *         system.registerRemoteNode("node1", "host1.example.com", 8081);
+ *
+ *         // Get remote actor reference
+ *         RemoteActorRef remoteMath = system.getRemoteActor("node1", "math");
+ *
+ *         // Call remote actor
+ *         ActionResult result = remoteMath.callByActionName("add", "5,3");
+ *         System.out.println("Result: " + result.getResult());
+ *     }
+ * }
  * }</pre>
  *
  * @author devteam@scivics-lab.com
- * @version 3.0.0
- * @since 3.0.0
+ * @version 2.5.0
+ * @since 2.5.0
  */
 public class DistributedActorSystem extends IIActorSystem {
 
