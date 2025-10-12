@@ -4,7 +4,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-3.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-2.5.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 ## Architecture
 
@@ -27,7 +27,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Plugin Architecture**: ServiceLoader-based plugin system for automatic actor registration
 - **Production Ready**: Enhanced error handling and resource management for real-world applications
 
-### Key Features in v3.0.0
+### Key Features in v2.5.0
 
 - **Distributed Actor System**: Actors can communicate across multiple nodes using lightweight HTTP
 - **Zero External Dependencies**: Uses only Java standard `HttpServer` (no Kafka, no middleware)
@@ -45,7 +45,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>POJO-actor</artifactId>
-    <version>3.0.0</version>
+    <version>2.5.0</version>
 </dependency>
 ```
 
@@ -241,9 +241,9 @@ ActorRef<ChildActor> child = parent.createChild("child", new ChildActor());
 Set<String> children = parent.getNamesOfChildren();
 ```
 
-### Distributed Actors (v3.0.0)
+### Distributed Actors (v2.5.0)
 
-POJO-actor v3.0.0 introduces distributed actor capabilities, allowing actors to communicate across multiple nodes using lightweight HTTP. Each node runs an embedded HTTP server, enabling remote actor invocation without external middleware.
+POJO-actor v2.5.0 introduces distributed actor capabilities, allowing actors to communicate across multiple nodes using lightweight HTTP. Each node runs an embedded HTTP server, enabling remote actor invocation without external middleware.
 
 #### Two-Node Example
 
@@ -319,7 +319,7 @@ spec:
     spec:
       containers:
       - name: actor-node
-        image: myapp:v3
+        image: myapp:v2
         env:
         - name: NODE_ID
           valueFrom:
@@ -340,7 +340,7 @@ spec:
 - **Scalable**: Add/remove nodes dynamically without coordination
 - **Native Image Ready**: No reflection in network communication layer
 
-For detailed distributed actor documentation, see [docs/DISTRIBUTED_ACTORS_V3.md](docs/DISTRIBUTED_ACTORS_V3.md).
+For detailed distributed actor documentation, see [docs/DISTRIBUTED_ACTORS_V2.md](docs/DISTRIBUTED_ACTORS_V2.md).
 
 ### Workflow Engine (YAML/JSON-Based Actor Orchestration)
 
@@ -819,11 +819,11 @@ This foundation enables future distributed actor systems where workflows can spa
 - **Plugin System**: Runtime-extensible architecture for modular applications
 - **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
 
-## What's New in v3.0.0
+## What's New in v2.5.0
 
 ### Distributed Actor System
 
-POJO-actor v3.0.0 introduces **distributed actor capabilities** for multi-node deployments:
+POJO-actor v2.5.0 introduces **distributed actor capabilities** for multi-node deployments:
 
 - **`DistributedActorSystem`**: Extended actor system with embedded HTTP server
 - **`RemoteActorRef`**: Proxy for transparent remote actor invocation
@@ -893,7 +893,7 @@ Works out-of-the-box with:
 - **Docker Compose**: Local multi-container development
 - **Bare Metal**: Traditional server deployments
 
-See [docs/DISTRIBUTED_ACTORS_V3.md](docs/DISTRIBUTED_ACTORS_V3.md) for complete distributed actor documentation.
+See [docs/DISTRIBUTED_ACTORS_V2.md](docs/DISTRIBUTED_ACTORS_V2.md) for complete distributed actor documentation.
 
 ## Future Plans
 

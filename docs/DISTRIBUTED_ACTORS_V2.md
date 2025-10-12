@@ -1,8 +1,8 @@
-# Distributed Actors Architecture (v3.0.0)
+# Distributed Actors Architecture (v2.5.0)
 
 ## Overview
 
-POJO-actor v3.0.0 introduces distributed actor capabilities, allowing actors to communicate across multiple nodes using lightweight HTTP-based messaging.
+POJO-actor v2.5.0 introduces distributed actor capabilities, allowing actors to communicate across multiple nodes using lightweight HTTP-based messaging.
 
 ## Design Philosophy
 
@@ -164,7 +164,7 @@ spec:
     spec:
       containers:
       - name: actor-node
-        image: myapp:v3
+        image: myapp:v2
         env:
         - name: NODE_ID
           valueFrom:
@@ -258,7 +258,7 @@ Content-Type: application/json
 
 ## Comparison with v2.0.0
 
-| Feature | v2.0.0 | v3.0.0 |
+| Feature | v2.0.0 | v2.5.0 |
 |---------|--------|--------|
 | Actor Model | Local only | Distributed |
 | Communication | In-process | HTTP |
