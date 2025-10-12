@@ -97,7 +97,7 @@ import java.util.logging.Logger;
  * }</pre>
  *
  * @author devteam@scivics-lab.com
- * @version 2.5.0
+ * @since 2.5.0
  * @since 2.5.0
  */
 public class DistributedActorSystem extends IIActorSystem {

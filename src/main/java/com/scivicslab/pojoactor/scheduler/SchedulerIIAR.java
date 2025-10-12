@@ -46,7 +46,7 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  * }</pre>
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 2.5.0
  * @see Scheduler
  * @see IIActorRef
  */

@@ -28,7 +28,7 @@ import java.util.concurrent.ExecutorService;
  * ActorRef.tell(action, pool) and ActorRef.ask(action, pool).
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public interface WorkerPool extends ExecutorService {
 

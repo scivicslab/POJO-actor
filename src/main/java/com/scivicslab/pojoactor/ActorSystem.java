@@ -33,7 +33,7 @@ import com.scivicslab.pojoactor.pojo.Root;
  * This system provides a framework for creating and managing actors with concurrent message processing.
  * 
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public class ActorSystem {
 

@@ -62,7 +62,7 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  * scheduled tasks and the executor service.</p>
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 2.5.0
  * @see SchedulerIIAR
  * @see CallableByActionName
  */

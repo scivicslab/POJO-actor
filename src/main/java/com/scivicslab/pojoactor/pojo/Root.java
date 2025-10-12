@@ -22,7 +22,7 @@ package com.scivicslab.pojoactor.pojo;
  * This class provides basic functionality for the root actor in an actor system.
  * 
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public class Root {
 

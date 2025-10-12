@@ -55,7 +55,7 @@ import java.util.UUID;
  * }</pre>
  *
  * @author devteam@scivics-lab.com
- * @version 3.0.0
+ * @since 3.0.0
  * @since 3.0.0
  */
 public class ActorMessage {

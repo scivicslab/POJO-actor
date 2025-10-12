@@ -40,7 +40,7 @@ package com.scivicslab.pojoactor;
  * }</pre>
  *
  * @author devteam@scivics-lab.com
- * @version 2.0.0
+ * @since 2.0.0
  * @since 2.0.0
  * @see CallableByActionName
  */

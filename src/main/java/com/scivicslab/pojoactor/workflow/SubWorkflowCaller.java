@@ -67,7 +67,7 @@ import com.scivicslab.pojoactor.CallableByActionName;
  * </ol>
  *
  * @author devteam@scivics-lab.com
- * @version 2.5.0
+ * @since 2.5.0
  * @see Interpreter
  * @see IIActorSystem
  * @see CallableByActionName

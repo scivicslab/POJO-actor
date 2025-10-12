@@ -41,7 +41,7 @@ import java.util.logging.Logger;
  * difference is minimal, and the added control capabilities are more valuable.
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public class ControllableWorkStealingPool extends ThreadPoolExecutor implements WorkerPool {
 

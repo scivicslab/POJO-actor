@@ -36,7 +36,7 @@ import java.util.concurrent.TimeoutException;
  * Use ControllableWorkStealingPool if you need that feature.
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public class ForkJoinPoolWrapper implements WorkerPool {
 

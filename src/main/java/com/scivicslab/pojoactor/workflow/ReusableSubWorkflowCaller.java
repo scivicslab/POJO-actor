@@ -100,7 +100,7 @@ import com.scivicslab.pojoactor.CallableByActionName;
  * call this actor concurrently, they will be serialized.</p>
  *
  * @author devteam@scivics-lab.com
- * @version 2.5.0
+ * @since 2.5.0
  * @see SubWorkflowCaller
  * @see Interpreter#reset()
  * @see IIActorSystem

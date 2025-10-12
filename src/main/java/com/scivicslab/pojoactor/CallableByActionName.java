@@ -151,7 +151,7 @@ package com.scivicslab.pojoactor;
  * </table>
  *
  * @author devteam@scivics-lab.com
- * @version 2.0.0
+ * @since 2.0.0
  * @since 2.0.0
  * @see ActionResult
  * @see ActorProvider
