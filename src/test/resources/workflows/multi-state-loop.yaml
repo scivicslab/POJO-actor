@@ -1,0 +1,36 @@
+name: multi-state-loop-workflow
+matrix:
+  # Entry point
+  - states: ["0", "1"]
+    actions:
+      - [cycleActor, phase1, "prepare"]
+
+  # Phase 1: First processing step
+  - states: ["1", "2"]
+    actions:
+      - [cycleActor, phase1, "execute"]
+
+  # Phase 2: Second processing step
+  - states: ["2", "3"]
+    actions:
+      - [cycleActor, phase2, "execute"]
+
+  # Phase 3: Third processing step
+  - states: ["3", "4"]
+    actions:
+      - [cycleActor, phase3, "execute"]
+
+  # Check: Should we continue the cycle?
+  - states: ["4", "5"]
+    actions:
+      - [cycleActor, checkContinue, ""]
+
+  # Continue cycle: go back to state 1
+  - states: ["5", "1"]
+    actions:
+      - [cycleActor, phase1, "restart"]
+
+  # Exit cycle: go to end
+  - states: ["5", "end"]
+    actions:
+      - [cycleActor, finalize, ""]

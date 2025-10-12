@@ -1,0 +1,11 @@
+name: error-handling-workflow
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [errorActor, riskyOperation, ""]
+  - states: ["1", "2"]
+    actions:
+      - [errorActor, handleError, ""]
+  - states: ["2", "end"]
+    actions:
+      - [errorActor, riskyOperation, ""]

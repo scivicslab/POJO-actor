@@ -1,0 +1,8 @@
+name: main-with-subworkflow
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [coordinator, executeSubWorkflow, "simple-math.yaml"]
+  - states: ["1", "end"]
+    actions:
+      - [coordinator, executeSubWorkflow, "simple-math.yaml"]

@@ -1,0 +1,8 @@
+name: main-with-caller
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [caller, call, "simple-math.yaml"]
+  - states: ["1", "end"]
+    actions:
+      - [caller, call, "simple-math.yaml"]

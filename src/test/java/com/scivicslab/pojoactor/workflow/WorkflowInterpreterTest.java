@@ -1,0 +1,326 @@
+/*
+ * Copyright 2025 devteam@scivics-lab.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package com.scivicslab.pojoactor.workflow;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.scivicslab.pojoactor.ActionResult;
+import com.scivicslab.pojoactor.plugin.MathPlugin;
+
+/**
+ * Comprehensive tests for Workflow Interpreter functionality.
+ *
+ * <p>This test suite verifies the workflow execution engine, which reads
+ * YAML/JSON workflow definitions and executes them using CallableByActionName.</p>
+ *
+ * @author devteam@scivics-lab.com
+ * @version 2.5.0
+ */
+@DisplayName("Workflow Interpreter Specification by Example")
+public class WorkflowInterpreterTest {
+
+    private IIActorSystem system;
+    private MathPlugin mathPlugin;
+
+    @BeforeEach
+    public void setUp() {
+        system = new IIActorSystem("workflow-test-system");
+        mathPlugin = new MathPlugin();
+
+        // Register math actor
+        TestMathIIAR mathActor = new TestMathIIAR("math", mathPlugin, system);
+        system.addIIActor(mathActor);
+    }
+
+    /**
+     * Test implementation of IIActorRef for MathPlugin.
+     */
+    private static class TestMathIIAR extends IIActorRef<MathPlugin> {
+
+        public TestMathIIAR(String actorName, MathPlugin object, IIActorSystem system) {
+            super(actorName, object, system);
+        }
+
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return this.object.callByActionName(actionName, args);
+        }
+    }
+
+    /**
+     * Example 1: Load YAML workflow definition.
+     */
+    @Test
+    @DisplayName("Should load workflow from YAML")
+    public void testLoadWorkflowFromYaml() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        assertNotNull(yamlInput, "YAML resource should exist");
+
+        interpreter.readYaml(yamlInput);
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code, "Code should be loaded");
+        assertEquals("simple-math-workflow", code.getName());
+        assertEquals(3, code.getMatrix().size(), "Should have 3 rows");
+    }
+
+    /**
+     * Example 2: Execute single-step workflow.
+     */
+    @Test
+    @DisplayName("Should execute single-step workflow")
+    public void testExecuteSingleStepWorkflow() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        interpreter.readYaml(yamlInput);
+
+        // Execute first step: state 0 -> 1, action: add 10,5
+        ActionResult result = interpreter.execCode();
+
+        assertTrue(result.isSuccess(), "Step should succeed");
+        assertTrue(result.getResult().contains("State: 1"), "Should transition to state 1");
+
+        // Verify the action was executed
+        assertEquals(15, mathPlugin.getLastResult(), "Math operation should have been executed");
+    }
+
+    /**
+     * Example 3: Execute multi-step workflow.
+     */
+    @Test
+    @DisplayName("Should execute multi-step workflow with state transitions")
+    public void testExecuteMultiStepWorkflow() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        interpreter.readYaml(yamlInput);
+
+        // Step 1: 0 -> 1, add 10,5 (result: 15)
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 2: 1 -> 2, multiply 3,4 (result: 12)
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+
+        // Step 3: 2 -> end, getLastResult (result: 12)
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 4: Execute workflow with multiple actions in one step.
+     */
+    @Test
+    @DisplayName("Should execute multiple actions in a single workflow step")
+    public void testExecuteMultipleActionsInOneStep() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/multi-action.yaml");
+        interpreter.readYaml(yamlInput);
+
+        MatrixCode code = interpreter.getCode();
+        assertEquals("multi-action-workflow", code.getName());
+
+        Row firstRow = code.getMatrix().get(0);
+        assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
+
+        // Execute the step with multiple actions
+        ActionResult result = interpreter.execCode();
+        assertTrue(result.isSuccess());
+
+        // The last action (getLastResult) doesn't change the result,
+        // so we check the result of multiply (2,4)
+        assertEquals(8, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 5: Verify workflow matrix structure.
+     */
+    @Test
+    @DisplayName("Should parse workflow matrix structure correctly")
+    public void testWorkflowMatrixStructure() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        interpreter.readYaml(yamlInput);
+
+        MatrixCode code = interpreter.getCode();
+
+        // Check first row
+        Row row0 = code.getMatrix().get(0);
+        assertEquals(2, row0.getStates().size());
+        assertEquals("0", row0.getStates().get(0));
+        assertEquals("1", row0.getStates().get(1));
+        assertEquals(1, row0.getActions().size());
+        assertEquals("math", row0.getActions().get(0).get(0));
+        assertEquals("add", row0.getActions().get(0).get(1));
+        assertEquals("10,5", row0.getActions().get(0).get(2));
+
+        // Check second row
+        Row row1 = code.getMatrix().get(1);
+        assertEquals("1", row1.getStates().get(0));
+        assertEquals("2", row1.getStates().get(1));
+        assertEquals("multiply", row1.getActions().get(0).get(1));
+    }
+
+    /**
+     * Example 6: Handle missing actor.
+     */
+    @Test
+    @DisplayName("Should handle missing actor gracefully")
+    public void testHandleMissingActor() {
+        // Create workflow with reference to non-existent actor
+        MatrixCode code = new MatrixCode();
+        code.setName("test-missing-actor");
+
+        Row row = new Row();
+        row.setStates(java.util.Arrays.asList("0", "1"));
+        row.setActions(java.util.Arrays.asList(
+            java.util.Arrays.asList("nonexistent", "someAction", "args")
+        ));
+        code.setMatrix(java.util.Arrays.asList(row));
+
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        // Manually set the code (bypass YAML loading)
+        java.lang.reflect.Field codeField;
+        try {
+            codeField = Interpreter.class.getDeclaredField("code");
+            codeField.setAccessible(true);
+            codeField.set(interpreter, code);
+        } catch (Exception e) {
+            fail("Failed to set code field: " + e.getMessage());
+        }
+
+        // Execute should not throw exception (actor is null, so action is skipped)
+        ActionResult result = interpreter.action();
+        assertTrue(result.isSuccess(), "Should succeed even with missing actor");
+    }
+
+    /**
+     * Example 7: Empty workflow code.
+     */
+    @Test
+    @DisplayName("Should handle empty workflow code")
+    public void testEmptyWorkflowCode() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        // Don't load any code
+        ActionResult result = interpreter.execCode();
+
+        assertFalse(result.isSuccess(), "Empty code should fail");
+        assertEquals("No code loaded", result.getResult());
+    }
+
+    /**
+     * Example 8: Builder pattern for Interpreter construction.
+     */
+    @Test
+    @DisplayName("Should construct Interpreter using Builder pattern")
+    public void testInterpreterBuilder() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("custom-logger")
+                .team(system)
+                .build();
+
+        assertNotNull(interpreter, "Interpreter should be created");
+    }
+
+    /**
+     * Example 9: State transition validation.
+     */
+    @Test
+    @DisplayName("Should validate state transitions")
+    public void testStateTransitionValidation() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        interpreter.readYaml(yamlInput);
+
+        // Execute first step
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertTrue(result1.getResult().contains("State: 1"));
+
+        // Execute second step
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertTrue(result2.getResult().contains("State: 2"));
+    }
+
+    /**
+     * Example 10: Workflow with end state.
+     */
+    @Test
+    @DisplayName("Should handle workflow end state")
+    public void testWorkflowEndState() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/simple-math.yaml");
+        interpreter.readYaml(yamlInput);
+
+        // Execute all steps
+        interpreter.execCode();  // 0 -> 1
+        interpreter.execCode();  // 1 -> 2
+        ActionResult result = interpreter.execCode();  // 2 -> end
+
+        assertTrue(result.isSuccess());
+        assertTrue(result.getResult().contains("State: end"));
+    }
+}

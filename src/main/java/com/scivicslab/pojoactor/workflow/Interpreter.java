@@ -196,5 +196,59 @@ public class Interpreter {
         return new ActionResult(false, "No matching state transition");
     }
 
+    /**
+     * Resets the interpreter to its initial state.
+     *
+     * <p>This method resets the execution state of the interpreter, allowing it
+     * to be reused for executing a new workflow without creating a new instance.
+     * The following state is reset:</p>
+     * <ul>
+     *   <li>Current row index is reset to 0</li>
+     *   <li>Current state is reset to "0" (initial state)</li>
+     *   <li>Loaded workflow code is cleared</li>
+     * </ul>
+     *
+     * <p>The following state is preserved:</p>
+     * <ul>
+     *   <li>Logger instance</li>
+     *   <li>Actor system reference</li>
+     * </ul>
+     *
+     * <p>This method is primarily used by {@link ReusableSubWorkflowCaller}
+     * to reuse a single Interpreter instance across multiple sub-workflow calls,
+     * reducing object allocation overhead.</p>
+     *
+     * <p><strong>Usage Example:</strong></p>
+     * <pre>{@code
+     * Interpreter interpreter = new Interpreter.Builder()
+     *     .loggerName("workflow")
+     *     .team(system)
+     *     .build();
+     *
+     * // First workflow execution
+     * interpreter.readYaml(workflow1);
+     * while (true) {
+     *     ActionResult result = interpreter.execCode();
+     *     if (result.getResult().contains("end")) break;
+     * }
+     *
+     * // Reset and reuse for second workflow
+     * interpreter.reset();
+     * interpreter.readYaml(workflow2);
+     * while (true) {
+     *     ActionResult result = interpreter.execCode();
+     *     if (result.getResult().contains("end")) break;
+     * }
+     * }</pre>
+     *
+     * @see ReusableSubWorkflowCaller
+     * @since 2.5.0
+     */
+    public void reset() {
+        this.currentRow = 0;
+        this.currentState = "0";
+        this.code = null;
+    }
+
 
 }
