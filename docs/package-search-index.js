@@ -1,1 +1,1 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html","k":"18"},{"l":"com.scivicslab.pojoactor"},{"l":"com.scivicslab.pojoactor.distributed"},{"l":"com.scivicslab.pojoactor.pojo"},{"l":"com.scivicslab.pojoactor.workflow"}];updateSearchResults();
+packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html","k":"18"},{"l":"com.scivicslab.pojoactor"},{"l":"com.scivicslab.pojoactor.distributed"},{"l":"com.scivicslab.pojoactor.distributed.discovery"},{"l":"com.scivicslab.pojoactor.pojo"},{"l":"com.scivicslab.pojoactor.workflow"}];updateSearchResults();

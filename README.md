@@ -287,6 +287,58 @@ System.out.println("Result: " + result.getResult()); // Prints: Result: 8
 3. **Message Protocol**: Actor invocations are converted to JSON and sent via HTTP POST
 4. **String-Based Actions**: All messages use `CallableByActionName` interface (no reflection at runtime)
 
+#### Automatic Node Discovery
+
+POJO-actor provides automatic node discovery for common distributed environments. Instead of manually registering each node, use `NodeDiscoveryFactory` to detect and configure nodes automatically:
+
+**Simple Example (Auto-Detection)**:
+```java
+import com.scivicslab.pojoactor.distributed.discovery.*;
+
+public class MyActorApp {
+    public static void main(String[] args) throws IOException {
+        // Automatically detect environment (Slurm/Kubernetes/Grid Engine)
+        // and create system with all nodes registered
+        DistributedActorSystem system = NodeDiscoveryFactory.createDistributedSystem(8080);
+
+        // Register your actors
+        MathPlugin math = new MathPlugin();
+        system.addIIActor(new MathIIAR("math", math, system));
+
+        // All remote nodes are already registered - ready to use!
+    }
+}
+```
+
+**Supported Environments**:
+- **Slurm**: Reads `SLURM_JOB_NODELIST` and `SLURM_PROCID` environment variables
+- **Kubernetes**: Reads `POD_NAME`, `SERVICE_NAME`, and `REPLICAS` from StatefulSet
+- **Grid Engine**: Reads `PE_HOSTFILE` from parallel environment
+
+**Manual Discovery** (if you need more control):
+```java
+// Detect environment and get node info
+NodeDiscovery discovery = NodeDiscoveryFactory.autoDetect(8080);
+
+// Create actor system for this node
+DistributedActorSystem system = new DistributedActorSystem(
+    discovery.getMyNodeId(),
+    discovery.getMyHost(),
+    discovery.getMyPort()
+);
+
+// Register all remote nodes
+for (NodeInfo node : discovery.getAllNodes()) {
+    if (!node.getNodeId().equals(discovery.getMyNodeId())) {
+        system.registerRemoteNode(
+            node.getNodeId(),
+            node.getHost(),
+            node.getPort()
+        );
+    }
+}
+```
+
 #### Deployment Examples
 
 **Slurm (HPC Environment)**:

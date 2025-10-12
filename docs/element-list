@@ -1,4 +1,5 @@
 com.scivicslab.pojoactor
 com.scivicslab.pojoactor.distributed
+com.scivicslab.pojoactor.distributed.discovery
 com.scivicslab.pojoactor.pojo
 com.scivicslab.pojoactor.workflow

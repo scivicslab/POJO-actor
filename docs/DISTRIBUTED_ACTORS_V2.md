@@ -121,6 +121,68 @@ ActionResult result = remoteMath.callByActionName("add", "5,3");
 System.out.println("Result: " + result.getResult()); // "8"
 ```
 
+### Automatic Node Discovery
+
+POJO-actor v2.5.0 includes automatic node discovery utilities for common distributed environments, eliminating the need to manually configure node addresses.
+
+#### Using NodeDiscoveryFactory
+
+**Simplest Approach** (fully automatic):
+```java
+import com.scivicslab.pojoactor.distributed.discovery.*;
+
+public class MyActorApp {
+    public static void main(String[] args) throws IOException {
+        // Auto-detect environment and create system with all nodes registered
+        DistributedActorSystem system = NodeDiscoveryFactory.createDistributedSystem(8080);
+
+        // Register your actors
+        MathPlugin math = new MathPlugin();
+        system.addIIActor(new MathIIAR("math", math, system));
+
+        // All remote nodes are already registered - ready to use!
+        // ...
+    }
+}
+```
+
+**Manual Control** (if needed):
+```java
+// Detect environment
+NodeDiscovery discovery = NodeDiscoveryFactory.autoDetect(8080);
+
+// Get node information
+String myNodeId = discovery.getMyNodeId();
+String myHost = discovery.getMyHost();
+int myPort = discovery.getMyPort();
+
+// Create actor system
+DistributedActorSystem system = new DistributedActorSystem(myNodeId, myHost, myPort);
+
+// Register all remote nodes
+for (NodeInfo node : discovery.getAllNodes()) {
+    if (!node.getNodeId().equals(myNodeId)) {
+        system.registerRemoteNode(node.getNodeId(), node.getHost(), node.getPort());
+    }
+}
+```
+
+#### Supported Environments
+
+**1. Slurm** - Uses environment variables:
+- `SLURM_JOB_NODELIST` - Node list (parsed via `scontrol show hostnames`)
+- `SLURM_PROCID` - Current process rank
+
+**2. Kubernetes StatefulSet** - Uses environment variables:
+- `POD_NAME` - Current pod name (e.g., "pojo-actor-0")
+- `SERVICE_NAME` - Headless service name
+- `REPLICAS` - Number of replicas in StatefulSet
+- `KUBERNETES_SERVICE_HOST` - Detects K8s environment
+
+**3. Grid Engine** - Uses environment variables:
+- `PE_HOSTFILE` - Path to hostfile with allocated nodes
+- `SGE_TASK_ID` - Optional task ID for array jobs
+
 ### Slurm Deployment
 
 ```bash
