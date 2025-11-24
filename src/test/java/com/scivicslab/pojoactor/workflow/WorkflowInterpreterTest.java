@@ -33,7 +33,7 @@ import com.scivicslab.pojoactor.plugin.MathPlugin;
  * Comprehensive tests for Workflow Interpreter functionality.
  *
  * <p>This test suite verifies the workflow execution engine, which reads
- * YAML/JSON workflow definitions and executes them using CallableByActionName.</p>
+ * YAML/JSON/XML workflow definitions and executes them using CallableByActionName.</p>
  *
  * @author devteam@scivics-lab.com
  * @version 2.5.0
@@ -322,5 +322,222 @@ public class WorkflowInterpreterTest {
 
         assertTrue(result.isSuccess());
         assertTrue(result.getResult().contains("State: end"));
+    }
+
+    // ==================== XML Workflow Tests ====================
+
+    /**
+     * Example 11: Load XML workflow definition.
+     */
+    @Test
+    @DisplayName("Should load workflow from XML")
+    public void testLoadWorkflowFromXml() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/simple-math.xml");
+        assertNotNull(xmlInput, "XML resource should exist");
+
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code, "Code should be loaded");
+        assertEquals("simple-math-workflow", code.getName());
+        assertEquals(3, code.getMatrix().size(), "Should have 3 rows");
+    }
+
+    /**
+     * Example 12: Execute XML workflow with single step.
+     */
+    @Test
+    @DisplayName("Should execute XML workflow single step")
+    public void testExecuteXmlSingleStepWorkflow() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/simple-math.xml");
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        // Execute first step: state 0 -> 1, action: add 10,5
+        ActionResult result = interpreter.execCode();
+
+        assertTrue(result.isSuccess(), "Step should succeed");
+        assertTrue(result.getResult().contains("State: 1"), "Should transition to state 1");
+
+        // Verify the action was executed
+        assertEquals(15, mathPlugin.getLastResult(), "Math operation should have been executed");
+    }
+
+    /**
+     * Example 13: Execute XML multi-step workflow.
+     */
+    @Test
+    @DisplayName("Should execute XML multi-step workflow with state transitions")
+    public void testExecuteXmlMultiStepWorkflow() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/simple-math.xml");
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        // Step 1: 0 -> 1, add 10,5 (result: 15)
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 2: 1 -> 2, multiply 3,4 (result: 12)
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+
+        // Step 3: 2 -> end, getLastResult (result: 12)
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 14: Execute XML workflow with multiple actions in one step.
+     */
+    @Test
+    @DisplayName("Should execute multiple actions in a single XML workflow step")
+    public void testExecuteXmlMultipleActionsInOneStep() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/multi-action.xml");
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        assertEquals("multi-action-workflow", code.getName());
+
+        Row firstRow = code.getMatrix().get(0);
+        assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
+
+        // Execute the step with multiple actions
+        ActionResult result = interpreter.execCode();
+        assertTrue(result.isSuccess());
+
+        // The last action (getLastResult) doesn't change the result,
+        // so we check the result of multiply (2,4)
+        assertEquals(8, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 15: Verify XML workflow matrix structure.
+     */
+    @Test
+    @DisplayName("Should parse XML workflow matrix structure correctly")
+    public void testXmlWorkflowMatrixStructure() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/simple-math.xml");
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+
+        // Check first row
+        Row row0 = code.getMatrix().get(0);
+        assertEquals(2, row0.getStates().size());
+        assertEquals("0", row0.getStates().get(0));
+        assertEquals("1", row0.getStates().get(1));
+        assertEquals(1, row0.getActions().size());
+        assertEquals("math", row0.getActions().get(0).get(0));
+        assertEquals("add", row0.getActions().get(0).get(1));
+        assertEquals("10,5", row0.getActions().get(0).get(2));
+
+        // Check second row
+        Row row1 = code.getMatrix().get(1);
+        assertEquals("1", row1.getStates().get(0));
+        assertEquals("2", row1.getStates().get(1));
+        assertEquals("multiply", row1.getActions().get(0).get(1));
+    }
+
+    /**
+     * Example 16: XML workflow with complex branching.
+     */
+    @Test
+    @DisplayName("Should load complex branching XML workflow")
+    public void testComplexBranchingXmlWorkflow() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/complex-branching.xml");
+        assertNotNull(xmlInput, "complex-branching.xml should exist");
+
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code, "Code should be loaded");
+        assertEquals("complex-branching", code.getName());
+        assertEquals(16, code.getMatrix().size(), "Should have 16 transitions");
+
+        // Verify first transition
+        Row firstRow = code.getMatrix().get(0);
+        assertEquals("init", firstRow.getStates().get(0));
+        assertEquals("state_A", firstRow.getStates().get(1));
+        assertEquals("checker", firstRow.getActions().get(0).get(0));
+        assertEquals("check_condition1", firstRow.getActions().get(0).get(1));
+    }
+
+    /**
+     * Example 17: Empty argument in XML action.
+     */
+    @Test
+    @DisplayName("Should handle empty arguments in XML actions")
+    public void testXmlEmptyArgument() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/simple-math.xml");
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        Row lastRow = code.getMatrix().get(2);  // The last row has getLastResult with empty argument
+
+        assertEquals("", lastRow.getActions().get(0).get(2), "Empty argument should be empty string");
     }
 }

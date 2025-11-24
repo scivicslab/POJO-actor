@@ -19,13 +19,24 @@ package com.scivicslab.pojoactor.workflow;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import com.scivicslab.pojoactor.ActionResult;
 
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
+import org.yaml.snakeyaml.LoaderOptions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -150,7 +161,7 @@ public class Interpreter {
      */
     public void readYaml(InputStream yamlInput) {
 
-        Yaml yaml = new Yaml(new Constructor(MatrixCode.class));
+        Yaml yaml = new Yaml(new Constructor(MatrixCode.class, new LoaderOptions()));
         code = yaml.load(yamlInput);
 
     }
@@ -164,6 +175,82 @@ public class Interpreter {
     public void readJson(InputStream jsonInput) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         code = mapper.readValue(jsonInput, MatrixCode.class);
+    }
+
+    /**
+     * Reads and parses a workflow definition from an XML input stream.
+     *
+     * <p>The XML format follows this structure:</p>
+     * <pre>{@code
+     * <workflow name="workflow-name">
+     *   <matrix>
+     *     <transition from="state1" to="state2">
+     *       <action actor="actorName" method="methodName">argument</action>
+     *     </transition>
+     *   </matrix>
+     * </workflow>
+     * }</pre>
+     *
+     * @param xmlInput the XML input stream containing the workflow definition
+     * @throws IOException if an I/O error occurs during parsing
+     * @throws ParserConfigurationException if the XML parser cannot be configured
+     * @throws SAXException if the XML is malformed
+     */
+    public void readXml(InputStream xmlInput) throws IOException, ParserConfigurationException, SAXException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(xmlInput);
+        doc.getDocumentElement().normalize();
+
+        // Create MatrixCode instance
+        code = new MatrixCode();
+
+        // Get workflow name
+        Element workflowElement = doc.getDocumentElement();
+        String workflowName = workflowElement.getAttribute("name");
+        code.setName(workflowName);
+
+        // Parse matrix
+        List<Row> matrix = new ArrayList<>();
+        NodeList matrixNodes = workflowElement.getElementsByTagName("matrix");
+
+        if (matrixNodes.getLength() > 0) {
+            Element matrixElement = (Element) matrixNodes.item(0);
+            NodeList transitionNodes = matrixElement.getElementsByTagName("transition");
+
+            for (int i = 0; i < transitionNodes.getLength(); i++) {
+                Element transitionElement = (Element) transitionNodes.item(i);
+
+                // Create Row instance
+                Row row = new Row();
+
+                // Parse states (from, to)
+                List<String> states = new ArrayList<>();
+                states.add(transitionElement.getAttribute("from"));
+                states.add(transitionElement.getAttribute("to"));
+                row.setStates(states);
+
+                // Parse actions
+                List<List<String>> actions = new ArrayList<>();
+                NodeList actionNodes = transitionElement.getElementsByTagName("action");
+
+                for (int j = 0; j < actionNodes.getLength(); j++) {
+                    Element actionElement = (Element) actionNodes.item(j);
+
+                    List<String> action = new ArrayList<>();
+                    action.add(actionElement.getAttribute("actor"));
+                    action.add(actionElement.getAttribute("method"));
+                    action.add(actionElement.getTextContent().trim());
+
+                    actions.add(action);
+                }
+
+                row.setActions(actions);
+                matrix.add(row);
+            }
+        }
+
+        code.setMatrix(matrix);
     }
 
     /**
