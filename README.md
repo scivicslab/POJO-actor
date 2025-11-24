@@ -31,6 +31,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 
 - **XML Workflow Support**: Define workflows in XML format alongside YAML/JSON
 - **XSLT Transformation**: Convert XML workflows to beautiful HTML visualizations (table and graph views)
+- **DynamicActorLoaderActor**: Generic actor for loading plugins dynamically from workflows
 - **Enhanced Workflow Engine**: Improved workflow documentation and tooling
 
 ### Key Features in v2.5.0
@@ -953,6 +954,86 @@ POJO-actor now supports three workflow formats, all using the same internal stru
 interpreter.readYaml(yamlInput);
 interpreter.readJson(jsonInput);
 interpreter.readXml(xmlInput);
+```
+
+### Dynamic Actor Loading from Workflows
+
+New actor that enables workflows to load and create actors dynamically:
+
+- **`DynamicActorLoaderActor`**: Generic actor for plugin management
+- **Load from JARs**: Load actors from external JAR files at runtime
+- **ServiceLoader Integration**: Create actors from registered providers
+- **Workflow-Driven**: All actions callable from XML/YAML/JSON workflows
+
+#### Example Usage
+
+```java
+// Register the loader actor
+DynamicActorLoaderActor loader = new DynamicActorLoaderActor(system);
+system.addIIActor(new DynamicActorLoaderIIAR("loader", loader, system));
+```
+
+```xml
+<workflow name="dynamic-loading">
+    <matrix>
+        <!-- List available providers -->
+        <transition from="init" to="listed">
+            <action actor="loader" method="listProviders"></action>
+        </transition>
+
+        <!-- Create actor from provider mid-workflow -->
+        <transition from="listed" to="loaded">
+            <action actor="loader" method="createFromProvider">
+                math
+            </action>
+        </transition>
+
+        <!-- Load actor from external JAR -->
+        <transition from="loaded" to="ready">
+            <action actor="loader" method="loadFromJar">
+                /plugins/custom-actor.jar,com.example.CustomActor,myactor
+            </action>
+        </transition>
+
+        <!-- Use the dynamically loaded actor -->
+        <transition from="ready" to="done">
+            <action actor="myactor" method="process">data</action>
+        </transition>
+    </matrix>
+</workflow>
+```
+
+#### Supported Actions
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `loadFromJar` | jarPath,className,actorName | Load actor from JAR file |
+| `createFromProvider` | providerName | Register actors from ServiceLoader provider |
+| `listProviders` | (none) | List all available ActorProvider instances |
+| `loadProvidersFromJar` | jarPath | Load ActorProvider plugins from JAR |
+
+#### Benefits
+
+- **Dynamic Extensibility**: Add actors without restarting application
+- **Conditional Loading**: Load actors based on workflow state
+- **Multi-Tenant**: Different actors for different tenants
+- **A/B Testing**: Load alternative implementations dynamically
+- **Hot Deployment**: Update actors by loading new JARs
+
+#### Domain-Specific Extensions
+
+Applications can extend `DynamicActorLoaderActor` for domain-specific functionality:
+
+```java
+// AI-workflow extends it for LLM-specific features
+public class PluginLoaderActor extends DynamicActorLoaderActor {
+    // Adds: createLLMAgent, listLLMProviders
+}
+
+// Your app can extend it for your domain
+public class DataProcessorLoader extends DynamicActorLoaderActor {
+    // Adds: createProcessor, listProcessors
+}
 ```
 
 ## What's New in v2.5.0
