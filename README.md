@@ -4,7 +4,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-2.5.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-2.6.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 ## Architecture
 
@@ -27,6 +27,12 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Plugin Architecture**: ServiceLoader-based plugin system for automatic actor registration
 - **Production Ready**: Enhanced error handling and resource management for real-world applications
 
+### Key Features in v2.6.0
+
+- **XML Workflow Support**: Define workflows in XML format alongside YAML/JSON
+- **XSLT Transformation**: Convert XML workflows to beautiful HTML visualizations (table and graph views)
+- **Enhanced Workflow Engine**: Improved workflow documentation and tooling
+
 ### Key Features in v2.5.0
 
 - **Distributed Actor System**: Actors can communicate across multiple nodes using lightweight HTTP
@@ -45,7 +51,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>POJO-actor</artifactId>
-    <version>2.5.0</version>
+    <version>2.6.0</version>
 </dependency>
 ```
 
@@ -870,6 +876,84 @@ This foundation enables future distributed actor systems where workflows can spa
 - **Workflow Integration**: Actor-WF engine merged into core for unified workflow execution
 - **Plugin System**: Runtime-extensible architecture for modular applications
 - **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
+
+## What's New in v2.6.0
+
+### XML Workflow Support
+
+POJO-actor v2.6.0 adds **XML workflow format** as an alternative to YAML and JSON:
+
+- **`Interpreter.readXml()`**: Parse XML workflow definitions
+- **Clean XML Format**: Attribute-based syntax with text content for arguments
+- **Human-Readable**: Less nested than JSON, more structured than YAML
+- **Full Compatibility**: Same internal `MatrixCode` structure as YAML/JSON
+
+#### XML Workflow Example
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow name="data-processing">
+    <matrix>
+        <transition from="init" to="processing">
+            <action actor="processor" method="loadData">/data/input.csv</action>
+        </transition>
+
+        <transition from="processing" to="end">
+            <action actor="processor" method="analyze"></action>
+            <action actor="logger" method="log">Processing complete</action>
+        </transition>
+    </matrix>
+</workflow>
+```
+
+### XSLT Transformation to HTML
+
+New feature: Transform XML workflows to beautiful HTML visualizations!
+
+- **`WorkflowXsltTransformer`**: Java utility for XSLT transformations
+- **Table View**: Structured table format showing all transitions
+- **Graph View**: Visual state transition graph with modern styling
+- **Self-Contained HTML**: Embedded CSS, opens directly in browsers
+
+#### Example Usage
+
+```java
+// Transform XML workflow to HTML table
+File xmlFile = new File("workflow.xml");
+File htmlFile = new File("workflow-table.html");
+WorkflowXsltTransformer.transformToTable(xmlFile, htmlFile);
+
+// Transform to graph view
+File graphFile = new File("workflow-graph.html");
+WorkflowXsltTransformer.transformToGraph(xmlFile, graphFile);
+
+// Transform to String
+String html = WorkflowXsltTransformer.transformToTableString(xmlFile);
+```
+
+#### Benefits
+
+- **Documentation**: Auto-generate workflow documentation
+- **Team Review**: Share visual workflows with non-technical stakeholders
+- **Debugging**: Visualize complex workflows for easier understanding
+- **Version Control**: Track workflow changes with visual diffs
+
+### All Three Formats Supported
+
+POJO-actor now supports three workflow formats, all using the same internal structure:
+
+| Format | Extension | Best For |
+|--------|-----------|----------|
+| YAML | .yaml, .yml | Quick prototyping, simple workflows |
+| JSON | .json | API integration, programmatic generation |
+| XML | .xml | Complex workflows, HTML visualization, enterprise standards |
+
+```java
+// All three work the same way
+interpreter.readYaml(yamlInput);
+interpreter.readJson(jsonInput);
+interpreter.readXml(xmlInput);
+```
 
 ## What's New in v2.5.0
 
