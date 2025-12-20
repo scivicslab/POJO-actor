@@ -1,0 +1,7 @@
+name: multi-action-workflow
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [math, add, "5,3"]
+      - [math, multiply, "2,4"]
+      - [math, getLastResult, ""]

@@ -1,3 +1,20 @@
+/*
+ * Copyright 2025 devteam@scivics-lab.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package com.scivicslab.pojoactor;
 
 import java.util.ArrayList;
@@ -16,7 +33,7 @@ import com.scivicslab.pojoactor.pojo.Root;
  * This system provides a framework for creating and managing actors with concurrent message processing.
  * 
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 1.0.0
  */
 public class ActorSystem {
 
@@ -42,7 +59,7 @@ public class ActorSystem {
     protected ConcurrentHashMap<String, ActorRef<?>> actors = new ConcurrentHashMap<>();
 
 
-    protected List<ExecutorService> workStealingPools = new ArrayList<>();
+    protected List<WorkerPool> workerPools = new ArrayList<>();
 
     
     /**
@@ -88,23 +105,23 @@ public class ActorSystem {
     
     /**
      * Constructs an ActorSystem with the specified name and default thread pool.
-     * 
+     *
      * @param systemName the name of the actor system
      */
     public ActorSystem(String systemName) {
         this.systemName = systemName;
-        this.workStealingPools.add(Executors.newWorkStealingPool());
+        this.workerPools.add(new ControllableWorkStealingPool(Runtime.getRuntime().availableProcessors()));
     }
 
     /**
      * Constructs an ActorSystem with the specified name and thread count.
-     * 
+     *
      * @param systemName the name of the actor system
-     * @param threadNum the number of threads in the work stealing pool
+     * @param threadNum the number of threads in the worker pool
      */
     public ActorSystem(String systemName, int threadNum) {
         this.systemName = systemName;
-        this.workStealingPools.add(Executors.newWorkStealingPool(threadNum));
+        this.workerPools.add(new ControllableWorkStealingPool(threadNum));
     }
 
 
@@ -118,7 +135,7 @@ public class ActorSystem {
         actors.keySet().stream()
             .forEach((name)->actors.get(name).close());
 
-        this.workStealingPools.stream()
+        this.workerPools.stream()
             .forEach((pool)->{
                     pool.shutdownNow();
                     try {
@@ -199,12 +216,12 @@ public class ActorSystem {
      */
     /**
      * Adds a new work stealing pool to the actor system.
-     * 
+     *
      * @param threadNum the number of threads in the new pool
      * @return true if the pool was successfully added
      */
     public boolean addWorkStealingPool(int threadNum) {
-        return this.workStealingPools.add(Executors.newWorkStealingPool(threadNum));
+        return this.workerPools.add(new ControllableWorkStealingPool(threadNum));
     }
 
 
@@ -235,8 +252,8 @@ public class ActorSystem {
      * @return true if the system is alive, false otherwise
      */
     public boolean isAlive() {
-        for (int i=0; i<workStealingPools.size(); i++) {
-            if (workStealingPools.get(i).isShutdown()) {
+        for (int i=0; i<workerPools.size(); i++) {
+            if (workerPools.get(i).isShutdown()) {
                 return false;
             }
         }
@@ -358,7 +375,7 @@ public class ActorSystem {
      * @return the default work stealing pool (index 0)
      */
     public ExecutorService getWorkStealingPool() {
-        return this.workStealingPools.get(0);
+        return this.workerPools.get(0);
     }
 
     /**
@@ -368,7 +385,7 @@ public class ActorSystem {
      * @return the work stealing pool at the specified index
      */
     public ExecutorService getWorkStealingPool(int  n) {
-        return this.workStealingPools.get(n);
+        return this.workerPools.get(n);
     }
 
 

@@ -1,2 +1,6 @@
 com.scivicslab.pojoactor
+com.scivicslab.pojoactor.distributed
+com.scivicslab.pojoactor.distributed.discovery
 com.scivicslab.pojoactor.pojo
+com.scivicslab.pojoactor.scheduler
+com.scivicslab.pojoactor.workflow

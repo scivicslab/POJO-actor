@@ -1,0 +1,14 @@
+name: loop-pattern-workflow
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [loopActor, increment, ""]
+  - states: ["1", "2"]
+    actions:
+      - [loopActor, checkLimit, ""]
+  - states: ["2", "1"]
+    actions:
+      - [loopActor, increment, ""]
+  - states: ["2", "end"]
+    actions:
+      - [loopActor, checkLimit, ""]

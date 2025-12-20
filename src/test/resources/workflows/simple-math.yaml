@@ -1,0 +1,11 @@
+name: simple-math-workflow
+matrix:
+  - states: ["0", "1"]
+    actions:
+      - [math, add, "10,5"]
+  - states: ["1", "2"]
+    actions:
+      - [math, multiply, "3,4"]
+  - states: ["2", "end"]
+    actions:
+      - [math, getLastResult, ""]
