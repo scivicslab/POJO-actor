@@ -17,6 +17,7 @@
 
 package com.scivicslab.pojoactor.workflow;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -24,10 +25,13 @@ import java.util.List;
  *
  * <p>Each row defines a state transition with associated actions. The states
  * list typically contains two elements: the current state and the next state.
- * The actions list contains action specifications, where each action is
- * represented as a list of strings: [actorName, actionName, argument].</p>
+ * The actions can be represented in two ways:</p>
+ * <ul>
+ *   <li>Legacy format: List of string lists [actorName, actionName, argument]</li>
+ *   <li>New format: List of Action objects with execution mode support</li>
+ * </ul>
  *
- * <p>This class is designed to be populated from YAML or JSON workflow definitions
+ * <p>This class is designed to be populated from YAML, JSON, or XML workflow definitions
  * using deserialization frameworks like SnakeYAML or Jackson.</p>
  *
  * @author devteam@scivics-lab.com
@@ -35,17 +39,14 @@ import java.util.List;
 public class Row {
 
     List<String> states;
-    List<List<String>> actions;
+    List<Action> actions;  // Unified format for all workflow types
 
     /**
-     * Returns the list of actions for this row.
+     * Returns the list of Action objects for this row.
      *
-     * <p>Each action is a list of strings containing:
-     * [actorName, actionName, argument]</p>
-     *
-     * @return a list of action specifications
+     * @return a list of Action objects
      */
-    public List<List<String>> getActions() {
+    public List<Action> getActions() {
         return this.actions;
     }
 
@@ -63,12 +64,11 @@ public class Row {
     /**
      * Sets the list of actions for this row.
      *
-     * @param list a list of action specifications
+     * @param actions a list of Action objects
      */
-    public void setActions(List<List<String>> list) {
-        this.actions = list;
+    public void setActions(List<Action> actions) {
+        this.actions = actions;
     }
-
 
     /**
      * Sets the list of states for this row.
@@ -78,6 +78,4 @@ public class Row {
     public void setStates(List<String> list) {
         this.states = list;
     }
-
-
 }
