@@ -117,11 +117,11 @@ public class Interpreter {
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult action() {
-        Row row = code.getMatrix().get(currentRow);
-        for (List<String> a: row.getActions()) {
-            String actorName = a.get(0);
-            String action    = a.get(1);
-            String argument  = a.get(2);
+        Row row = code.getSteps().get(currentRow);
+        for (Action a: row.getActions()) {
+            String actorName = a.getActor();
+            String action    = a.getMethod();
+            String argument  = a.getArgument();
 
             IIActorRef<?> actorAR = system.getIIActor(actorName);
             if (actorAR != null) {
@@ -172,19 +172,19 @@ public class Interpreter {
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult execCode() {
-        if (code == null || code.getMatrix().isEmpty()) {
+        if (code == null || code.getSteps().isEmpty()) {
             return new ActionResult(false, "No code loaded");
         }
 
-        Row row = code.getMatrix().get(currentRow);
+        Row row = code.getSteps().get(currentRow);
         List<String> states = row.getStates();
 
         if (states.size() >= 2 && states.get(0).equals(currentState)) {
             action();
             currentState = states.get(1);
 
-            for (int i = 0; i < code.getMatrix().size(); i++) {
-                Row nextRow = code.getMatrix().get(i);
+            for (int i = 0; i < code.getSteps().size(); i++) {
+                Row nextRow = code.getSteps().get(i);
                 if (!nextRow.getStates().isEmpty() && nextRow.getStates().get(0).equals(currentState)) {
                     currentRow = i;
                     break;
