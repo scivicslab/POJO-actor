@@ -30,13 +30,6 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Plugin Architecture**: ServiceLoader-based plugin system for automatic actor registration
 - **Production Ready**: Enhanced error handling and resource management for real-world applications
 
-### Key Features in v2.6.0
-
-- **XML Workflow Support**: Define workflows in XML format alongside YAML/JSON
-- **XSLT Transformation**: Convert XML workflows to beautiful HTML visualizations (table and graph views)
-- **DynamicActorLoaderActor**: Generic actor for loading plugins dynamically from workflows
-- **Enhanced Workflow Engine**: Improved workflow documentation and tooling
-
 ### Key Features in v2.5.0
 
 - **Distributed Actor System**: Actors can communicate across multiple nodes using lightweight HTTP
@@ -45,6 +38,13 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **Remote Actor References**: Transparent access to actors on remote nodes
 - **String-Based Protocol**: All messages are JSON-serializable for network transmission
 - **Native Image Compatible**: No reflection in network layer, fully compatible with GraalVM
+
+### Key Features in v2.6.0
+
+- **XML Workflow Support**: Define workflows in XML format alongside YAML/JSON
+- **XSLT Transformation**: Convert XML workflows to beautiful HTML visualizations (table and graph views)
+- **DynamicActorLoaderActor**: Generic actor for loading plugins dynamically from workflows
+- **Enhanced Workflow Engine**: Improved workflow documentation and tooling
 
 
 ## Quick Start
