@@ -1,16 +1,18 @@
 # POJO-actor
 
-A lightweight, GraalVM-native compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead.
+A lightweight, GraalVM Native Image compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead.
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Javadoc](https://img.shields.io/badge/javadoc-1.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 ## Architecture
 
-POJO-actor implements a simplified actor model built on modern Java features:
+POJO-actor implements a simplified actor model built on modern Java features.
+Built with just ~800 lines of code, POJO-actor delivers a practical actor model implementation without sacrificing functionality or performance.
 
 - **ActorSystem**: Manages actor lifecycle and configurable work-stealing thread pools
-- **ActorRef**: Reference to an actor that provides `tell()` and `ask()` messaging interface  
+- **ActorRef**: Reference to an actor that provides `tell()` and `ask()` messaging interface
 - **Virtual Threads**: Each actor runs on its own virtual thread for lightweight message handling
 - **Work-Stealing Pools**: Heavy computations are delegated to configurable thread pools
 - **Zero Reflection**: Built entirely with standard JDK APIs, making it GraalVM Native Image ready
@@ -45,11 +47,11 @@ import com.scivicslab.pojoactor.ActorRef;
 // Define your POJO
 class Counter {
     private int count = 0;
-    
+
     public void increment() {
         count++;
     }
-    
+
     public int getValue() {
         return count;
     }
@@ -97,7 +99,7 @@ CompletableFuture<String> firstElement = listActor.ask(list -> list.get(0));
 System.out.println("First element: " + firstElement.get()); // Prints: First element: Hello
 
 // Even complex operations work
-CompletableFuture<String> joinedResult = listActor.ask(list -> 
+CompletableFuture<String> joinedResult = listActor.ask(list ->
     String.join(" ", list));
 System.out.println(joinedResult.get()); // Prints: Hello World from POJO-actor
 
@@ -171,16 +173,16 @@ for (int blockRow = 0; blockRow < 4; blockRow++) {
         MatrixCalculator calculator = new MatrixCalculator();
         ActorRef<MatrixCalculator> actor = system.actorOf(
             String.format("block_%d_%d", blockRow, blockCol), calculator);
-        
+
         // Light operation: Initialize actor with block coordinates (uses virtual thread)
         actor.tell(calc -> calc.initBlock(matrixA, matrixB, blockRow, blockCol)).get();
-        
+
         // Heavy computation: Matrix multiplication (uses work-stealing pool)
         CompletableFuture<Double> blockSum = actor.ask(
             calc -> calc.calculateBlock(), // CPU-intensive matrix multiplication
             system.getWorkStealingPool()   // Delegate to work-stealing pool
         );
-        
+
         futures.add(blockSum);
     }
 }
@@ -263,11 +265,11 @@ CompletableFuture<Integer> size = listActor.ask(list -> list.size());
 ActorSystem system = new ActorSystem("system", 4); // 4 CPU threads for heavy work
 
 // CPU-intensive calculations should use work-stealing pool
-CompletableFuture<Double> result = calculator.ask(c -> c.performMatrixMultiplication(), 
+CompletableFuture<Double> result = calculator.ask(c -> c.performMatrixMultiplication(),
                                                  system.getWorkStealingPool());
 
 // I/O operations or blocking calls should also use work-stealing pool
-CompletableFuture<String> data = dataProcessor.ask(p -> p.readLargeFile(), 
+CompletableFuture<String> data = dataProcessor.ask(p -> p.readLargeFile(),
                                                    system.getWorkStealingPool());
 ```
 
@@ -287,7 +289,7 @@ processor.tell(p -> p.updateCounter());
 
 // Heavy operation - uses work-stealing pool
 CompletableFuture<ProcessResult> heavyResult = processor.ask(
-    p -> p.performComplexAnalysis(largeDataset), 
+    p -> p.performComplexAnalysis(largeDataset),
     system.getWorkStealingPool()
 );
 
@@ -337,7 +339,13 @@ POJO-actor was inspired by Alexander Zakusylo's [`actr`](https://medium.com/@zak
 
 We acknowledge the foundational work done by the `actr` library team in making actor model programming more accessible to Java developers.
 
+We also acknowledge [`Comedy.js`](https://github.com/untu/comedy), a Node.js actor framework, which inspired POJO-actor's basic architecture design, particularly the **ActorSystem** and **ActorRef** concepts. While Comedy.js uses one process or one real thread per actor, POJO-actor leverages Java's virtual threads to enable thousands of lightweight actors.
+
+## Future Plans
+
+- `tellNow`: add an API that can bypass the actor's virtual-thread mailbox and execute a message immediately when the caller needs synchronous semantics.
+- Clear pending messages: provide a utility that resets an actor's message queue to simplify test setups and restart scenarios.
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
