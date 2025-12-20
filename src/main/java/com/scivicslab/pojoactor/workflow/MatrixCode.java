@@ -34,7 +34,7 @@ import java.util.List;
 public class MatrixCode {
 
     String   name;
-    List<Row> matrix;
+    List<Row> steps;
 
     /**
      * Constructs an empty MatrixCode.
@@ -62,21 +62,21 @@ public class MatrixCode {
     }
 
     /**
-     * Returns the matrix of workflow rows.
+     * Returns the workflow steps.
      *
      * @return a list of {@link Row} objects representing the workflow steps
      */
-    public List<Row> getMatrix() {
-        return matrix;
+    public List<Row> getSteps() {
+        return steps;
     }
 
     /**
-     * Sets the matrix of workflow rows.
+     * Sets the workflow steps.
      *
-     * @param matrix a list of {@link Row} objects representing the workflow steps
+     * @param steps a list of {@link Row} objects representing the workflow steps
      */
-    public void setMatrix(List<Row> matrix) {
-        this.matrix = matrix;
+    public void setSteps(List<Row> steps) {
+        this.steps = steps;
     }
 
 
