@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workflow name="simple-math-workflow">
-    <matrix>
+    <steps>
         <transition from="0" to="1">
             <action actor="math" method="add">10,5</action>
         </transition>
@@ -12,5 +12,5 @@
         <transition from="2" to="end">
             <action actor="math" method="getLastResult"></action>
         </transition>
-    </matrix>
+    </steps>
 </workflow>

@@ -1,5 +1,5 @@
 name: parallel-execution-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [actor1, execute, "task1"]

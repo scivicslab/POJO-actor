@@ -88,7 +88,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertNotNull(code, "Code should be loaded");
         assertEquals("simple-math-workflow", code.getName());
-        assertEquals(3, code.getMatrix().size(), "Should have 3 rows");
+        assertEquals(3, code.getSteps().size(), "Should have 3 rows");
     }
 
     /**
@@ -162,7 +162,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertEquals("multi-action-workflow", code.getName());
 
-        Row firstRow = code.getMatrix().get(0);
+        Row firstRow = code.getSteps().get(0);
         assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
 
         // Execute the step with multiple actions
@@ -191,20 +191,20 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
 
         // Check first row
-        Row row0 = code.getMatrix().get(0);
+        Row row0 = code.getSteps().get(0);
         assertEquals(2, row0.getStates().size());
         assertEquals("0", row0.getStates().get(0));
         assertEquals("1", row0.getStates().get(1));
         assertEquals(1, row0.getActions().size());
-        assertEquals("math", row0.getActions().get(0).get(0));
-        assertEquals("add", row0.getActions().get(0).get(1));
-        assertEquals("10,5", row0.getActions().get(0).get(2));
+        assertEquals("math", row0.getActions().get(0).getActor());
+        assertEquals("add", row0.getActions().get(0).getMethod());
+        assertEquals("10,5", row0.getActions().get(0).getArgument());
 
         // Check second row
-        Row row1 = code.getMatrix().get(1);
+        Row row1 = code.getSteps().get(1);
         assertEquals("1", row1.getStates().get(0));
         assertEquals("2", row1.getStates().get(1));
-        assertEquals("multiply", row1.getActions().get(0).get(1));
+        assertEquals("multiply", row1.getActions().get(0).getMethod());
     }
 
     /**
@@ -219,10 +219,12 @@ public class WorkflowInterpreterTest {
 
         Row row = new Row();
         row.setStates(java.util.Arrays.asList("0", "1"));
-        row.setActions(java.util.Arrays.asList(
-            java.util.Arrays.asList("nonexistent", "someAction", "args")
-        ));
-        code.setMatrix(java.util.Arrays.asList(row));
+        Action action = new Action();
+        action.setActor("nonexistent");
+        action.setMethod("someAction");
+        action.setArgument("args");
+        row.setActions(java.util.Arrays.asList(action));
+        code.setSteps(java.util.Arrays.asList(row));
 
         Interpreter interpreter = new Interpreter.Builder()
                 .loggerName("test-interpreter")
@@ -349,7 +351,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertNotNull(code, "Code should be loaded");
         assertEquals("simple-math-workflow", code.getName());
-        assertEquals(3, code.getMatrix().size(), "Should have 3 rows");
+        assertEquals(3, code.getSteps().size(), "Should have 3 rows");
     }
 
     /**
@@ -435,7 +437,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertEquals("multi-action-workflow", code.getName());
 
-        Row firstRow = code.getMatrix().get(0);
+        Row firstRow = code.getSteps().get(0);
         assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
 
         // Execute the step with multiple actions
@@ -468,20 +470,20 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
 
         // Check first row
-        Row row0 = code.getMatrix().get(0);
+        Row row0 = code.getSteps().get(0);
         assertEquals(2, row0.getStates().size());
         assertEquals("0", row0.getStates().get(0));
         assertEquals("1", row0.getStates().get(1));
         assertEquals(1, row0.getActions().size());
-        assertEquals("math", row0.getActions().get(0).get(0));
-        assertEquals("add", row0.getActions().get(0).get(1));
-        assertEquals("10,5", row0.getActions().get(0).get(2));
+        assertEquals("math", row0.getActions().get(0).getActor());
+        assertEquals("add", row0.getActions().get(0).getMethod());
+        assertEquals("10,5", row0.getActions().get(0).getArgument());
 
         // Check second row
-        Row row1 = code.getMatrix().get(1);
+        Row row1 = code.getSteps().get(1);
         assertEquals("1", row1.getStates().get(0));
         assertEquals("2", row1.getStates().get(1));
-        assertEquals("multiply", row1.getActions().get(0).get(1));
+        assertEquals("multiply", row1.getActions().get(0).getMethod());
     }
 
     /**
@@ -507,14 +509,14 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertNotNull(code, "Code should be loaded");
         assertEquals("complex-branching", code.getName());
-        assertEquals(16, code.getMatrix().size(), "Should have 16 transitions");
+        assertEquals(16, code.getSteps().size(), "Should have 16 transitions");
 
         // Verify first transition
-        Row firstRow = code.getMatrix().get(0);
+        Row firstRow = code.getSteps().get(0);
         assertEquals("init", firstRow.getStates().get(0));
         assertEquals("state_A", firstRow.getStates().get(1));
-        assertEquals("checker", firstRow.getActions().get(0).get(0));
-        assertEquals("check_condition1", firstRow.getActions().get(0).get(1));
+        assertEquals("checker", firstRow.getActions().get(0).getActor());
+        assertEquals("check_condition1", firstRow.getActions().get(0).getMethod());
     }
 
     /**
@@ -536,8 +538,8 @@ public class WorkflowInterpreterTest {
         }
 
         MatrixCode code = interpreter.getCode();
-        Row lastRow = code.getMatrix().get(2);  // The last row has getLastResult with empty argument
+        Row lastRow = code.getSteps().get(2);  // The last row has getLastResult with empty argument
 
-        assertEquals("", lastRow.getActions().get(0).get(2), "Empty argument should be empty string");
+        assertEquals("", lastRow.getActions().get(0).getArgument(), "Empty argument should be empty string");
     }
 }

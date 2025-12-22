@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workflow name="multi-action-workflow">
-    <matrix>
+    <steps>
         <transition from="0" to="1">
             <action actor="math" method="add">5,3</action>
             <action actor="math" method="multiply">2,4</action>
             <action actor="math" method="getLastResult"></action>
         </transition>
-    </matrix>
+    </steps>
 </workflow>

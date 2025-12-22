@@ -1,5 +1,5 @@
 name: conditional-branch-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [decision, setValue, "15"]

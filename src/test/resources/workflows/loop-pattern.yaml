@@ -1,5 +1,5 @@
 name: loop-pattern-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [loopActor, increment, ""]

@@ -1,5 +1,5 @@
 name: error-handling-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [errorActor, riskyOperation, ""]

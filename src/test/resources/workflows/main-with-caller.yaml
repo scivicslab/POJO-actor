@@ -1,5 +1,5 @@
 name: main-with-caller
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [caller, call, "simple-math.yaml"]

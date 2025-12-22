@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workflow name="complex-branching">
-    <matrix>
+    <steps>
         <!-- 初期状態から分岐1 -->
         <transition from="init" to="state_A">
             <action actor="checker" method="check_condition1"></action>
@@ -70,5 +70,5 @@
         <transition from="process_F" to="end">
             <action actor="processor" method="process_F"></action>
         </transition>
-    </matrix>
+    </steps>
 </workflow>

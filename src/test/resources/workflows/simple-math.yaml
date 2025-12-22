@@ -1,5 +1,5 @@
 name: simple-math-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [math, add, "10,5"]

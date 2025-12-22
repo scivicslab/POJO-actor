@@ -117,11 +117,11 @@ public class DynamicActorLoaderActorTest {
         String workflowXml = """
             <?xml version="1.0" encoding="UTF-8"?>
             <workflow name="test-dynamic">
-                <matrix>
+                <steps>
                     <transition from="0" to="end">
                         <action actor="loader" method="listProviders"></action>
                     </transition>
-                </matrix>
+                </steps>
             </workflow>
             """;
 

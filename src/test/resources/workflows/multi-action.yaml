@@ -1,5 +1,5 @@
 name: multi-action-workflow
-matrix:
+steps:
   - states: ["0", "1"]
     actions:
       - [math, add, "5,3"]
