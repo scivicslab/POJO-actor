@@ -18,6 +18,10 @@
 package com.scivicslab.pojoactor.workflow;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import com.scivicslab.pojoactor.ActorSystem;
 
@@ -121,6 +125,205 @@ public class IIActorSystem extends ActorSystem {
     public void terminateIIActors() {
         iiActors.keySet().stream()
             .forEach((name)->iiActors.get(name).close());
+    }
+
+    /**
+     * Resolves an actor path relative to a given actor using Unix-style path notation.
+     *
+     * <p>Supports the following path formats:</p>
+     * <ul>
+     *   <li><code>.</code> or <code>this</code> - self (the actor specified by fromActorName)</li>
+     *   <li><code>..</code> - parent actor</li>
+     *   <li><code>./*</code> - all children of self</li>
+     *   <li><code>../*</code> - all siblings (all children of parent)</li>
+     *   <li><code>../sibling</code> - specific sibling by name</li>
+     *   <li><code>../web*</code> - siblings whose names start with "web"</li>
+     *   <li><code>../*server</code> - siblings whose names end with "server"</li>
+     *   <li><code>./child*</code> - children whose names start with "child"</li>
+     * </ul>
+     *
+     * <p>Wildcard patterns:</p>
+     * <ul>
+     *   <li><code>*</code> - matches all actors in the scope</li>
+     *   <li><code>prefix*</code> - matches actors whose names start with "prefix"</li>
+     *   <li><code>*suffix</code> - matches actors whose names end with "suffix"</li>
+     *   <li><code>*middle*</code> - matches actors whose names contain "middle"</li>
+     * </ul>
+     *
+     * @param fromActorName the name of the actor from which the path is relative
+     * @param actorPath Unix-style path (e.g., ".", "this", "..", "../sibling", "../web*")
+     * @return list of matching actors (empty list if no matches found)
+     *
+     * @throws IllegalArgumentException if fromActorName does not exist or path is invalid
+     *
+     * @since 2.6.0
+     */
+    public List<IIActorRef<?>> resolveActorPath(String fromActorName, String actorPath) {
+        List<IIActorRef<?>> results = new ArrayList<>();
+
+        // Get the actor from which the path is relative
+        IIActorRef<?> fromActor = getIIActor(fromActorName);
+        if (fromActor == null) {
+            throw new IllegalArgumentException(
+                "Actor not found: " + fromActorName);
+        }
+
+        // Handle different path patterns
+        if (actorPath.equals(".") || actorPath.equals("this")) {
+            // Self (Java-style "this" keyword is also supported)
+            results.add(fromActor);
+
+        } else if (actorPath.equals("..")) {
+            // Parent
+            String parentName = fromActor.getParentName();
+            if (parentName != null) {
+                IIActorRef<?> parent = getIIActor(parentName);
+                if (parent != null) {
+                    results.add(parent);
+                }
+            }
+
+        } else if (actorPath.equals("./*")) {
+            // All children of self
+            Set<String> childNames = fromActor.getNamesOfChildren();
+            for (String childName : childNames) {
+                IIActorRef<?> child = getIIActor(childName);
+                if (child != null) {
+                    results.add(child);
+                }
+            }
+
+        } else if (actorPath.startsWith("./")) {
+            // Specific child or wildcard children
+            String childPattern = actorPath.substring(2); // Remove "./"
+            Set<String> childNames = fromActor.getNamesOfChildren();
+
+            if (childPattern.equals("*")) {
+                // Same as "./*"
+                for (String childName : childNames) {
+                    IIActorRef<?> child = getIIActor(childName);
+                    if (child != null) {
+                        results.add(child);
+                    }
+                }
+            } else if (childPattern.contains("*")) {
+                // Wildcard pattern
+                Pattern regex = wildcardToRegex(childPattern);
+                for (String childName : childNames) {
+                    if (regex.matcher(childName).matches()) {
+                        IIActorRef<?> child = getIIActor(childName);
+                        if (child != null) {
+                            results.add(child);
+                        }
+                    }
+                }
+            } else {
+                // Exact child name
+                IIActorRef<?> child = getIIActor(childPattern);
+                if (child != null && childNames.contains(childPattern)) {
+                    results.add(child);
+                }
+            }
+
+        } else if (actorPath.equals("../*")) {
+            // All siblings (all children of parent)
+            String parentName = fromActor.getParentName();
+            if (parentName != null) {
+                IIActorRef<?> parent = getIIActor(parentName);
+                if (parent != null) {
+                    Set<String> siblingNames = parent.getNamesOfChildren();
+                    for (String siblingName : siblingNames) {
+                        IIActorRef<?> sibling = getIIActor(siblingName);
+                        if (sibling != null) {
+                            results.add(sibling);
+                        }
+                    }
+                }
+            }
+
+        } else if (actorPath.startsWith("../")) {
+            // Specific sibling or wildcard siblings
+            String siblingPattern = actorPath.substring(3); // Remove "../"
+            String parentName = fromActor.getParentName();
+            if (parentName != null) {
+                IIActorRef<?> parent = getIIActor(parentName);
+                if (parent != null) {
+                    Set<String> siblingNames = parent.getNamesOfChildren();
+
+                    if (siblingPattern.equals("*")) {
+                        // Same as "../*"
+                        for (String siblingName : siblingNames) {
+                            IIActorRef<?> sibling = getIIActor(siblingName);
+                            if (sibling != null) {
+                                results.add(sibling);
+                            }
+                        }
+                    } else if (siblingPattern.contains("*")) {
+                        // Wildcard pattern
+                        Pattern regex = wildcardToRegex(siblingPattern);
+                        for (String siblingName : siblingNames) {
+                            if (regex.matcher(siblingName).matches()) {
+                                IIActorRef<?> sibling = getIIActor(siblingName);
+                                if (sibling != null) {
+                                    results.add(sibling);
+                                }
+                            }
+                        }
+                    } else {
+                        // Exact sibling name
+                        IIActorRef<?> sibling = getIIActor(siblingPattern);
+                        if (sibling != null && siblingNames.contains(siblingPattern)) {
+                            results.add(sibling);
+                        }
+                    }
+                }
+            }
+
+        } else {
+            // Fallback: treat as absolute actor name
+            IIActorRef<?> actor = getIIActor(actorPath);
+            if (actor != null) {
+                results.add(actor);
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Converts a wildcard pattern to a regex Pattern.
+     *
+     * <p>Supported patterns:</p>
+     * <ul>
+     *   <li><code>*</code> - matches everything</li>
+     *   <li><code>prefix*</code> - starts with "prefix"</li>
+     *   <li><code>*suffix</code> - ends with "suffix"</li>
+     *   <li><code>*middle*</code> - contains "middle"</li>
+     * </ul>
+     *
+     * @param wildcard the wildcard pattern (e.g., "web*", "*server", "*node*")
+     * @return compiled regex Pattern
+     */
+    private Pattern wildcardToRegex(String wildcard) {
+        // Escape special regex characters except *
+        String escaped = wildcard
+            .replace(".", "\\.")
+            .replace("?", "\\?")
+            .replace("+", "\\+")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace("^", "\\^")
+            .replace("$", "\\$")
+            .replace("|", "\\|");
+
+        // Convert * to .*
+        String regex = escaped.replace("*", ".*");
+
+        return Pattern.compile(regex);
     }
 
 }

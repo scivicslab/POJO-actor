@@ -542,4 +542,160 @@ public class WorkflowInterpreterTest {
 
         assertEquals("", lastRow.getActions().get(0).getArgument(), "Empty argument should be empty string");
     }
+
+    // ==================== New Arguments Format Tests ====================
+
+    /**
+     * Example 18: Load YAML workflow with arguments list format.
+     */
+    @Test
+    @DisplayName("Should load and execute YAML workflow with arguments list format")
+    public void testYamlWithArgumentsListFormat() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/arguments-list-format.yaml");
+        assertNotNull(yamlInput, "arguments-list-format.yaml should exist");
+
+        interpreter.readYaml(yamlInput);
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code);
+        assertEquals("arguments-list-format-workflow", code.getName());
+
+        // Step 1: 0 -> 1, add ["10", "5"] (result: 15)
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 2: 1 -> 2, multiply ["3", "4"] (result: 12)
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+
+        // Step 3: 2 -> end, getLastResult [] (result: 12)
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 19: Load JSON workflow with arguments list format.
+     */
+    @Test
+    @DisplayName("Should load and execute JSON workflow with arguments list format")
+    public void testJsonWithArgumentsListFormat() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream jsonInput = getClass().getResourceAsStream("/workflows/arguments-list-format.json");
+        assertNotNull(jsonInput, "arguments-list-format.json should exist");
+
+        try {
+            interpreter.readJson(jsonInput);
+        } catch (Exception e) {
+            fail("Failed to read JSON workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code);
+        assertEquals("arguments-list-format-workflow", code.getName());
+
+        // Step 1: 0 -> 1, add ["10", "5"] (result: 15)
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 2: 1 -> 2, multiply ["3", "4"] (result: 12)
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+
+        // Step 3: 2 -> end, getLastResult [] (result: 12)
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 20: Load XML workflow with arguments list format.
+     */
+    @Test
+    @DisplayName("Should load and execute XML workflow with arguments list format")
+    public void testXmlWithArgumentsListFormat() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream xmlInput = getClass().getResourceAsStream("/workflows/arguments-list-format.xml");
+        assertNotNull(xmlInput, "arguments-list-format.xml should exist");
+
+        try {
+            interpreter.readXml(xmlInput);
+        } catch (Exception e) {
+            fail("Failed to read XML workflow: " + e.getMessage());
+        }
+
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code);
+        assertEquals("arguments-list-format-workflow", code.getName());
+
+        // Step 1: 0 -> 1, add ["10", "5"] (result: 15)
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 2: 1 -> 2, multiply ["3", "4"] (result: 12)
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+
+        // Step 3: 2 -> end, getLastResult [] (result: 12)
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(12, mathPlugin.getLastResult());
+    }
+
+    /**
+     * Example 21: Load YAML workflow with mixed arguments format (string + array).
+     * Demonstrates that both string and array formats are supported.
+     */
+    @Test
+    @DisplayName("Should load and execute YAML workflow with mixed arguments format")
+    public void testYamlWithMixedArguments() {
+        Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test-interpreter")
+                .team(system)
+                .build();
+
+        InputStream yamlInput = getClass().getResourceAsStream("/workflows/arguments-mixed-format.yaml");
+        assertNotNull(yamlInput, "arguments-mixed-format.yaml should exist");
+
+        interpreter.readYaml(yamlInput);
+        MatrixCode code = interpreter.getCode();
+        assertNotNull(code);
+        assertEquals("arguments-mixed-format-workflow", code.getName());
+
+        // Verify workflow loaded correctly with mixed argument formats
+        assertEquals(3, code.getSteps().size());
+
+        // Step 1: greet with string format (no array brackets) - action executed but result in state
+        ActionResult result1 = interpreter.execCode();
+        assertTrue(result1.isSuccess());
+
+        // Step 2: add with array format
+        ActionResult result2 = interpreter.execCode();
+        assertTrue(result2.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+
+        // Step 3: getLastResult with empty string
+        ActionResult result3 = interpreter.execCode();
+        assertTrue(result3.isSuccess());
+        assertEquals(15, mathPlugin.getLastResult());
+    }
 }

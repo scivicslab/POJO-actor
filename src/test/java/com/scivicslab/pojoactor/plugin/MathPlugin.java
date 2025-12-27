@@ -17,6 +17,9 @@
 
 package com.scivicslab.pojoactor.plugin;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+
 import com.scivicslab.pojoactor.ActionResult;
 import com.scivicslab.pojoactor.CallableByActionName;
 
@@ -97,16 +100,22 @@ public class MathPlugin implements CallableByActionName {
      * <p>This method enables workflow-driven execution and distributed system support.
      * Actions can be invoked from YAML/JSON workflows or sent across network boundaries.</p>
      *
+     * <p>Supports both JSON array format (new) and comma-separated format (legacy):</p>
+     * <ul>
+     *   <li>JSON array: {@code ["5", "3"]} or {@code ["5","3"]}</li>
+     *   <li>Comma-separated: {@code "5,3"} (for backward compatibility)</li>
+     * </ul>
+     *
      * <h3>Supported Actions</h3>
      * <ul>
-     *   <li><strong>add</strong>: Args format: "a,b" (e.g., "5,3")</li>
-     *   <li><strong>multiply</strong>: Args format: "a,b" (e.g., "4,2")</li>
-     *   <li><strong>getLastResult</strong>: No args needed (empty string)</li>
-     *   <li><strong>greet</strong>: Args format: "name" (e.g., "World")</li>
+     *   <li><strong>add</strong>: Args format: ["a","b"] or "a,b"</li>
+     *   <li><strong>multiply</strong>: Args format: ["a","b"] or "a,b"</li>
+     *   <li><strong>getLastResult</strong>: No args needed (empty array [] or empty string)</li>
+     *   <li><strong>greet</strong>: Args format: ["name"] or "name"</li>
      * </ul>
      *
      * @param actionName the name of the action to execute
-     * @param args string arguments (format depends on action)
+     * @param args string arguments (JSON array format or comma-separated)
      * @return an {@link ActionResult} indicating success or failure
      */
     @Override
@@ -114,22 +123,16 @@ public class MathPlugin implements CallableByActionName {
         try {
             switch (actionName) {
                 case "add":
-                    String[] addParts = args.split(",");
-                    if (addParts.length != 2) {
-                        return new ActionResult(false, "add requires 2 arguments: a,b");
-                    }
-                    int a = Integer.parseInt(addParts[0].trim());
-                    int b = Integer.parseInt(addParts[1].trim());
+                    String[] addArgs = parseArguments(args, 2);
+                    int a = Integer.parseInt(addArgs[0].trim());
+                    int b = Integer.parseInt(addArgs[1].trim());
                     int sum = add(a, b);
                     return new ActionResult(true, String.valueOf(sum));
 
                 case "multiply":
-                    String[] mulParts = args.split(",");
-                    if (mulParts.length != 2) {
-                        return new ActionResult(false, "multiply requires 2 arguments: a,b");
-                    }
-                    int x = Integer.parseInt(mulParts[0].trim());
-                    int y = Integer.parseInt(mulParts[1].trim());
+                    String[] mulArgs = parseArguments(args, 2);
+                    int x = Integer.parseInt(mulArgs[0].trim());
+                    int y = Integer.parseInt(mulArgs[1].trim());
                     int product = multiply(x, y);
                     return new ActionResult(true, String.valueOf(product));
 
@@ -138,10 +141,8 @@ public class MathPlugin implements CallableByActionName {
                     return new ActionResult(true, String.valueOf(result));
 
                 case "greet":
-                    if (args == null || args.trim().isEmpty()) {
-                        return new ActionResult(false, "greet requires a name argument");
-                    }
-                    String greeting = greet(args.trim());
+                    String[] greetArgs = parseArguments(args, 1);
+                    String greeting = greet(greetArgs[0].trim());
                     return new ActionResult(true, greeting);
 
                 default:
@@ -149,8 +150,55 @@ public class MathPlugin implements CallableByActionName {
             }
         } catch (NumberFormatException e) {
             return new ActionResult(false, "Invalid number format: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return new ActionResult(false, e.getMessage());
         } catch (Exception e) {
             return new ActionResult(false, "Error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Parses arguments from either JSON array format or comma-separated format.
+     *
+     * @param args the arguments string (JSON array or comma-separated)
+     * @param expectedCount the expected number of arguments
+     * @return array of parsed arguments
+     * @throws IllegalArgumentException if argument count doesn't match expected
+     */
+    private String[] parseArguments(String args, int expectedCount) {
+        if (args == null || args.trim().isEmpty()) {
+            if (expectedCount == 0) {
+                return new String[0];
+            }
+            throw new IllegalArgumentException("Expected " + expectedCount + " arguments but got none");
+        }
+
+        String trimmedArgs = args.trim();
+
+        // Try parsing as JSON array first
+        if (trimmedArgs.startsWith("[")) {
+            try {
+                JSONArray jsonArray = new JSONArray(trimmedArgs);
+                if (jsonArray.length() != expectedCount) {
+                    throw new IllegalArgumentException(
+                        "Expected " + expectedCount + " arguments but got " + jsonArray.length());
+                }
+                String[] result = new String[jsonArray.length()];
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    result[i] = jsonArray.getString(i);
+                }
+                return result;
+            } catch (JSONException e) {
+                throw new IllegalArgumentException("Invalid JSON array format: " + e.getMessage());
+            }
+        }
+
+        // Fall back to comma-separated format (backward compatibility)
+        String[] parts = trimmedArgs.split(",");
+        if (parts.length != expectedCount) {
+            throw new IllegalArgumentException(
+                "Expected " + expectedCount + " arguments but got " + parts.length);
+        }
+        return parts;
     }
 }

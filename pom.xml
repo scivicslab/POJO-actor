@@ -46,7 +46,14 @@
         <version>2.20.0</version>
       </dependency>
 
-      
+      <!-- JSON processing -->
+      <dependency>
+        <groupId>org.json</groupId>
+        <artifactId>json</artifactId>
+        <version>20240303</version>
+      </dependency>
+
+
       <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-math3 -->
       <dependency>
         <groupId>org.apache.commons</groupId>

@@ -20,7 +20,9 @@ package com.scivicslab.pojoactor.workflow;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -31,6 +33,9 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.scivicslab.pojoactor.ActionResult;
 
@@ -56,15 +61,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public class Interpreter {
 
-    Logger logger = null;
+    protected Logger logger = null;
 
-    MatrixCode code = null;
+    protected MatrixCode code = null;
 
-    int currentRow = 0;
+    protected int currentRow = 0;
 
-    String currentState = "0";
+    protected String currentState = "0";
 
-    IIActorSystem system = null;
+    protected IIActorSystem system = null;
+
+    /**
+     * Reference to the actor executing this interpreter (for Unix-style path resolution).
+     * When this interpreter is running inside an actor (e.g., Node extends Interpreter),
+     * this field holds a reference to that actor, enabling relative path resolution
+     * like "." (self), ".." (parent), "../sibling" (sibling actors), etc.
+     */
+    protected IIActorRef<?> selfActorRef = null;
 
     /**
      * Builder for constructing Interpreter instances.
@@ -122,26 +135,96 @@ public class Interpreter {
      * Executes the actions in the current row of the workflow matrix.
      *
      * <p>For each action in the current row, this method retrieves the
-     * corresponding actor from the system and invokes the specified action
+     * corresponding actor(s) from the system and invokes the specified action
      * by name with the provided arguments.</p>
+     *
+     * <p>Supports Unix-style actor path resolution when {@code selfActorRef} is set:</p>
+     * <ul>
+     *   <li>{@code .} or {@code this} - self (the current interpreter's actor)</li>
+     *   <li>{@code ..} - parent actor</li>
+     *   <li>{@code ./*} - all children</li>
+     *   <li>{@code ../*} - all siblings</li>
+     *   <li>{@code ../sibling} - specific sibling by name</li>
+     *   <li>{@code ../web*} - siblings matching wildcard pattern</li>
+     * </ul>
+     *
+     * <p>If {@code selfActorRef} is not set, falls back to absolute actor name lookup.</p>
+     *
+     * <p>Supports both legacy {@code argument} (String) and new {@code arguments} (List/Map) formats.
+     * If {@code arguments} is present, it is converted to JSON array format before passing to the actor.</p>
      *
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult action() {
         Row row = code.getSteps().get(currentRow);
         for (Action a: row.getActions()) {
-            String actorName = a.getActor();
+            String actorPath = a.getActor();
             String action    = a.getMethod();
-            String argument  = a.getArgument();
 
-            IIActorRef<?> actorAR = system.getIIActor(actorName);
-            if (actorAR != null) {
-                actorAR.callByActionName(action, argument);
+            // Convert arguments to JSON format
+            String argumentString = convertArgumentsToJson(a);
+
+            // Resolve actor path using Unix-style notation
+            List<IIActorRef<?>> actors;
+            if (selfActorRef != null) {
+                // Use path resolution relative to self
+                actors = system.resolveActorPath(selfActorRef.getName(), actorPath);
+            } else {
+                // Fallback: treat as absolute actor name
+                IIActorRef<?> actor = system.getIIActor(actorPath);
+                actors = actor != null ? Arrays.asList(actor) : new ArrayList<>();
             }
 
-
+            // Execute action on all matching actors
+            for (IIActorRef<?> actorAR : actors) {
+                actorAR.callByActionName(action, argumentString);
+            }
         }
         return new ActionResult(true, "");
+    }
+
+    /**
+     * Converts action arguments to JSON array format.
+     *
+     * <p>Handles multiple {@code arguments} formats:</p>
+     * <ul>
+     *   <li>If {@code arguments} is a String: wraps in JSON array (e.g., {@code "value"} → {@code ["value"]})</li>
+     *   <li>If {@code arguments} is a List: converts to JSON array string (e.g., {@code ["a","b"]})</li>
+     *   <li>If {@code arguments} is a Map: wraps in JSON array (e.g., {@code [{"key":"value"}]})</li>
+     *   <li>If {@code arguments} is null: falls back to legacy {@code argument} string</li>
+     * </ul>
+     *
+     * @param action the action containing arguments
+     * @return JSON array string or legacy argument string
+     */
+    private String convertArgumentsToJson(Action action) {
+        Object arguments = action.getArguments();
+
+        if (arguments == null) {
+            // Fall back to legacy argument field
+            return action.getArgument();
+        }
+
+        if (arguments instanceof String) {
+            // Single string argument: wrap in JSON array
+            JSONArray jsonArray = new JSONArray();
+            jsonArray.put((String) arguments);
+            return jsonArray.toString();
+        } else if (arguments instanceof List) {
+            // Convert List to JSON array: ["arg1", "arg2"]
+            JSONArray jsonArray = new JSONArray((List<?>) arguments);
+            return jsonArray.toString();
+        } else if (arguments instanceof Map) {
+            // Convert Map to JSON array with single object: [{"key": "value"}]
+            JSONObject jsonObject = new JSONObject((Map<?, ?>) arguments);
+            JSONArray jsonArray = new JSONArray();
+            jsonArray.put(jsonObject);
+            return jsonArray.toString();
+        } else {
+            throw new IllegalArgumentException(
+                "Unsupported arguments type: " + arguments.getClass().getName() +
+                ". Expected String, List, or Map.");
+        }
     }
 
     /**
@@ -240,7 +323,36 @@ public class Interpreter {
                     Action action = new Action();
                     action.setActor(actionElement.getAttribute("actor"));
                     action.setMethod(actionElement.getAttribute("method"));
-                    action.setArgument(actionElement.getTextContent().trim());
+
+                    // Check for new <arguments> element
+                    NodeList argumentsNodes = actionElement.getElementsByTagName("arguments");
+                    if (argumentsNodes.getLength() > 0) {
+                        Element argumentsElement = (Element) argumentsNodes.item(0);
+                        NodeList argNodes = argumentsElement.getElementsByTagName("arg");
+
+                        if (argNodes.getLength() > 0) {
+                            // Parse as list of arguments: <arguments><arg>a</arg><arg>b</arg></arguments>
+                            List<String> argsList = new ArrayList<>();
+                            for (int k = 0; k < argNodes.getLength(); k++) {
+                                Element argElement = (Element) argNodes.item(k);
+                                argsList.add(argElement.getTextContent().trim());
+                            }
+                            action.setArguments(argsList);
+                        } else {
+                            // Check if <arguments> has text content (single string format)
+                            String textContent = argumentsElement.getTextContent().trim();
+                            if (!textContent.isEmpty()) {
+                                // Single string argument: <arguments>value</arguments>
+                                action.setArguments(textContent);
+                            } else {
+                                // Empty <arguments/> element
+                                action.setArguments(new ArrayList<>());
+                            }
+                        }
+                    } else {
+                        // Fall back to legacy text content (argument field)
+                        action.setArgument(actionElement.getTextContent().trim());
+                    }
 
                     actions.add(action);
                 }
@@ -335,6 +447,19 @@ public class Interpreter {
         this.currentRow = 0;
         this.currentState = "0";
         this.code = null;
+    }
+
+    /**
+     * Sets the reference to the actor executing this interpreter.
+     *
+     * <p>This method is called by IIActorRef implementations to establish the
+     * link between the interpreter and its actor wrapper, enabling Unix-style
+     * path resolution within workflows.</p>
+     *
+     * @param actorRef the actor reference wrapping this interpreter
+     */
+    public void setSelfActorRef(IIActorRef<?> actorRef) {
+        this.selfActorRef = actorRef;
     }
 
 

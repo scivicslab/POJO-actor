@@ -23,6 +23,12 @@ package com.scivicslab.pojoactor.workflow;
  * <p>An action specifies which actor to invoke, which method to call,
  * with what arguments, and how to execute it (direct call vs work-stealing pool).</p>
  *
+ * <p>Supports both legacy {@code argument} (String) and new {@code arguments} (String/List/Map) formats:</p>
+ * <ul>
+ *   <li>{@code argument}: String format for backward compatibility</li>
+ *   <li>{@code arguments}: String (single argument), List (multiple arguments), or Map (structured data)</li>
+ * </ul>
+ *
  * @author devteam@scivics-lab.com
  * @since 2.7.0
  */
@@ -30,7 +36,8 @@ public class Action {
 
     private String actor;
     private String method;
-    private String argument;
+    private String argument;  // Legacy format
+    private Object arguments;  // New format: String, List, or Map
     private ExecutionMode execution = ExecutionMode.POOL;  // Default: pool
     private int poolIndex = 0;
 
@@ -105,6 +112,24 @@ public class Action {
      */
     public void setArgument(String argument) {
         this.argument = argument;
+    }
+
+    /**
+     * Gets the arguments (new format: String, List, or Map).
+     *
+     * @return the arguments as String, List, or Map, or null if not set
+     */
+    public Object getArguments() {
+        return arguments;
+    }
+
+    /**
+     * Sets the arguments (new format: String, List, or Map).
+     *
+     * @param arguments the arguments as String, List, or Map
+     */
+    public void setArguments(Object arguments) {
+        this.arguments = arguments;
     }
 
     /**
