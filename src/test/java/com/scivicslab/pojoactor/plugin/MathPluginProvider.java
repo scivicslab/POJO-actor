@@ -17,8 +17,8 @@
 
 package com.scivicslab.pojoactor.plugin;
 
-import com.scivicslab.pojoactor.ActorProvider;
-import com.scivicslab.pojoactor.ActorSystem;
+import com.scivicslab.pojoactor.core.ActorProvider;
+import com.scivicslab.pojoactor.core.ActorSystem;
 
 /**
  * Sample ActorProvider implementation for testing ServiceLoader mechanism.

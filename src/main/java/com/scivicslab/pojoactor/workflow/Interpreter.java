@@ -37,7 +37,7 @@ import org.xml.sax.SAXException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import com.scivicslab.pojoactor.ActionResult;
+import com.scivicslab.pojoactor.core.ActionResult;
 
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;

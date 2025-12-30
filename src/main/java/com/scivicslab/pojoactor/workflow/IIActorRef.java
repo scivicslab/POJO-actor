@@ -17,9 +17,9 @@
 
 package com.scivicslab.pojoactor.workflow;
 
-import com.scivicslab.pojoactor.ActorRef;
-import com.scivicslab.pojoactor.CallableByActionName;
-import com.scivicslab.pojoactor.ActionResult;
+import com.scivicslab.pojoactor.core.ActorRef;
+import com.scivicslab.pojoactor.core.CallableByActionName;
+import com.scivicslab.pojoactor.core.ActionResult;
 
 /**
  * An interpreter-interfaced actor reference that can be invoked by action name strings.

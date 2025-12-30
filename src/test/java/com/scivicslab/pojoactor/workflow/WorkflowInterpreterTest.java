@@ -26,8 +26,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.scivicslab.pojoactor.ActionResult;
+import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.plugin.MathPlugin;
+import com.scivicslab.pojoactor.workflow.IIActorRef;
+import com.scivicslab.pojoactor.workflow.IIActorSystem;
+import com.scivicslab.pojoactor.workflow.Interpreter;
+import com.scivicslab.pojoactor.workflow.MatrixCode;
+import com.scivicslab.pojoactor.workflow.Row;
+import com.scivicslab.pojoactor.workflow.Action;
 
 /**
  * Comprehensive tests for Workflow Interpreter functionality.

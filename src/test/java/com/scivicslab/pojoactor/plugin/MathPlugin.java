@@ -20,8 +20,8 @@ package com.scivicslab.pojoactor.plugin;
 import org.json.JSONArray;
 import org.json.JSONException;
 
-import com.scivicslab.pojoactor.ActionResult;
-import com.scivicslab.pojoactor.CallableByActionName;
+import com.scivicslab.pojoactor.core.ActionResult;
+import com.scivicslab.pojoactor.core.CallableByActionName;
 
 /**
  * Sample plugin class for testing dynamic actor loading with string-based invocation.
@@ -170,7 +170,7 @@ public class MathPlugin implements CallableByActionName {
             if (expectedCount == 0) {
                 return new String[0];
             }
-            throw new IllegalArgumentException("Expected " + expectedCount + " arguments but got none");
+            throw new IllegalArgumentException("Action requires " + expectedCount + " argument(s) but got none");
         }
 
         String trimmedArgs = args.trim();
@@ -181,7 +181,7 @@ public class MathPlugin implements CallableByActionName {
                 JSONArray jsonArray = new JSONArray(trimmedArgs);
                 if (jsonArray.length() != expectedCount) {
                     throw new IllegalArgumentException(
-                        "Expected " + expectedCount + " arguments but got " + jsonArray.length());
+                        "Action requires " + expectedCount + " argument(s) but got " + jsonArray.length());
                 }
                 String[] result = new String[jsonArray.length()];
                 for (int i = 0; i < jsonArray.length(); i++) {
@@ -194,10 +194,16 @@ public class MathPlugin implements CallableByActionName {
         }
 
         // Fall back to comma-separated format (backward compatibility)
+        // Special case: if expecting 1 argument, treat entire string as single argument
+        // (don't split on comma - allows names like "Smith, John")
+        if (expectedCount == 1) {
+            return new String[] { trimmedArgs };
+        }
+
         String[] parts = trimmedArgs.split(",");
         if (parts.length != expectedCount) {
             throw new IllegalArgumentException(
-                "Expected " + expectedCount + " arguments but got " + parts.length);
+                "Action requires " + expectedCount + " argument(s) but got " + parts.length);
         }
         return parts;
     }

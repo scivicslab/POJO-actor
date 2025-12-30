@@ -1,5 +1,7 @@
 package com.scivicslab.pojoactor;
 
+import com.scivicslab.pojoactor.core.ActorRef;
+import com.scivicslab.pojoactor.core.ActorSystem;
 import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 

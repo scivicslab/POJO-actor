@@ -20,6 +20,8 @@ package com.scivicslab.pojoactor.workflow;
 import java.io.File;
 import java.io.InputStream;
 
+import com.scivicslab.pojoactor.workflow.WorkflowXsltTransformer;
+
 /**
  * Demo program to generate HTML visualizations from XML workflows.
  *

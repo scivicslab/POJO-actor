@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import com.scivicslab.pojoactor.ActorSystem;
+import com.scivicslab.pojoactor.core.ActorSystem;
 
 /**
  * Interpreter-interfaced actor system for managing workflow actors.

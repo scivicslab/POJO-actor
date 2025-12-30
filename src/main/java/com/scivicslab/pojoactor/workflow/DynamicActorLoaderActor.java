@@ -17,10 +17,10 @@
 
 package com.scivicslab.pojoactor.workflow;
 
-import com.scivicslab.pojoactor.ActionResult;
-import com.scivicslab.pojoactor.ActorProvider;
-import com.scivicslab.pojoactor.CallableByActionName;
-import com.scivicslab.pojoactor.DynamicActorLoader;
+import com.scivicslab.pojoactor.core.ActionResult;
+import com.scivicslab.pojoactor.core.ActorProvider;
+import com.scivicslab.pojoactor.core.CallableByActionName;
+import com.scivicslab.pojoactor.core.DynamicActorLoader;
 
 import java.net.URL;
 import java.net.URLClassLoader;

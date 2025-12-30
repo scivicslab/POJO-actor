@@ -26,6 +26,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.scivicslab.pojoactor.workflow.WorkflowXsltTransformer;
+
 /**
  * Tests for WorkflowXsltTransformer functionality.
  *

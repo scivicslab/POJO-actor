@@ -19,8 +19,8 @@ package com.scivicslab.pojoactor.workflow;
 
 import java.io.InputStream;
 
-import com.scivicslab.pojoactor.ActionResult;
-import com.scivicslab.pojoactor.CallableByActionName;
+import com.scivicslab.pojoactor.core.ActionResult;
+import com.scivicslab.pojoactor.core.CallableByActionName;
 
 /**
  * Reusable sub-workflow caller that reuses a single Interpreter instance.
