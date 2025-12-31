@@ -120,7 +120,8 @@ public class WorkflowXsltTransformerTest {
         assertTrue(html.contains("<table"), "Should contain table tag");
         assertTrue(html.contains("math"), "Should contain actor name");
         assertTrue(html.contains("add"), "Should contain method name");
-        assertTrue(html.contains("10,5"), "Should contain argument");
+        // Arguments are now in separate <arg> elements: <arg>10</arg><arg>5</arg>
+        assertTrue(html.contains("10") && html.contains("5"), "Should contain arguments");
     }
 
     /**
@@ -197,8 +198,9 @@ public class WorkflowXsltTransformerTest {
 
         assertNotNull(htmlTable, "HTML output should not be null");
         assertTrue(htmlTable.contains("multi-action-workflow"), "Should contain workflow name");
-        assertTrue(htmlTable.contains("5,3"), "Should contain first action argument");
-        assertTrue(htmlTable.contains("2,4"), "Should contain second action argument");
+        // Arguments are now in separate <arg> elements
+        assertTrue(htmlTable.contains("5") && htmlTable.contains("3"), "Should contain first action arguments");
+        assertTrue(htmlTable.contains("2") && htmlTable.contains("4"), "Should contain second action arguments");
 
         // Test graph view
         xmlStream = getClass().getResourceAsStream("/workflows/multi-action.xml");

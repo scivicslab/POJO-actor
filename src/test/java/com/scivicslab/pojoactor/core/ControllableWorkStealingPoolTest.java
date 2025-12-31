@@ -243,9 +243,10 @@ public class ControllableWorkStealingPoolTest {
         // Wait for some jobs to complete
         Thread.sleep(500);
 
-        int urgentIndex = executionOrder.indexOf(-1);
+        List<Integer> snapshot = new ArrayList<>(executionOrder);
+        int urgentIndex = snapshot.indexOf(-1);
         logger.info("Urgent job (-1) executed at index: " + urgentIndex);
-        logger.info("Execution order (first 10): " + executionOrder.subList(0, Math.min(10, executionOrder.size())));
+        logger.info("Execution order (first 10): " + snapshot.subList(0, Math.min(10, snapshot.size())));
 
         // Urgent job should execute near the front (within first 10 positions)
         assertTrue(urgentIndex >= 0, "Urgent job should have executed");

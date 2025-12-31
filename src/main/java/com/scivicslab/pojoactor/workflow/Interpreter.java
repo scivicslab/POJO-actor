@@ -23,6 +23,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -177,7 +180,38 @@ public class Interpreter {
 
             // Execute action on all matching actors
             for (IIActorRef<?> actorAR : actors) {
-                actorAR.callByActionName(action, argumentString);
+                ActionResult result;
+
+                // Execute based on ExecutionMode
+                ExecutionMode executionMode = a.getExecution();
+                if (executionMode == null) {
+                    executionMode = ExecutionMode.POOL;  // Default to POOL
+                }
+
+                if (executionMode == ExecutionMode.POOL && system != null) {
+                    // POOL: Execute on WorkStealingPool (safe for heavy operations)
+                    try {
+                        result = CompletableFuture.supplyAsync(
+                            () -> actorAR.callByActionName(action, argumentString),
+                            system.getWorkStealingPool()
+                        ).get();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        logger.log(Level.WARNING, "Action interrupted", e);
+                        return new ActionResult(false, "Action interrupted: " + e.getMessage());
+                    } catch (ExecutionException e) {
+                        logger.log(Level.WARNING, "Action execution failed", e);
+                        return new ActionResult(false, "Action failed: " + e.getCause().getMessage());
+                    }
+                } else {
+                    // DIRECT: Direct synchronous call (for light operations)
+                    result = actorAR.callByActionName(action, argumentString);
+                }
+
+                // If any action returns false, abort this step
+                if (!result.isSuccess()) {
+                    return result;
+                }
             }
         }
         return new ActionResult(true, "");
@@ -191,18 +225,18 @@ public class Interpreter {
      *   <li>If {@code arguments} is a String: wraps in JSON array (e.g., {@code "value"} → {@code ["value"]})</li>
      *   <li>If {@code arguments} is a List: converts to JSON array string (e.g., {@code ["a","b"]})</li>
      *   <li>If {@code arguments} is a Map: wraps in JSON array (e.g., {@code [{"key":"value"}]})</li>
-     *   <li>If {@code arguments} is null: falls back to legacy {@code argument} string</li>
+     *   <li>If {@code arguments} is null or empty List: returns empty array {@code []}</li>
      * </ul>
      *
      * @param action the action containing arguments
-     * @return JSON array string or legacy argument string
+     * @return JSON array string (empty array "[]" if no arguments)
      */
     private String convertArgumentsToJson(Action action) {
         Object arguments = action.getArguments();
 
+        // null or empty list → return empty JSON array "[]"
         if (arguments == null) {
-            // Fall back to legacy argument field
-            return action.getArgument();
+            return "[]";
         }
 
         if (arguments instanceof String) {
@@ -211,7 +245,7 @@ public class Interpreter {
             jsonArray.put((String) arguments);
             return jsonArray.toString();
         } else if (arguments instanceof List) {
-            // Convert List to JSON array: ["arg1", "arg2"]
+            // Convert List to JSON array: ["arg1", "arg2"] or []
             JSONArray jsonArray = new JSONArray((List<?>) arguments);
             return jsonArray.toString();
         } else if (arguments instanceof Map) {
@@ -236,6 +270,14 @@ public class Interpreter {
         return this.code;
     }
 
+    /**
+     * Sets the workflow code directly (for testing purposes).
+     *
+     * @param code the workflow code to set
+     */
+    public void setCode(MatrixCode code) {
+        this.code = code;
+    }
 
     /**
      * Reads and parses a workflow definition from a YAML input stream.
@@ -349,10 +391,8 @@ public class Interpreter {
                                 action.setArguments(new ArrayList<>());
                             }
                         }
-                    } else {
-                        // Fall back to legacy text content (argument field)
-                        action.setArgument(actionElement.getTextContent().trim());
                     }
+                    // No arguments element means no arguments
 
                     actions.add(action);
                 }
@@ -368,31 +408,226 @@ public class Interpreter {
     /**
      * Executes the loaded workflow code.
      *
+     * <p>This method implements finite automaton semantics:</p>
+     * <ol>
+     *   <li>Find a step whose from-state matches the current state</li>
+     *   <li>Execute the actions in that step</li>
+     *   <li>If any action returns false, skip to the next step and retry</li>
+     *   <li>If all actions succeed, transition to the to-state</li>
+     * </ol>
+     *
+     * <p>This enables conditional branching: multiple steps can have the same
+     * from-state, and the first one whose actions all succeed will be taken.</p>
+     *
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult execCode() {
-        if (code == null || code.getSteps().isEmpty()) {
+        if (!hasCodeLoaded()) {
             return new ActionResult(false, "No code loaded");
         }
 
-        Row row = code.getSteps().get(currentRow);
-        List<String> states = row.getStates();
-
-        if (states.size() >= 2 && states.get(0).equals(currentState)) {
-            action();
-            currentState = states.get(1);
-
-            for (int i = 0; i < code.getSteps().size(); i++) {
-                Row nextRow = code.getSteps().get(i);
-                if (!nextRow.getStates().isEmpty() && nextRow.getStates().get(0).equals(currentState)) {
-                    currentRow = i;
-                    break;
-                }
+        // Try all rows, starting from currentRow and wrapping around
+        int stepsCount = code.getSteps().size();
+        for (int attempts = 0; attempts < stepsCount; attempts++) {
+            // Wrap around to the beginning when reaching the end
+            if (currentRow >= stepsCount) {
+                currentRow = 0;
             }
-            return new ActionResult(true, "State: " + currentState);
+
+            Row row = code.getSteps().get(currentRow);
+
+            // Check if from-state matches current state
+            if (matchesCurrentState(row)) {
+                // Try to execute actions
+                ActionResult actionResult = action();
+
+                if (actionResult.isSuccess()) {
+                    // All actions succeeded, transition to to-state
+                    transitionTo(getToState(row));
+                    return new ActionResult(true, "State: " + currentState);
+                }
+                // Action failed, try next step
+            }
+            currentRow++;
         }
 
         return new ActionResult(false, "No matching state transition");
+    }
+
+    /**
+     * Executes the workflow until reaching the "end" state.
+     *
+     * <p>This method provides a self-contained way to run workflows that have
+     * a defined termination state. The workflow author defines transitions to
+     * the "end" state in the YAML file, and this method handles the execution
+     * loop automatically.</p>
+     *
+     * <p>The method repeatedly calls {@link #execCode()} until:</p>
+     * <ul>
+     *   <li>The current state becomes "end" (success)</li>
+     *   <li>An action returns failure (error)</li>
+     *   <li>No matching state transition is found (error)</li>
+     *   <li>Maximum iterations exceeded (error - prevents infinite loops)</li>
+     * </ul>
+     *
+     * <p><strong>Usage Example:</strong></p>
+     * <pre>{@code
+     * // YAML workflow with "end" state:
+     * // steps:
+     * //   - states: ["0", "1"]
+     * //     actions:
+     * //       - actor: worker
+     * //         method: process
+     * //   - states: ["1", "end"]
+     * //     actions:
+     * //       - actor: worker
+     * //         method: finish
+     *
+     * Interpreter interpreter = new Interpreter.Builder()
+     *     .loggerName("workflow")
+     *     .team(system)
+     *     .build();
+     *
+     * interpreter.readYaml(workflowStream);
+     * ActionResult result = interpreter.runUntilEnd();
+     *
+     * if (result.isSuccess()) {
+     *     System.out.println("Workflow completed successfully");
+     * } else {
+     *     System.out.println("Workflow failed: " + result.getResult());
+     * }
+     * }</pre>
+     *
+     * @return an {@link ActionResult} with success=true if "end" state reached,
+     *         or success=false with error message if workflow failed
+     * @see #runUntilEnd(int) for specifying custom maximum iterations
+     * @since 2.8.0
+     */
+    public ActionResult runUntilEnd() {
+        return runUntilEnd(10000);  // Default max iterations
+    }
+
+    /**
+     * Executes the workflow until reaching the "end" state with a custom iteration limit.
+     *
+     * <p>This method runs the workflow with the following termination conditions:</p>
+     * <ul>
+     *   <li>Success: current state becomes "end" (automaton accepted)</li>
+     *   <li>Failure: an action fails and no alternative row matches the current state</li>
+     *   <li>Failure: maxIterations exceeded without reaching "end" (automaton did not accept)</li>
+     * </ul>
+     *
+     * @param maxIterations maximum number of state transitions allowed
+     * @return an {@link ActionResult} with success=true if "end" state reached,
+     *         or success=false with error message if workflow failed or iterations exceeded
+     * @see #runUntilEnd() for default iteration limit
+     * @since 2.8.0
+     */
+    public ActionResult runUntilEnd(int maxIterations) {
+        if (!hasCodeLoaded()) {
+            return new ActionResult(false, "No code loaded");
+        }
+
+        for (int iteration = 0; iteration < maxIterations; iteration++) {
+            // Check for end state before executing
+            if ("end".equals(currentState)) {
+                return new ActionResult(true, "Workflow completed");
+            }
+
+            ActionResult result = execCode();
+
+            if (!result.isSuccess()) {
+                return new ActionResult(false, "Workflow failed at iteration " + iteration + ": " + result.getResult());
+            }
+        }
+
+        return new ActionResult(false, "Maximum iterations (" + maxIterations + ") exceeded");
+    }
+
+    /**
+     * Checks if workflow code is loaded.
+     *
+     * @return true if code is loaded and has at least one step
+     */
+    public boolean hasCodeLoaded() {
+        return code != null && !code.getSteps().isEmpty();
+    }
+
+    /**
+     * Checks if a row's from-state matches the current state.
+     *
+     * <p>A row matches if it has at least 2 states (from and to) and
+     * the from-state (index 0) equals the interpreter's current state.</p>
+     *
+     * @param row the row to check
+     * @return true if the row's from-state matches current state
+     */
+    public boolean matchesCurrentState(Row row) {
+        List<String> states = row.getStates();
+        return states.size() >= 2 && states.get(0).equals(currentState);
+    }
+
+    /**
+     * Gets the to-state from a row.
+     *
+     * @param row the row containing the state transition
+     * @return the to-state (second element), or null if not present
+     */
+    public String getToState(Row row) {
+        List<String> states = row.getStates();
+        return states.size() >= 2 ? states.get(1) : null;
+    }
+
+    /**
+     * Transitions to a new state and finds the next matching row.
+     *
+     * <p>This method:</p>
+     * <ol>
+     *   <li>Updates the current state to the specified to-state</li>
+     *   <li>Searches for the first row whose from-state matches the new current state</li>
+     *   <li>Updates currentRow to point to that row</li>
+     * </ol>
+     *
+     * @param toState the state to transition to
+     */
+    public void transitionTo(String toState) {
+        currentState = toState;
+        findNextMatchingRow();
+    }
+
+    /**
+     * Finds the first row whose from-state matches the current state.
+     *
+     * <p>Searches from the beginning of the steps list and updates
+     * currentRow to the index of the first matching row.</p>
+     */
+    protected void findNextMatchingRow() {
+        int stepsCount = code.getSteps().size();
+        for (int i = 0; i < stepsCount; i++) {
+            Row nextRow = code.getSteps().get(i);
+            if (!nextRow.getStates().isEmpty() && nextRow.getStates().get(0).equals(currentState)) {
+                currentRow = i;
+                return;
+            }
+        }
+    }
+
+    /**
+     * Gets the current state of the interpreter.
+     *
+     * @return the current state string
+     */
+    public String getCurrentState() {
+        return currentState;
+    }
+
+    /**
+     * Gets the current row index.
+     *
+     * @return the current row index
+     */
+    public int getCurrentRow() {
+        return currentRow;
     }
 
     /**

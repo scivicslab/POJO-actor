@@ -2,9 +2,17 @@ name: parallel-execution-workflow
 steps:
   - states: ["0", "1"]
     actions:
-      - [actor1, execute, "task1"]
-      - [actor2, execute, "task2"]
-      - [actor3, execute, "task3"]
+      - actor: actor1
+        method: execute
+        arguments: "task1"
+      - actor: actor2
+        method: execute
+        arguments: "task2"
+      - actor: actor3
+        method: execute
+        arguments: "task3"
   - states: ["1", "end"]
     actions:
-      - [actor1, execute, "finalize"]
+      - actor: actor1
+        method: execute
+        arguments: "finalize"

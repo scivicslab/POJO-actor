@@ -2,7 +2,11 @@ name: main-with-subworkflow
 steps:
   - states: ["0", "1"]
     actions:
-      - [coordinator, executeSubWorkflow, "simple-math.yaml"]
+      - actor: coordinator
+        method: executeSubWorkflow
+        arguments: "simple-math.yaml"
   - states: ["1", "end"]
     actions:
-      - [coordinator, executeSubWorkflow, "simple-math.yaml"]
+      - actor: coordinator
+        method: executeSubWorkflow
+        arguments: "simple-math.yaml"

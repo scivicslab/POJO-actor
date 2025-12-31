@@ -19,6 +19,8 @@ package com.scivicslab.pojoactor.workflow;
 
 import java.io.InputStream;
 
+import org.json.JSONArray;
+
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.CallableByActionName;
 
@@ -156,6 +158,24 @@ public class ReusableSubWorkflowCaller implements CallableByActionName {
     }
 
     /**
+     * Extracts the first element from a JSON array string.
+     * If the input is not a JSON array, returns the input as-is.
+     *
+     * @param args the argument string (may be JSON array or plain string)
+     * @return the first element if JSON array, otherwise the original string
+     */
+    private String getFirstArg(String args) {
+        if (args == null || args.isEmpty()) {
+            return args;
+        }
+        if (args.startsWith("[")) {
+            JSONArray jsonArray = new JSONArray(args);
+            return jsonArray.length() > 0 ? jsonArray.getString(0) : "";
+        }
+        return args;
+    }
+
+    /**
      * Calls a sub-workflow synchronously using the reusable Interpreter.
      *
      * <p>This method is synchronized to ensure thread safety when reusing
@@ -165,11 +185,13 @@ public class ReusableSubWorkflowCaller implements CallableByActionName {
      * before each execution using {@link Interpreter#reset()}.</p>
      *
      * @param yamlFileName the name of the YAML file (e.g., "sub-workflow.yaml").
-     *                     The file is loaded from {@code /workflows/[yamlFileName]}
+     *                     The file is loaded from {@code /workflows/[yamlFileName]}.
+     *                     Can be a JSON array (e.g., {@code ["filename.yaml"]}) or plain string.
      * @return {@link ActionResult} indicating success or failure
      */
     private synchronized ActionResult callSubWorkflow(String yamlFileName) {
-        if (yamlFileName == null || yamlFileName.trim().isEmpty()) {
+        String actualFileName = getFirstArg(yamlFileName);
+        if (actualFileName == null || actualFileName.trim().isEmpty()) {
             return new ActionResult(false, "YAML filename cannot be null or empty");
         }
 
@@ -178,7 +200,7 @@ public class ReusableSubWorkflowCaller implements CallableByActionName {
             reusableInterpreter.reset();
 
             // Load YAML file from classpath
-            String resourcePath = "/workflows/" + yamlFileName;
+            String resourcePath = "/workflows/" + actualFileName;
             InputStream yamlInput = getClass().getResourceAsStream(resourcePath);
 
             if (yamlInput == null) {
@@ -213,7 +235,7 @@ public class ReusableSubWorkflowCaller implements CallableByActionName {
 
             callCount++;
             return new ActionResult(true,
-                "Sub-workflow called successfully: " + yamlFileName +
+                "Sub-workflow called successfully: " + actualFileName +
                 " (steps: " + stepCount + ", reused interpreter)");
 
         } catch (Exception e) {

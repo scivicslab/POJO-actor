@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.json.JSONArray;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -103,6 +104,21 @@ public class WorkflowAdvancedTest {
     }
 
     /**
+     * Helper method to extract the first element from a JSON array string.
+     * If the input is not a JSON array, returns the input as-is.
+     */
+    private static String getFirstArg(String args) {
+        if (args == null || args.isEmpty()) {
+            return args;
+        }
+        if (args.startsWith("[")) {
+            JSONArray jsonArray = new JSONArray(args);
+            return jsonArray.length() > 0 ? jsonArray.getString(0) : "";
+        }
+        return args;
+    }
+
+    /**
      * Test actor that makes conditional decisions.
      */
     private static class DecisionActor implements CallableByActionName {
@@ -113,7 +129,7 @@ public class WorkflowAdvancedTest {
         public ActionResult callByActionName(String actionName, String args) {
             switch (actionName) {
                 case "setValue":
-                    value = Integer.parseInt(args);
+                    value = Integer.parseInt(getFirstArg(args));
                     return new ActionResult(true, "Value set to: " + value);
 
                 case "checkValue":
@@ -170,17 +186,13 @@ public class WorkflowAdvancedTest {
                     .team(system)
                     .build();
 
-                InputStream yamlInput = getClass().getResourceAsStream("/workflows/" + args);
+                String workflowFile = getFirstArg(args);
+                InputStream yamlInput = getClass().getResourceAsStream("/workflows/" + workflowFile);
                 if (yamlInput != null) {
                     subInterpreter.readYaml(yamlInput);
 
-                    // Execute all steps of sub-workflow
-                    while (true) {
-                        ActionResult result = subInterpreter.execCode();
-                        if (!result.isSuccess() || result.getResult().contains("end")) {
-                            break;
-                        }
-                    }
+                    // Execute sub-workflow until "end" state
+                    subInterpreter.runUntilEnd();
 
                     subWorkflowExecutions++;
                     return new ActionResult(true, "Sub-workflow executed: " + args);
@@ -452,7 +464,10 @@ public class WorkflowAdvancedTest {
                     return new ActionResult(true, "Count: " + newValue);
                 } else if (actionName.equals("checkLimit")) {
                     boolean shouldContinue = counter.get() < 5;
-                    return new ActionResult(true, shouldContinue ? "continue" : "done");
+                    // Return false when limit reached, so workflow tries alternative path
+                    return new ActionResult(shouldContinue, shouldContinue ? "continue" : "done");
+                } else if (actionName.equals("finish")) {
+                    return new ActionResult(true, "finished");
                 }
                 return new ActionResult(false, "Unknown action");
             }
@@ -472,15 +487,9 @@ public class WorkflowAdvancedTest {
 
         interpreter.readYaml(yamlInput);
 
-        // Execute loop multiple times
-        for (int i = 0; i < 10; i++) {
-            ActionResult result = interpreter.execCode();
-            assertTrue(result.isSuccess());
-
-            if (result.getResult().contains("end")) {
-                break;
-            }
-        }
+        // Execute workflow until "end" state (max 10 iterations)
+        ActionResult result = interpreter.runUntilEnd(10);
+        assertTrue(result.isSuccess(), "Workflow should complete successfully");
 
         // Counter should have reached the limit
         assertEquals(5, counter.get());
@@ -507,7 +516,8 @@ public class WorkflowAdvancedTest {
                 if (actionName.equals("checkContinue")) {
                     int cycles = cycleCount.incrementAndGet();
                     boolean shouldContinue = cycles < 3;
-                    return new ActionResult(true, shouldContinue ? "continue" : "done");
+                    // Return false when done, so workflow tries alternative path to end
+                    return new ActionResult(shouldContinue, shouldContinue ? "continue" : "done");
                 }
 
                 return new ActionResult(true, "Executed: " + actionName);
@@ -528,15 +538,9 @@ public class WorkflowAdvancedTest {
 
         interpreter.readYaml(yamlInput);
 
-        // Execute loop multiple times
-        for (int i = 0; i < 20; i++) {
-            ActionResult result = interpreter.execCode();
-            assertTrue(result.isSuccess());
-
-            if (result.getResult().contains("end")) {
-                break;
-            }
-        }
+        // Execute workflow until "end" state (max 20 iterations)
+        ActionResult result = interpreter.runUntilEnd(20);
+        assertTrue(result.isSuccess(), "Workflow should complete successfully");
 
         // Should have cycled through states multiple times
         assertTrue(stateHistory.size() >= 12,
@@ -568,7 +572,7 @@ public class WorkflowAdvancedTest {
 
             @Override
             public ActionResult callByActionName(String actionName, String args) {
-                if (actionName.equals("risky Operation")) {
+                if (actionName.equals("riskyOperation")) {
                     attempts++;
                     if (attempts < 3) {
                         return new ActionResult(false, "Operation failed (attempt " + attempts + ")");

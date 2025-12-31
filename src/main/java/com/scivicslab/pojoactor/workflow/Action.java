@@ -23,21 +23,21 @@ package com.scivicslab.pojoactor.workflow;
  * <p>An action specifies which actor to invoke, which method to call,
  * with what arguments, and how to execute it (direct call vs work-stealing pool).</p>
  *
- * <p>Supports both legacy {@code argument} (String) and new {@code arguments} (String/List/Map) formats:</p>
+ * <p>The {@code arguments} field supports multiple formats:</p>
  * <ul>
- *   <li>{@code argument}: String format for backward compatibility</li>
- *   <li>{@code arguments}: String (single argument), List (multiple arguments), or Map (structured data)</li>
+ *   <li>String: Single argument (wrapped in JSON array when passed to actor)</li>
+ *   <li>List: Multiple arguments (converted to JSON array)</li>
+ *   <li>Map: Structured data (wrapped in JSON array as object)</li>
  * </ul>
  *
  * @author devteam@scivics-lab.com
- * @since 2.7.0
+ * @since 2.8.0
  */
 public class Action {
 
     private String actor;
     private String method;
-    private String argument;  // Legacy format
-    private Object arguments;  // New format: String, List, or Map
+    private Object arguments;  // String, List, or Map
     private ExecutionMode execution = ExecutionMode.POOL;  // Default: pool
     private int poolIndex = 0;
 
@@ -52,12 +52,12 @@ public class Action {
      *
      * @param actor the name of the actor to invoke
      * @param method the method to call
-     * @param argument the argument to pass
+     * @param arguments the arguments to pass (String, List, or Map)
      */
-    public Action(String actor, String method, String argument) {
+    public Action(String actor, String method, Object arguments) {
         this.actor = actor;
         this.method = method;
-        this.argument = argument;
+        this.arguments = arguments;
     }
 
     /**
@@ -97,36 +97,18 @@ public class Action {
     }
 
     /**
-     * Gets the argument.
+     * Gets the arguments (String, List, or Map).
      *
-     * @return the argument
-     */
-    public String getArgument() {
-        return argument;
-    }
-
-    /**
-     * Sets the argument.
-     *
-     * @param argument the argument
-     */
-    public void setArgument(String argument) {
-        this.argument = argument;
-    }
-
-    /**
-     * Gets the arguments (new format: String, List, or Map).
-     *
-     * @return the arguments as String, List, or Map, or null if not set
+     * @return the arguments, or null if not set
      */
     public Object getArguments() {
         return arguments;
     }
 
     /**
-     * Sets the arguments (new format: String, List, or Map).
+     * Sets the arguments (String, List, or Map).
      *
-     * @param arguments the arguments as String, List, or Map
+     * @param arguments the arguments
      */
     public void setArguments(Object arguments) {
         this.arguments = arguments;
@@ -166,33 +148,5 @@ public class Action {
      */
     public void setPoolIndex(int poolIndex) {
         this.poolIndex = poolIndex;
-    }
-
-    /**
-     * Creates an Action from a list representation (legacy format).
-     *
-     * <p>Converts from old format: [actor, method, argument]</p>
-     *
-     * @param actionList the list representation
-     * @return a new Action instance
-     */
-    public static Action fromList(java.util.List<String> actionList) {
-        if (actionList.size() < 3) {
-            throw new IllegalArgumentException("Action list must have at least 3 elements");
-        }
-        return new Action(actionList.get(0), actionList.get(1), actionList.get(2));
-    }
-
-    /**
-     * Converts this Action to list representation (for backward compatibility).
-     *
-     * @return list representation [actor, method, argument]
-     */
-    public java.util.List<String> toList() {
-        java.util.List<String> list = new java.util.ArrayList<>();
-        list.add(actor);
-        list.add(method);
-        list.add(argument);
-        return list;
     }
 }

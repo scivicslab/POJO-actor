@@ -2,7 +2,11 @@ name: main-with-caller
 steps:
   - states: ["0", "1"]
     actions:
-      - [caller, call, "simple-math.yaml"]
+      - actor: caller
+        method: call
+        arguments: "simple-math.yaml"
   - states: ["1", "end"]
     actions:
-      - [caller, call, "simple-math.yaml"]
+      - actor: caller
+        method: call
+        arguments: "simple-math.yaml"

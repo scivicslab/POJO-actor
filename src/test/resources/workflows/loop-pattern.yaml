@@ -2,13 +2,15 @@ name: loop-pattern-workflow
 steps:
   - states: ["0", "1"]
     actions:
-      - [loopActor, increment, ""]
-  - states: ["1", "2"]
+      - actor: loopActor
+        method: increment
+  - states: ["1", "1"]
     actions:
-      - [loopActor, checkLimit, ""]
-  - states: ["2", "1"]
+      - actor: loopActor
+        method: checkLimit
+      - actor: loopActor
+        method: increment
+  - states: ["1", "end"]
     actions:
-      - [loopActor, increment, ""]
-  - states: ["2", "end"]
-    actions:
-      - [loopActor, checkLimit, ""]
+      - actor: loopActor
+        method: finish

@@ -63,7 +63,7 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  *
  * @author devteam@scivics-lab.com
  * @since 2.5.0
- * @see SchedulerIIAR
+ * @see com.scivicslab.pojoactor.workflow.scheduler.SchedulerIIAR
  * @see CallableByActionName
  */
 public class Scheduler implements CallableByActionName, AutoCloseable {

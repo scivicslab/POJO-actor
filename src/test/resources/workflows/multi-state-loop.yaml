@@ -3,34 +3,42 @@ steps:
   # Entry point
   - states: ["0", "1"]
     actions:
-      - [cycleActor, phase1, "prepare"]
+      - actor: cycleActor
+        method: phase1
+        arguments: "prepare"
 
   # Phase 1: First processing step
   - states: ["1", "2"]
     actions:
-      - [cycleActor, phase1, "execute"]
+      - actor: cycleActor
+        method: phase1
+        arguments: "execute"
 
   # Phase 2: Second processing step
   - states: ["2", "3"]
     actions:
-      - [cycleActor, phase2, "execute"]
+      - actor: cycleActor
+        method: phase2
+        arguments: "execute"
 
   # Phase 3: Third processing step
   - states: ["3", "4"]
     actions:
-      - [cycleActor, phase3, "execute"]
+      - actor: cycleActor
+        method: phase3
+        arguments: "execute"
 
-  # Check: Should we continue the cycle?
-  - states: ["4", "5"]
+  # Continue cycle: go back to state 1 (if checkContinue succeeds)
+  - states: ["4", "1"]
     actions:
-      - [cycleActor, checkContinue, ""]
+      - actor: cycleActor
+        method: checkContinue
+      - actor: cycleActor
+        method: phase1
+        arguments: "restart"
 
-  # Continue cycle: go back to state 1
-  - states: ["5", "1"]
+  # Exit cycle: go to end (when checkContinue fails)
+  - states: ["4", "end"]
     actions:
-      - [cycleActor, phase1, "restart"]
-
-  # Exit cycle: go to end
-  - states: ["5", "end"]
-    actions:
-      - [cycleActor, finalize, ""]
+      - actor: cycleActor
+        method: finalize

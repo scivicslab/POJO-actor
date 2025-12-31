@@ -64,6 +64,16 @@ public class IIActorSystem extends ActorSystem {
     }
 
     /**
+     * Constructs a new IIActorSystem with the specified system name and thread count.
+     *
+     * @param systemName the name of this actor system
+     * @param threadNum the number of threads in the worker pool
+     */
+    public IIActorSystem(String systemName, int threadNum) {
+        super(systemName, threadNum);
+    }
+
+    /**
      * Adds an interpreter-interfaced actor to this system.
      *
      * @param <T> the type of the actor object

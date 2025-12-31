@@ -2,10 +2,14 @@ name: conditional-branch-workflow
 steps:
   - states: ["0", "1"]
     actions:
-      - [decision, setValue, "15"]
+      - actor: decision
+        method: setValue
+        arguments: "15"
   - states: ["1", "2"]
     actions:
-      - [decision, checkValue, ""]
+      - actor: decision
+        method: checkValue
   - states: ["2", "end"]
     actions:
-      - [decision, processHigh, ""]
+      - actor: decision
+        method: processHigh
