@@ -23,10 +23,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -47,6 +50,12 @@ import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.LoaderOptions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.apache.commons.jexl3.JexlBuilder;
+import org.apache.commons.jexl3.JexlContext;
+import org.apache.commons.jexl3.JexlEngine;
+import org.apache.commons.jexl3.JexlExpression;
+import org.apache.commons.jexl3.MapContext;
 
 /**
  * Workflow interpreter that executes matrix-based workflow definitions.
@@ -81,6 +90,12 @@ public class Interpreter {
      * like "." (self), ".." (parent), "../sibling" (sibling actors), etc.
      */
     protected IIActorRef<?> selfActorRef = null;
+
+    /**
+     * Random number generator for child actor name generation.
+     * Shared across all interpreters for efficiency.
+     */
+    private static final Random random = new Random();
 
     /**
      * Builder for constructing Interpreter instances.
@@ -167,11 +182,14 @@ public class Interpreter {
             // Convert arguments to JSON format
             String argumentString = convertArgumentsToJson(a);
 
-            // Resolve actor path using Unix-style notation
+            // Resolve actor path using Unix-style notation or wildcard
             List<IIActorRef<?>> actors;
             if (selfActorRef != null) {
                 // Use path resolution relative to self
                 actors = system.resolveActorPath(selfActorRef.getName(), actorPath);
+            } else if (actorPath.contains("*")) {
+                // Wildcard pattern without self reference - search all actors
+                actors = findMatchingActors(actorPath);
             } else {
                 // Fallback: treat as absolute actor name
                 IIActorRef<?> actor = system.getIIActor(actorPath);
@@ -557,14 +575,199 @@ public class Interpreter {
      * Checks if a row's from-state matches the current state.
      *
      * <p>A row matches if it has at least 2 states (from and to) and
-     * the from-state (index 0) equals the interpreter's current state.</p>
+     * the from-state pattern (index 0) matches the interpreter's current state.</p>
+     *
+     * <p>Supported state patterns:</p>
+     * <ul>
+     *   <li>Exact match: {@code "1"} - matches only state "1"</li>
+     *   <li>Wildcard: {@code "*"} - matches any state</li>
+     *   <li>Negation: {@code "!end"} - matches any state except "end"</li>
+     *   <li>OR condition: {@code "1|2|3"} - matches "1", "2", or "3"</li>
+     *   <li>Numeric comparison: {@code ">=1"}, {@code "<=5"}, {@code ">1"}, {@code "<5"}</li>
+     * </ul>
      *
      * @param row the row to check
-     * @return true if the row's from-state matches current state
+     * @return true if the row's from-state pattern matches current state
      */
     public boolean matchesCurrentState(Row row) {
         List<String> states = row.getStates();
-        return states.size() >= 2 && states.get(0).equals(currentState);
+        if (states.size() < 2) {
+            return false;
+        }
+        return matchesStatePattern(states.get(0), currentState);
+    }
+
+    /**
+     * Checks if a state pattern matches a given state value.
+     *
+     * <p>Supported patterns:</p>
+     * <ul>
+     *   <li>Exact match: "1" matches only "1"</li>
+     *   <li>Wildcard: "*" matches any state</li>
+     *   <li>Negation: "!end" matches anything except "end"</li>
+     *   <li>OR condition: "1|2|3" matches "1", "2", or "3"</li>
+     *   <li>Numeric comparison: ">=1", "&lt;5" etc.</li>
+     *   <li>JEXL expression: "jexl:state >= 5 &amp;&amp; state &lt; 10"</li>
+     * </ul>
+     *
+     * @param pattern the state pattern (may contain wildcards, operators, etc.)
+     * @param state the actual state value to match against
+     * @return true if the pattern matches the state
+     */
+    protected boolean matchesStatePattern(String pattern, String state) {
+        if (pattern == null || state == null) {
+            return false;
+        }
+
+        // JEXL expression: starts with "jexl:"
+        if (pattern.startsWith("jexl:")) {
+            return matchesJexlExpression(pattern.substring(5), state);
+        }
+
+        // Wildcard: "*" matches any state
+        if ("*".equals(pattern)) {
+            return true;
+        }
+
+        // Negation: "!xxx" matches any state except "xxx"
+        if (pattern.startsWith("!")) {
+            String negated = pattern.substring(1);
+            return !state.equals(negated);
+        }
+
+        // OR condition: "a|b|c" matches "a", "b", or "c"
+        if (pattern.contains("|")) {
+            String[] options = pattern.split("\\|");
+            for (String option : options) {
+                if (option.trim().equals(state)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Numeric comparisons: ">=1", "<=5", ">1", "<5"
+        if (pattern.startsWith(">=") || pattern.startsWith("<=") ||
+            pattern.startsWith(">") || pattern.startsWith("<")) {
+            return matchesNumericComparison(pattern, state);
+        }
+
+        // Default: exact match
+        return pattern.equals(state);
+    }
+
+    /** JEXL engine for expression evaluation (lazy initialized) */
+    private static JexlEngine jexlEngine;
+
+    /**
+     * Gets the JEXL engine instance (lazy initialization).
+     */
+    private static synchronized JexlEngine getJexlEngine() {
+        if (jexlEngine == null) {
+            jexlEngine = new JexlBuilder()
+                    .silent(true)
+                    .strict(false)
+                    .create();
+        }
+        return jexlEngine;
+    }
+
+    /**
+     * Evaluates a JEXL expression against the current state.
+     *
+     * <p>The expression has access to the following variables:</p>
+     * <ul>
+     *   <li>{@code state} - the current state as a string</li>
+     *   <li>{@code s} - alias for state</li>
+     *   <li>{@code n} - the state parsed as a number (or null if not numeric)</li>
+     * </ul>
+     *
+     * <p>Example expressions:</p>
+     * <ul>
+     *   <li>{@code state == 'error'}</li>
+     *   <li>{@code n >= 5 && n < 10}</li>
+     *   <li>{@code state =~ 'error.*'}</li>
+     *   <li>{@code state.startsWith('err')}</li>
+     * </ul>
+     *
+     * @param expression the JEXL expression to evaluate
+     * @param state the current state value
+     * @return true if the expression evaluates to true
+     */
+    private boolean matchesJexlExpression(String expression, String state) {
+        try {
+            JexlEngine engine = getJexlEngine();
+            JexlExpression jexlExpr = engine.createExpression(expression);
+
+            JexlContext context = new MapContext();
+            context.set("state", state);
+            context.set("s", state);
+
+            // Try to parse state as a number
+            try {
+                double numericState = Double.parseDouble(state);
+                context.set("n", numericState);
+            } catch (NumberFormatException e) {
+                context.set("n", null);
+            }
+
+            Object result = jexlExpr.evaluate(context);
+
+            if (result instanceof Boolean) {
+                return (Boolean) result;
+            }
+            // For non-boolean results, treat non-null as true
+            return result != null;
+
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "JEXL expression evaluation failed: " + expression, e);
+            return false;
+        }
+    }
+
+    /**
+     * Handles numeric comparison patterns.
+     *
+     * @param pattern comparison pattern like ">=1", "<=5", ">1", "<5"
+     * @param state the state value to compare
+     * @return true if the comparison is satisfied
+     */
+    private boolean matchesNumericComparison(String pattern, String state) {
+        try {
+            String operator;
+            String valueStr;
+
+            if (pattern.startsWith(">=")) {
+                operator = ">=";
+                valueStr = pattern.substring(2);
+            } else if (pattern.startsWith("<=")) {
+                operator = "<=";
+                valueStr = pattern.substring(2);
+            } else if (pattern.startsWith(">")) {
+                operator = ">";
+                valueStr = pattern.substring(1);
+            } else if (pattern.startsWith("<")) {
+                operator = "<";
+                valueStr = pattern.substring(1);
+            } else {
+                return false;
+            }
+
+            // Try to parse both as numbers
+            double patternValue = Double.parseDouble(valueStr.trim());
+            double stateValue = Double.parseDouble(state);
+
+            switch (operator) {
+                case ">=": return stateValue >= patternValue;
+                case "<=": return stateValue <= patternValue;
+                case ">":  return stateValue > patternValue;
+                case "<":  return stateValue < patternValue;
+                default:   return false;
+            }
+        } catch (NumberFormatException e) {
+            // If parsing fails, fall back to string comparison
+            return false;
+        }
     }
 
     /**
@@ -596,16 +799,18 @@ public class Interpreter {
     }
 
     /**
-     * Finds the first row whose from-state matches the current state.
+     * Finds the first row whose from-state pattern matches the current state.
      *
      * <p>Searches from the beginning of the steps list and updates
-     * currentRow to the index of the first matching row.</p>
+     * currentRow to the index of the first matching row. Supports
+     * state patterns including wildcards, negations, and numeric comparisons.</p>
      */
     protected void findNextMatchingRow() {
         int stepsCount = code.getSteps().size();
         for (int i = 0; i < stepsCount; i++) {
             Row nextRow = code.getSteps().get(i);
-            if (!nextRow.getStates().isEmpty() && nextRow.getStates().get(0).equals(currentState)) {
+            if (!nextRow.getStates().isEmpty() &&
+                matchesStatePattern(nextRow.getStates().get(0), currentState)) {
                 currentRow = i;
                 return;
             }
@@ -697,5 +902,305 @@ public class Interpreter {
         this.selfActorRef = actorRef;
     }
 
+    // ========================================================================
+    // Subworkflow Support
+    // ========================================================================
+
+    /**
+     * Generates a unique child actor name for subworkflow execution.
+     *
+     * <p>The name format is: {@code subwf-{workflowName}-{timestamp}-{random}}</p>
+     * <p>Example: {@code subwf-user-validation-1735812345678-04821}</p>
+     *
+     * <p>The combination of timestamp and random number ensures collision-free
+     * naming even under parallel invocation or nested subworkflows.</p>
+     *
+     * @param workflowFile the workflow file name (e.g., "user-validation.yaml")
+     * @return a unique child actor name
+     * @since 2.9.0
+     */
+    protected String generateChildName(String workflowFile) {
+        String baseName = workflowFile.replace(".yaml", "").replace(".json", "");
+        long timestamp = System.currentTimeMillis();
+        int rand = random.nextInt(100000);
+        return String.format("subwf-%s-%d-%05d", baseName, timestamp, rand);
+    }
+
+    /**
+     * Calls a subworkflow by creating a child interpreter, executing it, and removing it.
+     *
+     * <p>This method implements the 4-step subworkflow pattern:</p>
+     * <ol>
+     *   <li><strong>createChild</strong> — Create a child InterpreterIIAR and register it</li>
+     *   <li><strong>loadWorkflow</strong> — Load the YAML workflow into the child interpreter</li>
+     *   <li><strong>runUntilEnd</strong> — Execute the subworkflow until "end" state</li>
+     *   <li><strong>removeChild</strong> — Remove the child actor (always executed via finally)</li>
+     * </ol>
+     *
+     * <p>The child interpreter shares the same {@link IIActorSystem} as the parent,
+     * so all registered actors are accessible from the subworkflow.</p>
+     *
+     * <p><strong>Usage in YAML:</strong></p>
+     * <pre>{@code
+     * - states: ["0", "1"]
+     *   actions:
+     *     - actor: this
+     *       method: call
+     *       arguments: ["sub-workflow.yaml"]
+     * }</pre>
+     *
+     * @param workflowFile the workflow file name to execute
+     * @return ActionResult indicating success or failure
+     * @since 2.9.0
+     */
+    public ActionResult call(String workflowFile) {
+        if (system == null) {
+            return new ActionResult(false, "No actor system configured");
+        }
+
+        String childName = generateChildName(workflowFile);
+
+        try {
+            // === Step 1: createChild (親と同じクラスの子アクターを作成) ===
+            // まずInterpreterを作成
+            Interpreter childInterpreter = new Interpreter.Builder()
+                .loggerName(childName)
+                .team(system)
+                .build();
+
+            // InterpreterIIARでラップ（親と同じクラス）
+            InterpreterIIAR childActor = new InterpreterIIAR(childName, childInterpreter, system);
+            childInterpreter.setSelfActorRef(childActor);
+
+            // 親子関係を設定
+            if (selfActorRef != null) {
+                childActor.setParentName(selfActorRef.getName());
+                selfActorRef.getNamesOfChildren().add(childName);
+            }
+            system.addIIActor(childActor);
+
+            // === Step 2: loadWorkflow ===
+            InputStream yamlStream = loadWorkflowFromClasspath(workflowFile);
+            if (yamlStream == null) {
+                return new ActionResult(false, "Workflow not found: " + workflowFile);
+            }
+            childInterpreter.readYaml(yamlStream);
+
+            // === Step 3: runUntilEnd ===
+            ActionResult result = childInterpreter.runUntilEnd(1000);
+
+            return result;
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Subworkflow error: " + workflowFile, e);
+            return new ActionResult(false, "Subworkflow error: " + e.getMessage());
+
+        } finally {
+            // === Step 4: removeChild (always executed) ===
+            removeChildActor(childName);
+        }
+    }
+
+    /**
+     * Loads a workflow from the classpath.
+     *
+     * <p>Searches for the workflow in the following locations:</p>
+     * <ol>
+     *   <li>{@code /workflows/{workflowFile}}</li>
+     *   <li>{@code /{workflowFile}}</li>
+     * </ol>
+     *
+     * @param workflowFile the workflow file name
+     * @return InputStream for the workflow, or null if not found
+     */
+    protected InputStream loadWorkflowFromClasspath(String workflowFile) {
+        // Try /workflows/ directory first
+        InputStream stream = getClass().getResourceAsStream("/workflows/" + workflowFile);
+        if (stream != null) {
+            return stream;
+        }
+        // Try root classpath
+        return getClass().getResourceAsStream("/" + workflowFile);
+    }
+
+    /**
+     * Removes a child actor from the system and parent-child relationship.
+     *
+     * @param childName the name of the child actor to remove
+     */
+    protected void removeChildActor(String childName) {
+        if (system != null) {
+            system.removeIIActor(childName);
+        }
+        if (selfActorRef != null) {
+            selfActorRef.getNamesOfChildren().remove(childName);
+        }
+    }
+
+    /**
+     * Applies an action to existing child actors (with wildcard support).
+     *
+     * <p>Unlike {@link #call(String)} which creates and deletes child actors,
+     * this method operates on existing child actors without removing them.</p>
+     *
+     * <p>Supports wildcard patterns for actor names:</p>
+     * <ul>
+     *   <li>{@code *} — all child actors</li>
+     *   <li>{@code Species-*} — child actors starting with "Species-"</li>
+     *   <li>{@code *-worker} — child actors ending with "-worker"</li>
+     *   <li>{@code node-*-primary} — child actors matching the pattern</li>
+     * </ul>
+     *
+     * <p><strong>Usage in YAML:</strong></p>
+     * <pre>{@code
+     * - actor: this
+     *   method: apply
+     *   arguments:
+     *     - actor: "Species-*"
+     *       method: mutate
+     *       arguments: [0.05, 0.02, 0.5]
+     * }</pre>
+     *
+     * @param actionDefinition JSON string containing actor, method, and arguments
+     * @return ActionResult indicating success or failure
+     * @since 2.9.0
+     */
+    public ActionResult apply(String actionDefinition) {
+        if (selfActorRef == null) {
+            return new ActionResult(false, "No self actor reference configured");
+        }
+
+        try {
+            JSONObject action = new JSONObject(actionDefinition);
+            String actorPattern = action.getString("actor");
+            String methodName = action.getString("method");
+
+            // Get arguments - handle both array and single value
+            String args;
+            if (action.has("arguments")) {
+                Object argsObj = action.get("arguments");
+                if (argsObj instanceof JSONArray) {
+                    args = argsObj.toString();
+                } else {
+                    args = new JSONArray().put(argsObj).toString();
+                }
+            } else {
+                args = "[]";
+            }
+
+            // Find matching child actors
+            List<IIActorRef<?>> matchedActors = findMatchingChildActors(actorPattern);
+
+            if (matchedActors.isEmpty()) {
+                return new ActionResult(false, "No actors matched pattern: " + actorPattern);
+            }
+
+            // Execute on each matched actor sequentially
+            List<String> successNames = new ArrayList<>();
+            for (IIActorRef<?> actor : matchedActors) {
+                ActionResult result = actor.callByActionName(methodName, args);
+                if (!result.isSuccess()) {
+                    return new ActionResult(false,
+                        "Failed on " + actor.getName() + ": " + result.getResult());
+                }
+                successNames.add(actor.getName());
+            }
+
+            return new ActionResult(true,
+                "Applied to " + successNames.size() + " actors: " + successNames);
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Apply error", e);
+            return new ActionResult(false, "Apply error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Finds all actors in the system matching a wildcard pattern.
+     *
+     * <p>This method searches all registered actors in the IIActorSystem,
+     * not just child actors of the current interpreter.</p>
+     *
+     * @param pattern the pattern (exact name or wildcard like "Species-*")
+     * @return list of matching actors
+     * @since 2.9.0
+     */
+    protected List<IIActorRef<?>> findMatchingActors(String pattern) {
+        List<IIActorRef<?>> matched = new ArrayList<>();
+
+        if (system == null) {
+            return matched;
+        }
+
+        // Exact match (no wildcard)
+        if (!pattern.contains("*")) {
+            IIActorRef<?> actor = system.getIIActor(pattern);
+            if (actor != null) {
+                matched.add(actor);
+            }
+            return matched;
+        }
+
+        // Wildcard pattern - convert to regex
+        String regex = pattern
+            .replace(".", "\\.")
+            .replace("*", ".*");
+        Pattern compiled = Pattern.compile(regex);
+
+        for (String actorName : system.listActorNames()) {
+            if (compiled.matcher(actorName).matches()) {
+                IIActorRef<?> actor = system.getIIActor(actorName);
+                if (actor != null) {
+                    matched.add(actor);
+                }
+            }
+        }
+
+        return matched;
+    }
+
+    /**
+     * Finds child actors matching a wildcard pattern.
+     *
+     * @param pattern the pattern (exact name or wildcard like "Species-*")
+     * @return list of matching child actors
+     */
+    protected List<IIActorRef<?>> findMatchingChildActors(String pattern) {
+        List<IIActorRef<?>> matched = new ArrayList<>();
+
+        if (selfActorRef == null || system == null) {
+            return matched;
+        }
+
+        ConcurrentSkipListSet<String> childNames = selfActorRef.getNamesOfChildren();
+
+        // Exact match (no wildcard)
+        if (!pattern.contains("*")) {
+            if (childNames.contains(pattern)) {
+                IIActorRef<?> actor = system.getIIActor(pattern);
+                if (actor != null) {
+                    matched.add(actor);
+                }
+            }
+            return matched;
+        }
+
+        // Wildcard pattern - convert to regex
+        String regex = pattern
+            .replace(".", "\\.")
+            .replace("*", ".*");
+        Pattern compiled = Pattern.compile(regex);
+
+        for (String childName : childNames) {
+            if (compiled.matcher(childName).matches()) {
+                IIActorRef<?> actor = system.getIIActor(childName);
+                if (actor != null) {
+                    matched.add(actor);
+                }
+            }
+        }
+
+        return matched;
+    }
 
 }

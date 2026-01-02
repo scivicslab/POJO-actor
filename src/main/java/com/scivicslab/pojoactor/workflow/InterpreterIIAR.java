@@ -101,6 +101,35 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 ActionResult result = this.ask(i -> i.execCode(), this.system().getWorkStealingPool()).get();
                 return result;
             }
+            else if (actionName.equals("runUntilEnd")) {
+                // Parse optional maxIterations argument
+                int maxIterations = 10000;
+                if (arg != null && !arg.isEmpty() && !arg.equals("[]")) {
+                    try {
+                        org.json.JSONArray args = new org.json.JSONArray(arg);
+                        if (args.length() > 0) {
+                            maxIterations = args.getInt(0);
+                        }
+                    } catch (Exception e) {
+                        // Use default if parsing fails
+                    }
+                }
+                final int iterations = maxIterations;
+                ActionResult result = this.ask(i -> i.runUntilEnd(iterations), this.system().getWorkStealingPool()).get();
+                return result;
+            }
+            else if (actionName.equals("call")) {
+                // Subworkflow call
+                org.json.JSONArray args = new org.json.JSONArray(arg);
+                String workflowFile = args.getString(0);
+                ActionResult result = this.ask(i -> i.call(workflowFile), this.system().getWorkStealingPool()).get();
+                return result;
+            }
+            else if (actionName.equals("apply")) {
+                // Apply action to child actors
+                ActionResult result = this.ask(i -> i.apply(arg), this.system().getWorkStealingPool()).get();
+                return result;
+            }
             else if (actionName.equals("readYaml")) {
                 try (InputStream input = new FileInputStream(new File(arg))) {
                     this.tell(i -> i.readYaml(input)).get();

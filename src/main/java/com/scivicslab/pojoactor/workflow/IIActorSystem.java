@@ -127,6 +127,20 @@ public class IIActorSystem extends ActorSystem {
     }
 
     /**
+     * Returns the names of all interpreter-interfaced actors in this system.
+     *
+     * <p>This method overrides the base class method to return IIActorRef names
+     * instead of regular ActorRef names.</p>
+     *
+     * @return a list of actor names
+     * @since 2.9.0
+     */
+    @Override
+    public List<String> listActorNames() {
+        return new ArrayList<>(iiActors.keySet());
+    }
+
+    /**
      * Terminates all interpreter-interfaced actors managed by this system.
      *
      * <p>This method closes all registered IIActorRef instances, releasing
