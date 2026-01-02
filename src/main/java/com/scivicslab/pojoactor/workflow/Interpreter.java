@@ -526,6 +526,68 @@ public class Interpreter {
     }
 
     /**
+     * Loads and runs a workflow file to completion.
+     *
+     * <p>This is a convenience method that combines loading a workflow and
+     * running it until the "end" state is reached. The workflow file is
+     * reloaded each time this method is called, ensuring fresh state.</p>
+     *
+     * <p>The method:</p>
+     * <ol>
+     *   <li>Resets the interpreter state</li>
+     *   <li>Loads the workflow from classpath or file system</li>
+     *   <li>Runs until "end" state is reached</li>
+     * </ol>
+     *
+     * @param workflowFile the workflow file path (YAML or JSON)
+     * @return ActionResult with success=true if completed, false otherwise
+     * @since 2.8.0
+     */
+    public ActionResult runWorkflow(String workflowFile) {
+        return runWorkflow(workflowFile, 10000);
+    }
+
+    /**
+     * Loads and runs a workflow file to completion with custom iteration limit.
+     *
+     * @param workflowFile the workflow file path (YAML or JSON)
+     * @param maxIterations maximum number of state transitions allowed
+     * @return ActionResult with success=true if completed, false otherwise
+     * @since 2.8.0
+     */
+    public ActionResult runWorkflow(String workflowFile, int maxIterations) {
+        try {
+            // Reset state for fresh execution
+            reset();
+
+            // Load workflow from classpath or file system
+            InputStream stream = loadWorkflowFromClasspath(workflowFile);
+            if (stream == null) {
+                // Try file system
+                try {
+                    stream = new java.io.FileInputStream(workflowFile);
+                } catch (java.io.FileNotFoundException e) {
+                    return new ActionResult(false, "Workflow not found: " + workflowFile);
+                }
+            }
+
+            // Determine file type and load
+            if (workflowFile.endsWith(".json")) {
+                readJson(stream);
+            } else {
+                readYaml(stream);
+            }
+
+            // Run until end
+            return runUntilEnd(maxIterations);
+
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error running workflow: " + workflowFile, e);
+            return new ActionResult(false, "Error: " + e.getMessage());
+        }
+    }
+
+    /**
      * Executes the workflow until reaching the "end" state with a custom iteration limit.
      *
      * <p>This method runs the workflow with the following termination conditions:</p>

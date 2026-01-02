@@ -119,10 +119,18 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 return result;
             }
             else if (actionName.equals("call")) {
-                // Subworkflow call
+                // Subworkflow call (creates child actor)
                 org.json.JSONArray args = new org.json.JSONArray(arg);
                 String workflowFile = args.getString(0);
                 ActionResult result = this.ask(i -> i.call(workflowFile), this.system().getWorkStealingPool()).get();
+                return result;
+            }
+            else if (actionName.equals("runWorkflow")) {
+                // Load and run workflow directly (no child actor)
+                org.json.JSONArray args = new org.json.JSONArray(arg);
+                String workflowFile = args.getString(0);
+                int maxIterations = args.length() > 1 ? args.getInt(1) : 10000;
+                ActionResult result = this.ask(i -> i.runWorkflow(workflowFile, maxIterations), this.system().getWorkStealingPool()).get();
                 return result;
             }
             else if (actionName.equals("apply")) {
