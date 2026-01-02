@@ -19,6 +19,8 @@ package com.scivicslab.pojoactor.workflow;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +46,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.scivicslab.pojoactor.core.ActionResult;
+import com.scivicslab.pojoactor.workflow.kustomize.WorkflowKustomizer;
 
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
@@ -311,6 +314,108 @@ public class Interpreter {
         Yaml yaml = new Yaml(new Constructor(MatrixCode.class, new LoaderOptions()));
         code = yaml.load(yamlInput);
 
+    }
+
+    /**
+     * Reads and parses a workflow definition from a YAML file.
+     *
+     * @param yamlPath the path to the YAML file containing the workflow definition
+     * @throws IOException if the file cannot be read
+     */
+    public void readYaml(Path yamlPath) throws IOException {
+        try (InputStream is = Files.newInputStream(yamlPath)) {
+            readYaml(is);
+        }
+        // Set the workflow base directory for relative path resolution
+        if (yamlPath.getParent() != null) {
+            this.workflowBaseDir = yamlPath.getParent().toString();
+        }
+    }
+
+    /**
+     * Reads and parses a workflow definition from a YAML file with overlay applied.
+     *
+     * <p>This method applies the overlay configuration from the specified directory
+     * to the base workflow before loading. The overlay can modify vertices, add new
+     * steps, substitute variables, and apply name transformations.</p>
+     *
+     * <p>Example usage:</p>
+     * <pre>
+     * interpreter.readYaml(
+     *     Path.of("workflows/base/main-workflow.yaml"),
+     *     Path.of("workflows/overlays/production")
+     * );
+     * </pre>
+     *
+     * @param yamlPath the path to the base YAML workflow file
+     * @param overlayDir the directory containing overlay-conf.yaml
+     * @throws IOException if files cannot be read
+     * @since 2.9.0
+     */
+    public void readYaml(Path yamlPath, Path overlayDir) throws IOException {
+        WorkflowKustomizer kustomizer = new WorkflowKustomizer();
+        String workflowFileName = yamlPath.getFileName().toString();
+
+        // Build the overlay and get the specific workflow
+        Map<String, Map<String, Object>> workflows = kustomizer.build(overlayDir);
+
+        // Find the workflow (may have prefix/suffix applied)
+        Map<String, Object> workflowData = null;
+        for (Map.Entry<String, Map<String, Object>> entry : workflows.entrySet()) {
+            if (entry.getKey().contains(workflowFileName.replace(".yaml", "").replace(".yml", ""))) {
+                workflowData = entry.getValue();
+                break;
+            }
+        }
+
+        if (workflowData == null) {
+            throw new IOException("Workflow not found after overlay: " + workflowFileName);
+        }
+
+        // Convert the merged data to MatrixCode
+        code = mapToMatrixCode(workflowData);
+
+        // Set the workflow base directory
+        if (yamlPath.getParent() != null) {
+            this.workflowBaseDir = yamlPath.getParent().toString();
+        }
+    }
+
+    /**
+     * Converts a Map representation to MatrixCode.
+     * Used when loading workflows with overlay applied.
+     */
+    @SuppressWarnings("unchecked")
+    private MatrixCode mapToMatrixCode(Map<String, Object> data) {
+        MatrixCode mc = new MatrixCode();
+        mc.setName((String) data.get("name"));
+
+        List<Map<String, Object>> stepsData = (List<Map<String, Object>>) data.get("steps");
+        if (stepsData != null) {
+            List<Row> rows = new ArrayList<>();
+            for (Map<String, Object> stepData : stepsData) {
+                Row row = new Row();
+                row.setStates((List<String>) stepData.get("states"));
+                row.setVertexName((String) stepData.get("vertexName"));
+
+                List<Map<String, Object>> actionsData = (List<Map<String, Object>>) stepData.get("actions");
+                if (actionsData != null) {
+                    List<Action> actions = new ArrayList<>();
+                    for (Map<String, Object> actionData : actionsData) {
+                        Action action = new Action();
+                        action.setActor((String) actionData.get("actor"));
+                        action.setMethod((String) actionData.get("method"));
+                        action.setArguments(actionData.get("arguments"));
+                        actions.add(action);
+                    }
+                    row.setActions(actions);
+                }
+                rows.add(row);
+            }
+            mc.setSteps(rows);
+        }
+
+        return mc;
     }
 
     /**

@@ -39,6 +39,7 @@ import java.util.List;
 public class Row {
 
     List<String> states;
+    String vertexName;  // Optional identifier for overlay matching
     List<Action> actions;  // Unified format for all workflow types
 
     /**
@@ -77,5 +78,29 @@ public class Row {
      */
     public void setStates(List<String> list) {
         this.states = list;
+    }
+
+    /**
+     * Returns the vertex name for this row.
+     *
+     * <p>The vertex name is used as a stable identifier for overlay matching.
+     * When applying patches, vertices are matched by this name rather than
+     * by states or array index.</p>
+     *
+     * @return the vertex name, or null if not set
+     * @since 2.9.0
+     */
+    public String getVertexName() {
+        return this.vertexName;
+    }
+
+    /**
+     * Sets the vertex name for this row.
+     *
+     * @param vertexName the vertex name identifier
+     * @since 2.9.0
+     */
+    public void setVertexName(String vertexName) {
+        this.vertexName = vertexName;
     }
 }
