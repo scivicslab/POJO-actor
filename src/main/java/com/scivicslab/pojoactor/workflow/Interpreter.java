@@ -92,6 +92,12 @@ public class Interpreter {
     protected IIActorRef<?> selfActorRef = null;
 
     /**
+     * Base directory for resolving relative workflow file paths.
+     * When set, runWorkflow will look for files relative to this directory.
+     */
+    protected String workflowBaseDir = null;
+
+    /**
      * Random number generator for child actor name generation.
      * Shared across all interpreters for efficiency.
      */
@@ -236,18 +242,18 @@ public class Interpreter {
     }
 
     /**
-     * Converts action arguments to JSON array format.
+     * Converts action arguments to JSON format.
      *
      * <p>Handles multiple {@code arguments} formats:</p>
      * <ul>
      *   <li>If {@code arguments} is a String: wraps in JSON array (e.g., {@code "value"} → {@code ["value"]})</li>
      *   <li>If {@code arguments} is a List: converts to JSON array string (e.g., {@code ["a","b"]})</li>
-     *   <li>If {@code arguments} is a Map: wraps in JSON array (e.g., {@code [{"key":"value"}]})</li>
-     *   <li>If {@code arguments} is null or empty List: returns empty array {@code []}</li>
+     *   <li>If {@code arguments} is a Map: converts to JSON object string (e.g., {@code {"key":"value"}})</li>
+     *   <li>If {@code arguments} is null: returns empty array {@code []}</li>
      * </ul>
      *
      * @param action the action containing arguments
-     * @return JSON array string (empty array "[]" if no arguments)
+     * @return JSON string (array for String/List, object for Map)
      */
     private String convertArgumentsToJson(Action action) {
         Object arguments = action.getArguments();
@@ -267,11 +273,9 @@ public class Interpreter {
             JSONArray jsonArray = new JSONArray((List<?>) arguments);
             return jsonArray.toString();
         } else if (arguments instanceof Map) {
-            // Convert Map to JSON array with single object: [{"key": "value"}]
+            // Convert Map to JSON object directly (not wrapped in array)
             JSONObject jsonObject = new JSONObject((Map<?, ?>) arguments);
-            JSONArray jsonArray = new JSONArray();
-            jsonArray.put(jsonObject);
-            return jsonArray.toString();
+            return jsonObject.toString();
         } else {
             throw new IllegalArgumentException(
                 "Unsupported arguments type: " + arguments.getClass().getName() +
@@ -562,8 +566,21 @@ public class Interpreter {
 
             // Load workflow from classpath or file system
             InputStream stream = loadWorkflowFromClasspath(workflowFile);
+
+            // If not found in classpath, try workflowBaseDir
+            if (stream == null && workflowBaseDir != null) {
+                java.io.File baseDirFile = new java.io.File(workflowBaseDir, workflowFile);
+                if (baseDirFile.exists()) {
+                    try {
+                        stream = new java.io.FileInputStream(baseDirFile);
+                    } catch (java.io.FileNotFoundException e) {
+                        // Continue to try other options
+                    }
+                }
+            }
+
+            // If still not found, try as absolute or relative path
             if (stream == null) {
-                // Try file system
                 try {
                     stream = new java.io.FileInputStream(workflowFile);
                 } catch (java.io.FileNotFoundException e) {
@@ -964,6 +981,24 @@ public class Interpreter {
         this.selfActorRef = actorRef;
     }
 
+    /**
+     * Sets the base directory for resolving relative workflow file paths.
+     *
+     * @param baseDir the directory path
+     */
+    public void setWorkflowBaseDir(String baseDir) {
+        this.workflowBaseDir = baseDir;
+    }
+
+    /**
+     * Gets the base directory for resolving relative workflow file paths.
+     *
+     * @return the directory path, or null if not set
+     */
+    public String getWorkflowBaseDir() {
+        return this.workflowBaseDir;
+    }
+
     // ========================================================================
     // Subworkflow Support
     // ========================================================================
@@ -1263,6 +1298,65 @@ public class Interpreter {
         }
 
         return matched;
+    }
+
+    // ========================================================================
+    // Accumulator Support
+    // ========================================================================
+
+    /**
+     * Adds a result to the accumulator actor in the system.
+     *
+     * <p>This is a convenience method for child workflows to report results
+     * back to an accumulator. It looks up the accumulator actor by name
+     * (default: "accumulator") and calls its "add" action.</p>
+     *
+     * <p><strong>Usage in YAML:</strong></p>
+     * <pre>{@code
+     * - states: ["0", "1"]
+     *   actions:
+     *     - actor: this
+     *       method: addToAccumulator
+     *       arguments:
+     *         type: "cpu"
+     *         data: "Intel Xeon E5-2680"
+     * }</pre>
+     *
+     * @param type the type of result (e.g., "cpu", "memory")
+     * @param data the result data
+     * @return ActionResult indicating success or failure
+     * @since 2.8.0
+     */
+    public ActionResult addToAccumulator(String type, String data) {
+        return addToAccumulator("accumulator", type, data);
+    }
+
+    /**
+     * Adds a result to a named accumulator actor in the system.
+     *
+     * @param accumulatorName the name of the accumulator actor
+     * @param type the type of result (e.g., "cpu", "memory")
+     * @param data the result data
+     * @return ActionResult indicating success or failure
+     * @since 2.8.0
+     */
+    public ActionResult addToAccumulator(String accumulatorName, String type, String data) {
+        if (system == null) {
+            return new ActionResult(false, "No actor system available");
+        }
+
+        IIActorRef<?> accumulator = system.getIIActor(accumulatorName);
+        if (accumulator == null) {
+            return new ActionResult(false, "Accumulator not found: " + accumulatorName);
+        }
+
+        // Build the argument JSON
+        JSONObject addArg = new JSONObject();
+        addArg.put("source", selfActorRef != null ? selfActorRef.getName() : "unknown");
+        addArg.put("type", type);
+        addArg.put("data", data);
+
+        return accumulator.callByActionName("add", addArg.toString());
     }
 
 }

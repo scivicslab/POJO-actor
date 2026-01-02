@@ -27,7 +27,7 @@ package com.scivicslab.pojoactor.workflow;
  * <ul>
  *   <li>String: Single argument (wrapped in JSON array when passed to actor)</li>
  *   <li>List: Multiple arguments (converted to JSON array)</li>
- *   <li>Map: Structured data (wrapped in JSON array as object)</li>
+ *   <li>Map: Structured data (converted to JSON object, not wrapped in array)</li>
  * </ul>
  *
  * @author devteam@scivics-lab.com

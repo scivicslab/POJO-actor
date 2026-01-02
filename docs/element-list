@@ -1,8 +1,10 @@
 com.scivicslab.pojoactor.core
+com.scivicslab.pojoactor.core.accumulator
 com.scivicslab.pojoactor.core.distributed
 com.scivicslab.pojoactor.core.distributed.discovery
 com.scivicslab.pojoactor.core.scheduler
 com.scivicslab.pojoactor.pojo
 com.scivicslab.pojoactor.workflow
+com.scivicslab.pojoactor.workflow.accumulator
 com.scivicslab.pojoactor.workflow.distributed
 com.scivicslab.pojoactor.workflow.scheduler

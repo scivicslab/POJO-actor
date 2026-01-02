@@ -386,6 +386,78 @@ public class SubworkflowTest {
         }
     }
 
+    // ==================== Workflow Base Directory Tests ====================
+
+    @Nested
+    @DisplayName("Workflow Base Directory")
+    class WorkflowBaseDirTests {
+
+        @Test
+        @DisplayName("Should set and get workflowBaseDir")
+        public void testSetGetWorkflowBaseDir() {
+            assertNull(interpreter.getWorkflowBaseDir());
+
+            interpreter.setWorkflowBaseDir("/path/to/workflows");
+            assertEquals("/path/to/workflows", interpreter.getWorkflowBaseDir());
+        }
+
+        @Test
+        @DisplayName("Should find workflow from baseDir when classpath fails")
+        public void testRunWorkflowFromBaseDir() throws Exception {
+            // Create a temporary workflow file
+            java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("workflow-test");
+            java.nio.file.Path workflowFile = tempDir.resolve("temp-workflow.yaml");
+
+            // Create a simple workflow that just ends
+            String yamlContent = """
+                name: TempWorkflow
+                steps:
+                  - states: ["0", "end"]
+                    actions:
+                      - actor: main
+                        method: doNothing
+                """;
+            java.nio.file.Files.writeString(workflowFile, yamlContent);
+
+            // Add doNothing handler to interpreter
+            interpreterActor = new InterpreterIIAR("main", interpreter, system) {
+                @Override
+                public ActionResult callByActionName(String actionName, String args) {
+                    if ("doNothing".equals(actionName)) {
+                        return new ActionResult(true, "did nothing");
+                    }
+                    return super.callByActionName(actionName, args);
+                }
+            };
+            system.addIIActor(interpreterActor);
+
+            // Set baseDir and run workflow
+            interpreter.setWorkflowBaseDir(tempDir.toString());
+            ActionResult result = interpreter.runWorkflow("temp-workflow.yaml");
+
+            assertTrue(result.isSuccess(), "Workflow should succeed: " + result.getResult());
+
+            // Cleanup
+            java.nio.file.Files.delete(workflowFile);
+            java.nio.file.Files.delete(tempDir);
+        }
+
+        @Test
+        @DisplayName("Should fail when workflow not found in baseDir")
+        public void testRunWorkflowNotFoundInBaseDir() throws Exception {
+            java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("workflow-test-empty");
+
+            interpreter.setWorkflowBaseDir(tempDir.toString());
+            ActionResult result = interpreter.runWorkflow("nonexistent.yaml");
+
+            assertFalse(result.isSuccess());
+            assertTrue(result.getResult().contains("not found"));
+
+            // Cleanup
+            java.nio.file.Files.delete(tempDir);
+        }
+    }
+
     // ==================== Integration Tests ====================
 
     @Nested
