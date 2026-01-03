@@ -7,4 +7,5 @@ com.scivicslab.pojoactor.pojo
 com.scivicslab.pojoactor.workflow
 com.scivicslab.pojoactor.workflow.accumulator
 com.scivicslab.pojoactor.workflow.distributed
+com.scivicslab.pojoactor.workflow.kustomize
 com.scivicslab.pojoactor.workflow.scheduler
