@@ -1126,6 +1126,34 @@ See [docs/DISTRIBUTED_ACTORS_V2.md](docs/DISTRIBUTED_ACTORS_V2.md) for complete 
 - **Metrics Collection**: Built-in statistics for message processing and queue sizes
 - **Actor Replication**: Create redundant copies of critical actors
 
+## Feature List
+
+POJO-actorが提供する機能の一覧です。詳細ドキュメントは準備中です。
+
+### Core
+- **POJO Actor Model** — 任意のJavaオブジェクトをアクターとして利用可能
+- **Virtual Threads** — 軽量な仮想スレッドによる大量アクターの実現
+- **Work-Stealing Pool** — CPU集約タスク用のスレッドプール
+- **Job Cancellation** — アクター単位でのジョブキャンセル
+- **Immediate Execution** — tellNow/askNowによる即時実行
+- **Actor Hierarchies** — 親子関係によるアクター階層
+
+### Distributed
+- **Distributed Actor System** — HTTP経由のノード間通信
+- **Remote Actor Reference** — リモートアクターへの透過的アクセス
+- **Node Discovery** — Slurm/Kubernetes/Grid Engine環境の自動検出
+
+### Workflow Engine
+- **YAML/JSON/XML Workflow** — 3形式でのワークフロー定義
+- **Subworkflows** — ワークフローの分割と再利用
+- **YAML Overlay** — 環境ごとの設定切り替え（開発/ステージング/本番）
+- **XSLT Transformation** — ワークフローのHTML可視化
+
+### Extensibility
+- **Dynamic Actor Loading** — 外部JARからのアクター読み込み
+- **Plugin Architecture** — ServiceLoaderによるプラグイン登録
+- **GraalVM Native Image** — ネイティブイメージコンパイル対応
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
