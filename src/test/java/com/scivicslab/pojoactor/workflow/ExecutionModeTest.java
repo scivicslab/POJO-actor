@@ -188,7 +188,7 @@ public class ExecutionModeTest {
         MatrixCode code = new MatrixCode();
         code.setName("pool-test");
 
-        Row row = new Row();
+        Vertex row = new Vertex();
         row.setStates(Arrays.asList("0", "end"));
 
         Action action = new Action("math", "add", Arrays.asList("1", "2"));
@@ -223,7 +223,7 @@ public class ExecutionModeTest {
         MatrixCode code = new MatrixCode();
         code.setName("direct-test");
 
-        Row row = new Row();
+        Vertex row = new Vertex();
         row.setStates(Arrays.asList("0", "end"));
 
         Action action = new Action("math", "add", Arrays.asList("1", "2"));

@@ -80,7 +80,7 @@ public class Interpreter {
 
     protected MatrixCode code = null;
 
-    protected int currentRow = 0;
+    protected int currentVertexIndex = 0;
 
     protected String currentState = "0";
 
@@ -183,8 +183,8 @@ public class Interpreter {
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult action() {
-        Row row = code.getSteps().get(currentRow);
-        for (Action a: row.getActions()) {
+        Vertex vertex = code.getVertices().get(currentVertexIndex);
+        for (Action a: vertex.getActions()) {
             String actorPath = a.getActor();
             String action    = a.getMethod();
 
@@ -392,11 +392,11 @@ public class Interpreter {
 
         List<Map<String, Object>> stepsData = (List<Map<String, Object>>) data.get("steps");
         if (stepsData != null) {
-            List<Row> rows = new ArrayList<>();
+            List<Vertex> vertices = new ArrayList<>();
             for (Map<String, Object> stepData : stepsData) {
-                Row row = new Row();
-                row.setStates((List<String>) stepData.get("states"));
-                row.setVertexName((String) stepData.get("vertexName"));
+                Vertex vertex = new Vertex();
+                vertex.setStates((List<String>) stepData.get("states"));
+                vertex.setVertexName((String) stepData.get("vertexName"));
 
                 List<Map<String, Object>> actionsData = (List<Map<String, Object>>) stepData.get("actions");
                 if (actionsData != null) {
@@ -408,11 +408,11 @@ public class Interpreter {
                         action.setArguments(actionData.get("arguments"));
                         actions.add(action);
                     }
-                    row.setActions(actions);
+                    vertex.setActions(actions);
                 }
-                rows.add(row);
+                vertices.add(vertex);
             }
-            mc.setSteps(rows);
+            mc.setSteps(vertices);
         }
 
         return mc;
@@ -463,7 +463,7 @@ public class Interpreter {
         code.setName(workflowName);
 
         // Parse steps
-        List<Row> steps = new ArrayList<>();
+        List<Vertex> steps = new ArrayList<>();
         NodeList stepsNodes = workflowElement.getElementsByTagName("steps");
 
         if (stepsNodes.getLength() > 0) {
@@ -473,14 +473,14 @@ public class Interpreter {
             for (int i = 0; i < transitionNodes.getLength(); i++) {
                 Element transitionElement = (Element) transitionNodes.item(i);
 
-                // Create Row instance
-                Row row = new Row();
+                // Create Vertex instance
+                Vertex vertex = new Vertex();
 
                 // Parse states (from, to)
                 List<String> states = new ArrayList<>();
                 states.add(transitionElement.getAttribute("from"));
                 states.add(transitionElement.getAttribute("to"));
-                row.setStates(states);
+                vertex.setStates(states);
 
                 // Parse actions
                 List<Action> actions = new ArrayList<>();
@@ -524,8 +524,8 @@ public class Interpreter {
                     actions.add(action);
                 }
 
-                row.setActions(actions);
-                steps.add(row);
+                vertex.setActions(actions);
+                steps.add(vertex);
             }
         }
 
@@ -553,29 +553,32 @@ public class Interpreter {
             return new ActionResult(false, "No code loaded");
         }
 
-        // Try all rows, starting from currentRow and wrapping around
-        int stepsCount = code.getSteps().size();
+        // Try all steps, starting from currentVertexIndex and wrapping around
+        int stepsCount = code.getVertices().size();
         for (int attempts = 0; attempts < stepsCount; attempts++) {
             // Wrap around to the beginning when reaching the end
-            if (currentRow >= stepsCount) {
-                currentRow = 0;
+            if (currentVertexIndex >= stepsCount) {
+                currentVertexIndex = 0;
             }
 
-            Row row = code.getSteps().get(currentRow);
+            Vertex vertex = code.getVertices().get(currentVertexIndex);
 
             // Check if from-state matches current state
-            if (matchesCurrentState(row)) {
+            if (matchesCurrentState(vertex)) {
+                // Hook: notify subclasses that we're entering this vertex
+                onEnterVertex(vertex);
+
                 // Try to execute actions
                 ActionResult actionResult = action();
 
                 if (actionResult.isSuccess()) {
                     // All actions succeeded, transition to to-state
-                    transitionTo(getToState(row));
+                    transitionTo(getToState(vertex));
                     return new ActionResult(true, "State: " + currentState);
                 }
                 // Action failed, try next step
             }
-            currentRow++;
+            currentVertexIndex++;
         }
 
         return new ActionResult(false, "No matching state transition");
@@ -752,13 +755,13 @@ public class Interpreter {
      * @return true if code is loaded and has at least one step
      */
     public boolean hasCodeLoaded() {
-        return code != null && !code.getSteps().isEmpty();
+        return code != null && !code.getVertices().isEmpty();
     }
 
     /**
-     * Checks if a row's from-state matches the current state.
+     * Checks if a vertex's from-state matches the current state.
      *
-     * <p>A row matches if it has at least 2 states (from and to) and
+     * <p>A vertex matches if it has at least 2 states (from and to) and
      * the from-state pattern (index 0) matches the interpreter's current state.</p>
      *
      * <p>Supported state patterns:</p>
@@ -770,11 +773,11 @@ public class Interpreter {
      *   <li>Numeric comparison: {@code ">=1"}, {@code "<=5"}, {@code ">1"}, {@code "<5"}</li>
      * </ul>
      *
-     * @param row the row to check
-     * @return true if the row's from-state pattern matches current state
+     * @param vertex the vertex to check
+     * @return true if the vertex's from-state pattern matches current state
      */
-    public boolean matchesCurrentState(Row row) {
-        List<String> states = row.getStates();
+    public boolean matchesCurrentState(Vertex vertex) {
+        List<String> states = vertex.getStates();
         if (states.size() < 2) {
             return false;
         }
@@ -955,13 +958,13 @@ public class Interpreter {
     }
 
     /**
-     * Gets the to-state from a row.
+     * Gets the to-state from a vertex.
      *
-     * @param row the row containing the state transition
+     * @param vertex the vertex containing the state transition
      * @return the to-state (second element), or null if not present
      */
-    public String getToState(Row row) {
-        List<String> states = row.getStates();
+    public String getToState(Vertex vertex) {
+        List<String> states = vertex.getStates();
         return states.size() >= 2 ? states.get(1) : null;
     }
 
@@ -971,31 +974,31 @@ public class Interpreter {
      * <p>This method:</p>
      * <ol>
      *   <li>Updates the current state to the specified to-state</li>
-     *   <li>Searches for the first row whose from-state matches the new current state</li>
-     *   <li>Updates currentRow to point to that row</li>
+     *   <li>Searches for the first step whose from-state matches the new current state</li>
+     *   <li>Updates currentVertexIndex to point to that step</li>
      * </ol>
      *
      * @param toState the state to transition to
      */
     public void transitionTo(String toState) {
         currentState = toState;
-        findNextMatchingRow();
+        findNextMatchingVertex();
     }
 
     /**
-     * Finds the first row whose from-state pattern matches the current state.
+     * Finds the first step whose from-state pattern matches the current state.
      *
      * <p>Searches from the beginning of the steps list and updates
-     * currentRow to the index of the first matching row. Supports
+     * currentVertexIndex to the index of the first matching step. Supports
      * state patterns including wildcards, negations, and numeric comparisons.</p>
      */
-    protected void findNextMatchingRow() {
-        int stepsCount = code.getSteps().size();
+    protected void findNextMatchingVertex() {
+        int stepsCount = code.getVertices().size();
         for (int i = 0; i < stepsCount; i++) {
-            Row nextRow = code.getSteps().get(i);
-            if (!nextRow.getStates().isEmpty() &&
-                matchesStatePattern(nextRow.getStates().get(0), currentState)) {
-                currentRow = i;
+            Vertex nextVertex = code.getVertices().get(i);
+            if (!nextVertex.getStates().isEmpty() &&
+                matchesStatePattern(nextVertex.getStates().get(0), currentState)) {
+                currentVertexIndex = i;
                 return;
             }
         }
@@ -1011,12 +1014,12 @@ public class Interpreter {
     }
 
     /**
-     * Gets the current row index.
+     * Gets the current step index.
      *
-     * @return the current row index
+     * @return the current step index
      */
-    public int getCurrentRow() {
-        return currentRow;
+    public int getCurrentVertexIndex() {
+        return currentVertexIndex;
     }
 
     /**
@@ -1068,9 +1071,25 @@ public class Interpreter {
      * @since 2.5.0
      */
     public void reset() {
-        this.currentRow = 0;
+        this.currentVertexIndex = 0;
         this.currentState = "0";
         this.code = null;
+    }
+
+    /**
+     * Hook method called when entering a vertex during workflow execution.
+     *
+     * <p>This method is called just before executing the actions of a matching vertex.
+     * Subclasses can override this method to provide custom behavior such as
+     * logging, visualization, or debugging output.</p>
+     *
+     * <p>The default implementation does nothing.</p>
+     *
+     * @param vertex the vertex being entered
+     * @since 2.9.0
+     */
+    protected void onEnterVertex(Vertex vertex) {
+        // Default: do nothing. Subclasses can override.
     }
 
     /**

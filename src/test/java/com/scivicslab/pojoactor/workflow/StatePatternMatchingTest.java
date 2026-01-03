@@ -128,8 +128,8 @@ public class StatePatternMatchingTest {
         @DisplayName("Should work in workflow as catch-all")
         public void testWildcardInWorkflow() {
             MatrixCode code = createWorkflow(
-                row("0", "1", "action0"),
-                row("*", "error", "catchAll")  // Catch-all
+                step("0", "1", "action0"),
+                step("*", "error", "catchAll")  // Catch-all
             );
             setCode(code);
 
@@ -176,10 +176,10 @@ public class StatePatternMatchingTest {
             // When failStep fails, the interpreter tries next row with same from-state "1"
             // Since there's no other "1" row, it falls through to "!end" which matches "1"
             MatrixCode code = createWorkflow(
-                row("0", "1", "step1"),
-                row("1", "2", "failStep"),  // Will fail
-                row("1", "error", "errorHandler"),  // Same from-state, catches the failure
-                row("error", "end", "cleanup")
+                step("0", "1", "step1"),
+                step("1", "2", "failStep"),  // Will fail
+                step("1", "error", "errorHandler"),  // Same from-state, catches the failure
+                step("error", "end", "cleanup")
             );
             setCode(code);
 
@@ -228,8 +228,8 @@ public class StatePatternMatchingTest {
         @DisplayName("Should work for multiple state consolidation")
         public void testOrConditionInWorkflow() {
             MatrixCode code = createWorkflow(
-                row("0", "1", "init"),
-                row("1|2|3", "end", "commonHandler")  // Handle states 1, 2, or 3
+                step("0", "1", "init"),
+                step("1|2|3", "end", "commonHandler")  // Handle states 1, 2, or 3
             );
             setCode(code);
 
@@ -304,9 +304,9 @@ public class StatePatternMatchingTest {
         public void testNumericComparisonInWorkflow() {
             // Simulates retry logic: state < 4 retries, state >= 4 gives up
             MatrixCode code = createWorkflow(
-                row("0", "1", "attempt"),
-                row("<4", "end", "underFour"),   // States 1,2,3 -> succeed
-                row(">=4", "error", "giveUp")    // State 4+ -> give up
+                step("0", "1", "attempt"),
+                step("<4", "end", "underFour"),   // States 1,2,3 -> succeed
+                step(">=4", "error", "giveUp")    // State 4+ -> give up
             );
             setCode(code);
 
@@ -391,8 +391,8 @@ public class StatePatternMatchingTest {
         @DisplayName("Should work in workflow")
         public void testJexlInWorkflow() {
             MatrixCode code = createWorkflow(
-                row("0", "5", "init"),
-                row("jexl:n >= 5 && n < 10", "end", "inRange")
+                step("0", "5", "init"),
+                step("jexl:n >= 5 && n < 10", "end", "inRange")
             );
             setCode(code);
 
@@ -420,8 +420,8 @@ public class StatePatternMatchingTest {
         public void testExactMatchPriority() {
             // Exact match row comes first, should be used
             MatrixCode code = createWorkflow(
-                row("1", "2", "exactMatch"),
-                row("*", "error", "wildcard")
+                step("1", "2", "exactMatch"),
+                step("*", "error", "wildcard")
             );
             setCode(code);
 
@@ -438,8 +438,8 @@ public class StatePatternMatchingTest {
         @DisplayName("Should fall through to wildcard when exact match fails")
         public void testFallThroughToWildcard() {
             MatrixCode code = createWorkflow(
-                row("1", "2", "failExact"),  // Fails
-                row("*", "error", "wildcard")  // Catches
+                step("1", "2", "failExact"),  // Fails
+                step("*", "error", "wildcard")  // Catches
             );
             setCode(code);
 
@@ -454,11 +454,11 @@ public class StatePatternMatchingTest {
         @DisplayName("Should handle complex error handling workflow")
         public void testComplexErrorHandling() {
             MatrixCode code = createWorkflow(
-                row("0", "1", "step0"),
-                row("1", "2", "step1"),
-                row("2", "3", "failStep2"),  // Fails
-                row("2", "end", "fallback2"),  // Fallback for state 2
-                row("3", "end", "step3")
+                step("0", "1", "step0"),
+                step("1", "2", "step1"),
+                step("2", "3", "failStep2"),  // Fails
+                step("2", "end", "fallback2"),  // Fallback for state 2
+                step("3", "end", "step3")
             );
             setCode(code);
 
@@ -474,18 +474,18 @@ public class StatePatternMatchingTest {
         public void testMatchesCurrentStateWithPattern() {
             // Need to set code first to avoid NPE in transitionTo
             MatrixCode code = createWorkflow(
-                row("0", "1", "dummy")
+                step("0", "1", "dummy")
             );
             setCode(code);
 
-            Row wildcardRow = new Row();
-            wildcardRow.setStates(Arrays.asList("*", "error"));
+            Vertex wildcardVertex = new Vertex();
+            wildcardVertex.setStates(Arrays.asList("*", "error"));
 
-            Row negationRow = new Row();
-            negationRow.setStates(Arrays.asList("!end", "error"));
+            Vertex negationVertex = new Vertex();
+            negationVertex.setStates(Arrays.asList("!end", "error"));
 
-            Row numericRow = new Row();
-            numericRow.setStates(Arrays.asList(">=5", "high"));
+            Vertex numericVertex = new Vertex();
+            numericVertex.setStates(Arrays.asList(">=5", "high"));
 
             // Test pattern matching directly (without transitionTo which needs code)
             // Use reflection to set currentState
@@ -494,16 +494,16 @@ public class StatePatternMatchingTest {
                 stateField.setAccessible(true);
 
                 stateField.set(interpreter, "3");
-                assertTrue(interpreter.matchesCurrentState(wildcardRow));
-                assertTrue(interpreter.matchesCurrentState(negationRow));
-                assertFalse(interpreter.matchesCurrentState(numericRow));
+                assertTrue(interpreter.matchesCurrentState(wildcardVertex));
+                assertTrue(interpreter.matchesCurrentState(negationVertex));
+                assertFalse(interpreter.matchesCurrentState(numericVertex));
 
                 stateField.set(interpreter, "10");
-                assertTrue(interpreter.matchesCurrentState(numericRow));
+                assertTrue(interpreter.matchesCurrentState(numericVertex));
 
                 stateField.set(interpreter, "end");
-                assertTrue(interpreter.matchesCurrentState(wildcardRow));
-                assertFalse(interpreter.matchesCurrentState(negationRow));
+                assertTrue(interpreter.matchesCurrentState(wildcardVertex));
+                assertFalse(interpreter.matchesCurrentState(negationVertex));
             } catch (Exception e) {
                 fail("Failed to set currentState: " + e.getMessage());
             }
@@ -512,20 +512,20 @@ public class StatePatternMatchingTest {
 
     // ==================== Helper Methods ====================
 
-    private Row row(String fromState, String toState, String actionName) {
-        Row row = new Row();
-        row.setStates(Arrays.asList(fromState, toState));
+    private Vertex step(String fromState, String toState, String actionName) {
+        Vertex vertex = new Vertex();
+        vertex.setStates(Arrays.asList(fromState, toState));
         Action action = new Action();
         action.setActor("tracker");
         action.setMethod(actionName);
-        row.setActions(Arrays.asList(action));
-        return row;
+        vertex.setActions(Arrays.asList(action));
+        return vertex;
     }
 
-    private MatrixCode createWorkflow(Row... rows) {
+    private MatrixCode createWorkflow(Vertex... steps) {
         MatrixCode code = new MatrixCode();
         code.setName("test-workflow");
-        code.setSteps(Arrays.asList(rows));
+        code.setSteps(Arrays.asList(steps));
         return code;
     }
 

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import com.scivicslab.pojoactor.workflow.Interpreter;
 import com.scivicslab.pojoactor.workflow.MatrixCode;
-import com.scivicslab.pojoactor.workflow.Row;
+import com.scivicslab.pojoactor.workflow.Vertex;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -255,14 +255,14 @@ class WorkflowKustomizerTest {
             assertEquals(4, code.getSteps().size());
 
             // Verify vertexName is preserved
-            Row initRow = code.getSteps().stream()
+            Vertex initVertex = code.getSteps().stream()
                 .filter(r -> "init".equals(r.getVertexName()))
                 .findFirst()
                 .orElse(null);
-            assertNotNull(initRow, "init vertex should exist");
+            assertNotNull(initVertex, "init vertex should exist");
 
             // Verify overlay was applied - init should use 'json' argument
-            Object args = initRow.getActions().get(0).getArguments();
+            Object args = initVertex.getActions().get(0).getArguments();
             assertTrue(args instanceof List);
             @SuppressWarnings("unchecked")
             List<String> argList = (List<String>) args;
@@ -285,7 +285,7 @@ class WorkflowKustomizerTest {
 
             // Check all vertices have their names
             List<String> vertexNames = code.getSteps().stream()
-                .map(Row::getVertexName)
+                .map(Vertex::getVertexName)
                 .toList();
 
             assertTrue(vertexNames.contains("init"));

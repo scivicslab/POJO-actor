@@ -22,8 +22,8 @@ import java.util.List;
 /**
  * Represents a matrix-based workflow definition.
  *
- * <p>A MatrixCode contains a name and a list of {@link Row} objects that define
- * the workflow's state transitions and actions. Each row in the matrix represents
+ * <p>A MatrixCode contains a name and a list of {@link Vertex} objects that define
+ * the workflow's state transitions and actions. Each vertex in the matrix represents
  * a state transition with associated actions to execute.</p>
  *
  * <p>This class is designed to be populated from YAML or JSON workflow definitions
@@ -34,7 +34,7 @@ import java.util.List;
 public class MatrixCode {
 
     String   name;
-    List<Row> steps;
+    List<Vertex> vertices;
 
     /**
      * Constructs an empty MatrixCode.
@@ -62,21 +62,43 @@ public class MatrixCode {
     }
 
     /**
-     * Returns the workflow steps.
+     * Returns the workflow vertices.
      *
-     * @return a list of {@link Row} objects representing the workflow steps
+     * @return a list of {@link Vertex} objects representing the workflow vertices
      */
-    public List<Row> getSteps() {
-        return steps;
+    public List<Vertex> getVertices() {
+        return vertices;
     }
 
     /**
-     * Sets the workflow steps.
+     * Sets the workflow vertices.
      *
-     * @param steps a list of {@link Row} objects representing the workflow steps
+     * @param vertices a list of {@link Vertex} objects representing the workflow vertices
      */
-    public void setSteps(List<Row> steps) {
-        this.steps = steps;
+    public void setVertices(List<Vertex> vertices) {
+        this.vertices = vertices;
+    }
+
+    /**
+     * Returns the workflow vertices.
+     *
+     * @return a list of {@link Vertex} objects representing the workflow vertices
+     * @deprecated Use {@link #getVertices()} instead
+     */
+    @Deprecated
+    public List<Vertex> getSteps() {
+        return vertices;
+    }
+
+    /**
+     * Sets the workflow vertices.
+     *
+     * @param vertices a list of {@link Vertex} objects representing the workflow vertices
+     * @deprecated Use {@link #setVertices(List)} instead
+     */
+    @Deprecated
+    public void setSteps(List<Vertex> vertices) {
+        this.vertices = vertices;
     }
 
 

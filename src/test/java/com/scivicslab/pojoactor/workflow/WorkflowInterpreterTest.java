@@ -32,7 +32,7 @@ import com.scivicslab.pojoactor.workflow.IIActorRef;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 import com.scivicslab.pojoactor.workflow.Interpreter;
 import com.scivicslab.pojoactor.workflow.MatrixCode;
-import com.scivicslab.pojoactor.workflow.Row;
+import com.scivicslab.pojoactor.workflow.Vertex;
 import com.scivicslab.pojoactor.workflow.Action;
 
 /**
@@ -94,7 +94,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertNotNull(code, "Code should be loaded");
         assertEquals("simple-math-workflow", code.getName());
-        assertEquals(3, code.getSteps().size(), "Should have 3 rows");
+        assertEquals(3, code.getSteps().size(), "Should have 3 steps");
     }
 
     /**
@@ -168,8 +168,8 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertEquals("multi-action-workflow", code.getName());
 
-        Row firstRow = code.getSteps().get(0);
-        assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
+        Vertex firstVertex = code.getSteps().get(0);
+        assertEquals(3, firstVertex.getActions().size(), "First row should have 3 actions");
 
         // Execute the step with multiple actions
         ActionResult result = interpreter.execCode();
@@ -197,7 +197,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
 
         // Check first row
-        Row row0 = code.getSteps().get(0);
+        Vertex row0 = code.getSteps().get(0);
         assertEquals(2, row0.getStates().size());
         assertEquals("0", row0.getStates().get(0));
         assertEquals("1", row0.getStates().get(1));
@@ -212,7 +212,7 @@ public class WorkflowInterpreterTest {
         assertEquals("5", args.get(1));
 
         // Check second row
-        Row row1 = code.getSteps().get(1);
+        Vertex row1 = code.getSteps().get(1);
         assertEquals("1", row1.getStates().get(0));
         assertEquals("2", row1.getStates().get(1));
         assertEquals("multiply", row1.getActions().get(0).getMethod());
@@ -228,7 +228,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = new MatrixCode();
         code.setName("test-missing-actor");
 
-        Row row = new Row();
+        Vertex row = new Vertex();
         row.setStates(java.util.Arrays.asList("0", "1"));
         Action action = new Action();
         action.setActor("nonexistent");
@@ -362,7 +362,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertNotNull(code, "Code should be loaded");
         assertEquals("simple-math-workflow", code.getName());
-        assertEquals(3, code.getSteps().size(), "Should have 3 rows");
+        assertEquals(3, code.getSteps().size(), "Should have 3 steps");
     }
 
     /**
@@ -448,8 +448,8 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
         assertEquals("multi-action-workflow", code.getName());
 
-        Row firstRow = code.getSteps().get(0);
-        assertEquals(3, firstRow.getActions().size(), "First row should have 3 actions");
+        Vertex firstVertex = code.getSteps().get(0);
+        assertEquals(3, firstVertex.getActions().size(), "First row should have 3 actions");
 
         // Execute the step with multiple actions
         ActionResult result = interpreter.execCode();
@@ -481,7 +481,7 @@ public class WorkflowInterpreterTest {
         MatrixCode code = interpreter.getCode();
 
         // Check first row
-        Row row0 = code.getSteps().get(0);
+        Vertex row0 = code.getSteps().get(0);
         assertEquals(2, row0.getStates().size());
         assertEquals("0", row0.getStates().get(0));
         assertEquals("1", row0.getStates().get(1));
@@ -496,7 +496,7 @@ public class WorkflowInterpreterTest {
         assertEquals("5", xmlArgs.get(1));
 
         // Check second row
-        Row row1 = code.getSteps().get(1);
+        Vertex row1 = code.getSteps().get(1);
         assertEquals("1", row1.getStates().get(0));
         assertEquals("2", row1.getStates().get(1));
         assertEquals("multiply", row1.getActions().get(0).getMethod());
@@ -528,11 +528,11 @@ public class WorkflowInterpreterTest {
         assertEquals(16, code.getSteps().size(), "Should have 16 transitions");
 
         // Verify first transition
-        Row firstRow = code.getSteps().get(0);
-        assertEquals("init", firstRow.getStates().get(0));
-        assertEquals("state_A", firstRow.getStates().get(1));
-        assertEquals("checker", firstRow.getActions().get(0).getActor());
-        assertEquals("check_condition1", firstRow.getActions().get(0).getMethod());
+        Vertex firstVertex = code.getSteps().get(0);
+        assertEquals("init", firstVertex.getStates().get(0));
+        assertEquals("state_A", firstVertex.getStates().get(1));
+        assertEquals("checker", firstVertex.getActions().get(0).getActor());
+        assertEquals("check_condition1", firstVertex.getActions().get(0).getMethod());
     }
 
     /**
@@ -554,9 +554,9 @@ public class WorkflowInterpreterTest {
         }
 
         MatrixCode code = interpreter.getCode();
-        Row lastRow = code.getSteps().get(2);  // The last row has getLastResult with no arguments
+        Vertex lastVertex = code.getSteps().get(2);  // The last row has getLastResult with no arguments
 
-        assertNull(lastRow.getActions().get(0).getArguments(), "No arguments should be null");
+        assertNull(lastVertex.getActions().get(0).getArguments(), "No arguments should be null");
     }
 
     // ==================== New Arguments Format Tests ====================
@@ -750,7 +750,7 @@ public class WorkflowInterpreterTest {
         // Test 1: Create workflow with null arguments (omitted)
         MatrixCode code1 = new MatrixCode();
         code1.setName("test-null-args");
-        Row row1 = new Row();
+        Vertex row1 = new Vertex();
         row1.setStates(java.util.Arrays.asList("0", "1"));
         Action action1 = new Action();
         action1.setActor("argRecorder");
@@ -777,7 +777,7 @@ public class WorkflowInterpreterTest {
 
         MatrixCode code2 = new MatrixCode();
         code2.setName("test-empty-args");
-        Row row2 = new Row();
+        Vertex row2 = new Vertex();
         row2.setStates(java.util.Arrays.asList("0", "1"));
         Action action2 = new Action();
         action2.setActor("argRecorder");
@@ -853,7 +853,7 @@ public class WorkflowInterpreterTest {
         // Test: Empty arguments (omitted)
         MatrixCode code = new MatrixCode();
         code.setName("test-zero-args");
-        Row row = new Row();
+        Vertex row = new Vertex();
         row.setStates(java.util.Arrays.asList("0", "1"));
         Action action = new Action();
         action.setActor("argCounter");
@@ -878,13 +878,13 @@ public class WorkflowInterpreterTest {
     }
 
     /**
-     * Example 24: Verify that execCode() wraps around from the last Row to the first.
+     * Example 24: Verify that execCode() wraps around from the last Vertex to the first.
      *
-     * <p>When the interpreter is at the end of the Row list and fails to find a match,
+     * <p>When the interpreter is at the end of the Vertex list and fails to find a match,
      * it should wrap around to the beginning to continue searching.</p>
      */
     @Test
-    @DisplayName("Should wrap around from last Row to first when searching for matching state")
+    @DisplayName("Should wrap around from last Vertex to first when searching for matching state")
     public void testExecCodeWrapsAround() {
         // Create an actor that tracks which actions were called
         java.util.List<String> calledActions = new java.util.ArrayList<>();
@@ -908,46 +908,46 @@ public class WorkflowInterpreterTest {
                 .build();
 
         // Create workflow where:
-        // - Row 0: state "A" -> "B" (at the beginning)
-        // - Row 1: state "0" -> "A" (fail action, should try next)
-        // - Row 2: state "0" -> "A" (success action)
-        // - Row 3: state "B" -> "end"
+        // - Vertex 0: state "A" -> "B" (at the beginning)
+        // - Vertex 1: state "0" -> "A" (fail action, should try next)
+        // - Vertex 2: state "0" -> "A" (success action)
+        // - Vertex 3: state "B" -> "end"
         //
-        // After transitioning to "A", the interpreter is at Row 3.
-        // When looking for "A", it should wrap around to Row 0.
+        // After transitioning to "A", the interpreter is at Vertex 3.
+        // When looking for "A", it should wrap around to Vertex 0.
         MatrixCode code = new MatrixCode();
         code.setName("wrap-around-test");
 
-        // Row 0: A -> B
-        Row row0 = new Row();
+        // Vertex 0: A -> B
+        Vertex row0 = new Vertex();
         row0.setStates(java.util.Arrays.asList("A", "B"));
         Action action0 = new Action();
         action0.setActor("tracker");
-        action0.setMethod("actionAtRow0");
+        action0.setMethod("actionAtVertex0");
         row0.setActions(java.util.Arrays.asList(action0));
 
-        // Row 1: 0 -> A (fails)
-        Row row1 = new Row();
+        // Vertex 1: 0 -> A (fails)
+        Vertex row1 = new Vertex();
         row1.setStates(java.util.Arrays.asList("0", "A"));
         Action action1 = new Action();
         action1.setActor("tracker");
         action1.setMethod("fail");
         row1.setActions(java.util.Arrays.asList(action1));
 
-        // Row 2: 0 -> A (succeeds)
-        Row row2 = new Row();
+        // Vertex 2: 0 -> A (succeeds)
+        Vertex row2 = new Vertex();
         row2.setStates(java.util.Arrays.asList("0", "A"));
         Action action2 = new Action();
         action2.setActor("tracker");
-        action2.setMethod("actionAtRow2");
+        action2.setMethod("actionAtVertex2");
         row2.setActions(java.util.Arrays.asList(action2));
 
-        // Row 3: B -> end
-        Row row3 = new Row();
+        // Vertex 3: B -> end
+        Vertex row3 = new Vertex();
         row3.setStates(java.util.Arrays.asList("B", "end"));
         Action action3 = new Action();
         action3.setActor("tracker");
-        action3.setMethod("actionAtRow3");
+        action3.setMethod("actionAtVertex3");
         row3.setActions(java.util.Arrays.asList(action3));
 
         code.setSteps(java.util.Arrays.asList(row0, row1, row2, row3));
@@ -967,21 +967,21 @@ public class WorkflowInterpreterTest {
         assertTrue(result.isSuccess(), "Workflow should complete successfully");
 
         // Verify the execution order:
-        // 1. Row 1 (fail) -> Row 2 (actionAtRow2) -> transition to A
-        // 2. From Row 3, wrap around to Row 0 (actionAtRow0) -> transition to B
-        // 3. Row 3 (actionAtRow3) -> transition to end
+        // 1. Vertex 1 (fail) -> Vertex 2 (actionAtVertex2) -> transition to A
+        // 2. From Vertex 3, wrap around to Vertex 0 (actionAtVertex0) -> transition to B
+        // 3. Vertex 3 (actionAtVertex3) -> transition to end
         assertEquals(4, calledActions.size(), "Should have called 4 actions");
         assertEquals("fail", calledActions.get(0), "First action should be fail");
-        assertEquals("actionAtRow2", calledActions.get(1), "Second action should be at Row 2");
-        assertEquals("actionAtRow0", calledActions.get(2), "Third action should be at Row 0 (wrapped around)");
-        assertEquals("actionAtRow3", calledActions.get(3), "Fourth action should be at Row 3");
+        assertEquals("actionAtVertex2", calledActions.get(1), "Second action should be at Vertex 2");
+        assertEquals("actionAtVertex0", calledActions.get(2), "Third action should be at Vertex 0 (wrapped around)");
+        assertEquals("actionAtVertex3", calledActions.get(3), "Fourth action should be at Vertex 3");
     }
 
     /**
      * Example 25: Verify conditional branching with fallback.
      *
      * <p>Tests that when conditions fail, the interpreter continues to the next
-     * matching Row until finding one that succeeds (fallback/default case).</p>
+     * matching Vertex until finding one that succeeds (fallback/default case).</p>
      */
     @Test
     @DisplayName("Should fall through to default when conditions fail")
@@ -1006,43 +1006,43 @@ public class WorkflowInterpreterTest {
                 .build();
 
         // Scenario: Conditional branching with fallback
-        // - Row 0: state "0" -> "check"
-        // - Row 1: state "check" -> "pathA" (fails)
-        // - Row 2: state "check" -> "pathB" (fails)
-        // - Row 3: state "check" -> "end" (default/fallback - succeeds)
+        // - Vertex 0: state "0" -> "check"
+        // - Vertex 1: state "check" -> "pathA" (fails)
+        // - Vertex 2: state "check" -> "pathB" (fails)
+        // - Vertex 3: state "check" -> "end" (default/fallback - succeeds)
         //
-        // After transitioning to "check", findNextMatchingRow() finds Row 1.
-        // Row 1 fails, Row 2 fails, Row 3 succeeds.
+        // After transitioning to "check", findNextMatchingVertex() finds Vertex 1.
+        // Vertex 1 fails, Vertex 2 fails, Vertex 3 succeeds.
 
         MatrixCode code = new MatrixCode();
         code.setName("conditional-fallback-test");
 
-        // Row 0: 0 -> check
-        Row row0 = new Row();
+        // Vertex 0: 0 -> check
+        Vertex row0 = new Vertex();
         row0.setStates(java.util.Arrays.asList("0", "check"));
         Action action0 = new Action();
         action0.setActor("tracker");
         action0.setMethod("init");
         row0.setActions(java.util.Arrays.asList(action0));
 
-        // Row 1: check -> pathA (fails)
-        Row row1 = new Row();
+        // Vertex 1: check -> pathA (fails)
+        Vertex row1 = new Vertex();
         row1.setStates(java.util.Arrays.asList("check", "pathA"));
         Action action1 = new Action();
         action1.setActor("tracker");
         action1.setMethod("failConditionA");
         row1.setActions(java.util.Arrays.asList(action1));
 
-        // Row 2: check -> pathB (fails)
-        Row row2 = new Row();
+        // Vertex 2: check -> pathB (fails)
+        Vertex row2 = new Vertex();
         row2.setStates(java.util.Arrays.asList("check", "pathB"));
         Action action2 = new Action();
         action2.setActor("tracker");
         action2.setMethod("failConditionB");
         row2.setActions(java.util.Arrays.asList(action2));
 
-        // Row 3: check -> end (default)
-        Row row3 = new Row();
+        // Vertex 3: check -> end (default)
+        Vertex row3 = new Vertex();
         row3.setStates(java.util.Arrays.asList("check", "end"));
         Action action3 = new Action();
         action3.setActor("tracker");
