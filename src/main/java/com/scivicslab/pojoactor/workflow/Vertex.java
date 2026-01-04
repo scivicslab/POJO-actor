@@ -190,8 +190,8 @@ public class Vertex {
         if (args instanceof String) {
             String s = (String) args;
             // Truncate long strings
-            if (s.length() > 40) {
-                s = s.substring(0, 37) + "...";
+            if (s.length() > 120) {
+                s = s.substring(0, 117) + "...";
             }
             return "\"" + s + "\"";
         } else if (args instanceof java.util.List) {
@@ -202,8 +202,8 @@ public class Vertex {
                 Object item = list.get(i);
                 if (item instanceof String) {
                     String s = (String) item;
-                    if (s.length() > 30) {
-                        s = s.substring(0, 27) + "...";
+                    if (s.length() > 120) {
+                        s = s.substring(0, 117) + "...";
                     }
                     sb.append("\"").append(s).append("\"");
                 } else {
@@ -218,8 +218,8 @@ public class Vertex {
             return "{...} (" + map.size() + " keys)";
         } else {
             String s = args.toString();
-            if (s.length() > 40) {
-                s = s.substring(0, 37) + "...";
+            if (s.length() > 120) {
+                s = s.substring(0, 117) + "...";
             }
             return s;
         }
