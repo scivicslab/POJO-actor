@@ -236,20 +236,7 @@ public class WorkflowKustomizer {
         }
 
         // Find the target workflow
-        Map<String, Object> targetWorkflow = null;
-        String targetFileName = null;
-        for (Map.Entry<String, Map<String, Object>> entry : workflows.entrySet()) {
-            if (patchWorkflowName.equals(entry.getValue().get("name"))) {
-                targetWorkflow = entry.getValue();
-                targetFileName = entry.getKey();
-                break;
-            }
-        }
-
-        if (targetWorkflow == null) {
-            throw new IllegalArgumentException(
-                "Patch target workflow not found: " + patchWorkflowName + " in " + patchFile);
-        }
+        Map<String, Object> targetWorkflow = findTargetWorkflow(workflows, patchWorkflowName, patchFile);
 
         // Get steps from both
         List<Map<String, Object>> baseSteps = (List<Map<String, Object>>) targetWorkflow.get("steps");
@@ -260,17 +247,70 @@ public class WorkflowKustomizer {
         }
 
         // Build index of base vertices by vertexName
-        Map<String, Integer> baseVertexIndex = new HashMap<>();
-        for (int i = 0; i < baseSteps.size(); i++) {
-            String vertexName = (String) baseSteps.get(i).get("vertexName");
-            if (vertexName != null) {
-                baseVertexIndex.put(vertexName, i);
+        Map<String, Integer> baseVertexIndex = buildVertexIndex(baseSteps);
+
+        // Check for orphan vertices
+        validatePatchVertices(patchSteps, baseVertexIndex, patchFile);
+
+        // Apply patches and replace steps
+        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseVertexIndex, patchFile);
+        targetWorkflow.put("steps", newSteps);
+    }
+
+    /**
+     * Finds the target workflow by name.
+     *
+     * @param workflows the map of workflows
+     * @param workflowName the name to search for
+     * @param patchFile the patch file name for error messages
+     * @return the target workflow
+     * @throws IllegalArgumentException if workflow not found
+     */
+    private Map<String, Object> findTargetWorkflow(
+            Map<String, Map<String, Object>> workflows,
+            String workflowName,
+            String patchFile) {
+        for (Map.Entry<String, Map<String, Object>> entry : workflows.entrySet()) {
+            if (workflowName.equals(entry.getValue().get("name"))) {
+                return entry.getValue();
             }
         }
+        throw new IllegalArgumentException(
+            "Patch target workflow not found: " + workflowName + " in " + patchFile);
+    }
 
-        // Check for orphan vertices (all patch vertices must either match or have an anchor)
+    /**
+     * Builds an index mapping vertexName to position in the steps list.
+     *
+     * @param steps the list of workflow steps
+     * @return map of vertexName to index
+     */
+    private Map<String, Integer> buildVertexIndex(List<Map<String, Object>> steps) {
+        Map<String, Integer> index = new HashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            String vertexName = (String) steps.get(i).get("vertexName");
+            if (vertexName != null) {
+                index.put(vertexName, i);
+            }
+        }
+        return index;
+    }
+
+    /**
+     * Validates that patch vertices have proper anchors.
+     *
+     * @param patchSteps the patch steps to validate
+     * @param baseVertexIndex the index of base vertices
+     * @param patchFile the patch file name for error messages
+     * @throws OrphanVertexException if orphan vertices are found
+     */
+    private void validatePatchVertices(
+            List<Map<String, Object>> patchSteps,
+            Map<String, Integer> baseVertexIndex,
+            String patchFile) {
         boolean hasAnchor = false;
         List<String> newVertexNames = new ArrayList<>();
+
         for (Map<String, Object> patchVertex : patchSteps) {
             String vertexName = (String) patchVertex.get("vertexName");
             if (vertexName == null) {
@@ -287,12 +327,24 @@ public class WorkflowKustomizer {
         if (!hasAnchor && !newVertexNames.isEmpty()) {
             throw new OrphanVertexException(newVertexNames.get(0), patchFile);
         }
+    }
 
-        // Apply patches: process in order, tracking insertion positions
+    /**
+     * Applies patch steps to base steps.
+     *
+     * @param baseSteps the original steps
+     * @param patchSteps the patch steps to apply
+     * @param baseVertexIndex the index of base vertices
+     * @param patchFile the patch file name for error messages
+     * @return the new steps list with patches applied
+     */
+    private List<Map<String, Object>> applyPatchSteps(
+            List<Map<String, Object>> baseSteps,
+            List<Map<String, Object>> patchSteps,
+            Map<String, Integer> baseVertexIndex,
+            String patchFile) {
         List<Map<String, Object>> newSteps = new ArrayList<>(baseSteps);
         int insertionOffset = 0;
-
-        String lastAnchorVertexName = null;
         int lastAnchorNewIndex = -1;
 
         for (Map<String, Object> patchVertex : patchSteps) {
@@ -305,16 +357,12 @@ public class WorkflowKustomizer {
                 int newIndex = originalIndex + insertionOffset;
 
                 if (Boolean.TRUE.equals(deleteMarker)) {
-                    // Delete this vertex
                     newSteps.remove(newIndex);
                     insertionOffset--;
-                    // Update the anchor tracking
-                    lastAnchorNewIndex = newIndex - 1; // Point to previous
+                    lastAnchorNewIndex = newIndex - 1;
                 } else {
-                    // Merge the patch vertex into the base
                     Map<String, Object> baseVertex = newSteps.get(newIndex);
                     mergeVertex(baseVertex, patchVertex);
-                    lastAnchorVertexName = vertexName;
                     lastAnchorNewIndex = newIndex;
                 }
             } else {
@@ -322,17 +370,14 @@ public class WorkflowKustomizer {
                 if (lastAnchorNewIndex < 0) {
                     throw new OrphanVertexException(vertexName, patchFile);
                 }
-
-                // Insert after the last anchor
                 int insertIndex = lastAnchorNewIndex + 1;
                 newSteps.add(insertIndex, new LinkedHashMap<>(patchVertex));
                 insertionOffset++;
-                lastAnchorNewIndex = insertIndex; // New vertex becomes the anchor for subsequent ones
+                lastAnchorNewIndex = insertIndex;
             }
         }
 
-        // Replace the steps
-        targetWorkflow.put("steps", newSteps);
+        return newSteps;
     }
 
     /**

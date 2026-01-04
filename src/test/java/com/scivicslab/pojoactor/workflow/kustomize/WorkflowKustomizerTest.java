@@ -293,5 +293,107 @@ class WorkflowKustomizerTest {
             assertTrue(vertexNames.contains("setup-logging")); // inserted vertex
             assertTrue(vertexNames.contains("run-tasks"));
         }
+
+        @Test
+        @DisplayName("Should select correct workflow when name is substring of another")
+        void testWorkflowSelectionWithSubstringName() throws IOException {
+            // Test that 'workflow.yaml' is correctly selected even when
+            // 'main-workflow.yaml' exists (which contains 'workflow' as substring)
+            Path workflowPath = testResourcesPath.resolve("base/workflow.yaml");
+            Path overlayPath = testResourcesPath.resolve("base"); // Use base as overlay (no patches)
+
+            Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test")
+                .build();
+
+            interpreter.readYaml(workflowPath, overlayPath);
+
+            MatrixCode code = interpreter.getCode();
+            assertNotNull(code);
+
+            // Should load SubWorkflow, NOT MainWorkflow
+            assertEquals("SubWorkflow", code.getName(),
+                "Should select 'workflow.yaml' (SubWorkflow), not 'main-workflow.yaml' (MainWorkflow)");
+            assertEquals(2, code.getSteps().size());
+
+            // Verify correct vertices are loaded
+            List<String> vertexNames = code.getSteps().stream()
+                .map(Vertex::getVertexName)
+                .toList();
+            assertTrue(vertexNames.contains("step-one"));
+            assertTrue(vertexNames.contains("step-two"));
+        }
+
+        @Test
+        @DisplayName("Should select main-workflow when explicitly requested")
+        void testMainWorkflowSelection() throws IOException {
+            Path workflowPath = testResourcesPath.resolve("base/main-workflow.yaml");
+            Path overlayPath = testResourcesPath.resolve("base");
+
+            Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test")
+                .build();
+
+            interpreter.readYaml(workflowPath, overlayPath);
+
+            MatrixCode code = interpreter.getCode();
+            assertNotNull(code);
+
+            // Should load MainWorkflow
+            assertEquals("MainWorkflow", code.getName());
+            assertEquals(3, code.getSteps().size());
+        }
+
+        @Test
+        @DisplayName("Should select setup.yaml not main-setup.yaml when requesting setup")
+        void testSetupVsMainSetupSelection() throws IOException {
+            // This tests the real-world scenario where:
+            // - setup.yaml exists (SetupWorkflow)
+            // - main-setup.yaml exists (MainSetupWorkflow)
+            // When user requests 'setup', we should load SetupWorkflow, NOT MainSetupWorkflow
+            Path workflowPath = testResourcesPath.resolve("base/setup.yaml");
+            Path overlayPath = testResourcesPath.resolve("base");
+
+            Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test")
+                .build();
+
+            interpreter.readYaml(workflowPath, overlayPath);
+
+            MatrixCode code = interpreter.getCode();
+            assertNotNull(code);
+
+            // Should load SetupWorkflow, NOT MainSetupWorkflow
+            assertEquals("SetupWorkflow", code.getName(),
+                "Should select 'setup.yaml' (SetupWorkflow), not 'main-setup.yaml' (MainSetupWorkflow)");
+            assertEquals(2, code.getSteps().size());
+
+            // Verify correct vertices are loaded
+            List<String> vertexNames = code.getSteps().stream()
+                .map(Vertex::getVertexName)
+                .toList();
+            assertTrue(vertexNames.contains("setup-step-one"));
+            assertTrue(vertexNames.contains("setup-step-two"));
+        }
+
+        @Test
+        @DisplayName("Should select main-setup.yaml when explicitly requested")
+        void testMainSetupSelection() throws IOException {
+            Path workflowPath = testResourcesPath.resolve("base/main-setup.yaml");
+            Path overlayPath = testResourcesPath.resolve("base");
+
+            Interpreter interpreter = new Interpreter.Builder()
+                .loggerName("test")
+                .build();
+
+            interpreter.readYaml(workflowPath, overlayPath);
+
+            MatrixCode code = interpreter.getCode();
+            assertNotNull(code);
+
+            // Should load MainSetupWorkflow
+            assertEquals("MainSetupWorkflow", code.getName());
+            assertEquals(3, code.getSteps().size());
+        }
     }
 }
