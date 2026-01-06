@@ -1,0 +1,9 @@
+name: MainWorkflow
+
+steps:
+  - vertexName: init
+    actions:
+      - actor: nodeGroup
+        method: createAccumulator
+        arguments:
+          - targeted-streaming

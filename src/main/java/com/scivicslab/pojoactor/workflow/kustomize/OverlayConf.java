@@ -36,8 +36,16 @@ import java.util.Map;
  * bases:
  *   - ../../base
  *
+ * # Simple format (applies to all matching workflows)
  * patches:
  *   - patch-prod.yaml
+ *
+ * # OR Targeted format (applies patch to specific workflow file)
+ * patches:
+ *   - target: setup.yaml
+ *     patch: patch-setup.yaml
+ *   - target: build.yaml
+ *     patch: patch-build.yaml
  *
  * vars:
  *   environment: production
@@ -54,7 +62,7 @@ public class OverlayConf {
     private String apiVersion;
     private String kind;
     private List<String> bases = new ArrayList<>();
-    private List<String> patches = new ArrayList<>();
+    private List<PatchEntry> patches = new ArrayList<>();
     private Map<String, String> vars = new HashMap<>();
     private String namePrefix;
     private String nameSuffix;
@@ -115,20 +123,20 @@ public class OverlayConf {
     }
 
     /**
-     * Gets the list of patch files.
+     * Gets the list of patch entries.
      *
-     * @return list of patch file names
+     * @return list of patch entries (each may have target and patch fields)
      */
-    public List<String> getPatches() {
+    public List<PatchEntry> getPatches() {
         return patches;
     }
 
     /**
-     * Sets the list of patch files.
+     * Sets the list of patch entries.
      *
-     * @param patches list of patch file names
+     * @param patches list of patch entries
      */
-    public void setPatches(List<String> patches) {
+    public void setPatches(List<PatchEntry> patches) {
         this.patches = patches;
     }
 

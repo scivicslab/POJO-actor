@@ -92,10 +92,16 @@ public class WorkflowKustomizer {
         }
 
         // Apply patches
-        for (String patchFile : overlayConf.getPatches()) {
-            Path patchPath = overlayDir.resolve(patchFile);
+        for (PatchEntry patchEntry : overlayConf.getPatches()) {
+            Path patchPath = overlayDir.resolve(patchEntry.getPatch());
             Map<String, Object> patch = loadYamlFile(patchPath);
-            applyPatch(workflows, patch, patchFile);
+            if (patchEntry.hasTarget()) {
+                // Apply patch only to the specified target workflow file
+                applyPatchToTarget(workflows, patch, patchEntry.getPatch(), patchEntry.getTarget());
+            } else {
+                // Apply patch to all matching workflows (original behavior)
+                applyPatch(workflows, patch, patchEntry.getPatch());
+            }
         }
 
         // Apply variable substitution
@@ -160,7 +166,28 @@ public class WorkflowKustomizer {
             k.setBases((List<String>) data.get("bases"));
         }
         if (data.get("patches") instanceof List) {
-            k.setPatches((List<String>) data.get("patches"));
+            List<?> patchList = (List<?>) data.get("patches");
+            List<PatchEntry> patchEntries = new ArrayList<>();
+            for (Object item : patchList) {
+                if (item instanceof String) {
+                    // Simple format: just patch file name
+                    patchEntries.add(new PatchEntry((String) item));
+                } else if (item instanceof Map) {
+                    // Target/patch format: {target: "file.yaml", patch: "patch.yaml"}
+                    Map<String, Object> patchMap = (Map<String, Object>) item;
+                    String target = (String) patchMap.get("target");
+                    String patch = (String) patchMap.get("patch");
+                    if (patch == null) {
+                        throw new IllegalArgumentException(
+                            "Patch entry must have 'patch' field: " + patchMap);
+                    }
+                    patchEntries.add(new PatchEntry(target, patch));
+                } else {
+                    throw new IllegalArgumentException(
+                        "Invalid patch entry type: " + item.getClass().getName());
+                }
+            }
+            k.setPatches(patchEntries);
         }
         if (data.get("vars") instanceof Map) {
             Map<String, Object> vars = (Map<String, Object>) data.get("vars");
@@ -237,6 +264,48 @@ public class WorkflowKustomizer {
 
         // Find the target workflow
         Map<String, Object> targetWorkflow = findTargetWorkflow(workflows, patchWorkflowName, patchFile);
+
+        // Get steps from both
+        List<Map<String, Object>> baseSteps = (List<Map<String, Object>>) targetWorkflow.get("steps");
+        List<Map<String, Object>> patchSteps = (List<Map<String, Object>>) patch.get("steps");
+
+        if (patchSteps == null || patchSteps.isEmpty()) {
+            return;
+        }
+
+        // Build index of base vertices by vertexName
+        Map<String, Integer> baseVertexIndex = buildVertexIndex(baseSteps);
+
+        // Check for orphan vertices
+        validatePatchVertices(patchSteps, baseVertexIndex, patchFile);
+
+        // Apply patches and replace steps
+        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseVertexIndex, patchFile);
+        targetWorkflow.put("steps", newSteps);
+    }
+
+    /**
+     * Applies a patch to a specific target workflow file.
+     *
+     * <p>Unlike {@link #applyPatch}, this method matches by file name instead of
+     * workflow name field, allowing patches to be applied to specific files.</p>
+     *
+     * @param workflows the map of workflows keyed by file name
+     * @param patch the patch content
+     * @param patchFile the patch file name for error messages
+     * @param targetFile the target workflow file name to apply the patch to
+     */
+    @SuppressWarnings("unchecked")
+    private void applyPatchToTarget(Map<String, Map<String, Object>> workflows,
+                                     Map<String, Object> patch,
+                                     String patchFile,
+                                     String targetFile) {
+        // Find the workflow by file name
+        Map<String, Object> targetWorkflow = workflows.get(targetFile);
+        if (targetWorkflow == null) {
+            throw new IllegalArgumentException(
+                "Target workflow file not found: " + targetFile + " (patch: " + patchFile + ")");
+        }
 
         // Get steps from both
         List<Map<String, Object>> baseSteps = (List<Map<String, Object>>) targetWorkflow.get("steps");
