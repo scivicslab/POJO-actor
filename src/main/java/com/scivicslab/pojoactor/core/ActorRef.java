@@ -64,6 +64,9 @@ public class ActorRef<T> implements AutoCloseable {
     ConcurrentSkipListSet<String> NamesOfChildren = new ConcurrentSkipListSet<>();
     String parentName;
 
+    // === JSON State (lazy-initialized) ===
+    private volatile JsonState jsonState;
+
 
     /**
      * Constructs an ActorRef with the specified name and object.
@@ -421,6 +424,140 @@ public class ActorRef<T> implements AutoCloseable {
         }
     }
     
+
+    // ========================================================================
+    // JSON State API
+    // ========================================================================
+
+    /**
+     * Returns the JSON state container for this actor, creating it if necessary.
+     *
+     * <p>The JSON state provides a dynamic, XPath-style accessor for storing
+     * workflow state that doesn't need compile-time type safety. This is useful
+     * for temporary state, debug information, and YAML workflow integration.</p>
+     *
+     * <p><b>Usage Example:</b></p>
+     * <pre>{@code
+     * ActorRef<MyActor> actor = system.actorOf("worker", new MyActor());
+     *
+     * // Store values using XPath-style paths
+     * actor.json().put("workflow.retry", 3);
+     * actor.json().put("hosts[0]", "server1.example.com");
+     *
+     * // Read values
+     * int retry = actor.json().getInt("$.workflow.retry", 0);
+     * String host = actor.json().getString("$.hosts[0]");
+     * }</pre>
+     *
+     * @return the JSON state container (never null)
+     * @since 2.10.0
+     */
+    public JsonState json() {
+        if (jsonState == null) {
+            synchronized (this) {
+                if (jsonState == null) {
+                    jsonState = new JsonState();
+                }
+            }
+        }
+        return jsonState;
+    }
+
+    /**
+     * Checks if this actor has any JSON state.
+     *
+     * @return true if JSON state exists and is not empty
+     * @since 2.10.0
+     */
+    public boolean hasJsonState() {
+        return jsonState != null && !jsonState.isEmpty();
+    }
+
+    /**
+     * Convenience method to put a value into the JSON state.
+     *
+     * @param path the XPath-style path (e.g., "workflow.retry" or "$.hosts[0]")
+     * @param value the value to store
+     * @return this ActorRef for method chaining
+     * @since 2.10.0
+     */
+    public ActorRef<T> putJson(String path, Object value) {
+        json().put(path, value);
+        return this;
+    }
+
+    /**
+     * Convenience method to get a string from the JSON state.
+     *
+     * @param path the XPath-style path
+     * @return the string value, or null if not found
+     * @since 2.10.0
+     */
+    public String getJsonString(String path) {
+        return jsonState != null ? jsonState.getString(path) : null;
+    }
+
+    /**
+     * Convenience method to get a string from the JSON state with default.
+     *
+     * @param path the XPath-style path
+     * @param defaultValue the default value if not found
+     * @return the string value, or defaultValue if not found
+     * @since 2.10.0
+     */
+    public String getJsonString(String path, String defaultValue) {
+        return jsonState != null ? jsonState.getString(path, defaultValue) : defaultValue;
+    }
+
+    /**
+     * Convenience method to get an integer from the JSON state.
+     *
+     * @param path the XPath-style path
+     * @param defaultValue the default value if not found
+     * @return the integer value, or defaultValue if not found
+     * @since 2.10.0
+     */
+    public int getJsonInt(String path, int defaultValue) {
+        return jsonState != null ? jsonState.getInt(path, defaultValue) : defaultValue;
+    }
+
+    /**
+     * Convenience method to get a boolean from the JSON state.
+     *
+     * @param path the XPath-style path
+     * @param defaultValue the default value if not found
+     * @return the boolean value, or defaultValue if not found
+     * @since 2.10.0
+     */
+    public boolean getJsonBoolean(String path, boolean defaultValue) {
+        return jsonState != null ? jsonState.getBoolean(path, defaultValue) : defaultValue;
+    }
+
+    /**
+     * Convenience method to check if a path exists in the JSON state.
+     *
+     * @param path the XPath-style path
+     * @return true if the path exists and has a non-null value
+     * @since 2.10.0
+     */
+    public boolean hasJson(String path) {
+        return jsonState != null && jsonState.has(path);
+    }
+
+    /**
+     * Clears all JSON state for this actor.
+     *
+     * @since 2.10.0
+     */
+    public void clearJsonState() {
+        if (jsonState != null) {
+            jsonState.clear();
+        }
+    }
+
+    // ========================================================================
+    // Lifecycle Management
+    // ========================================================================
 
     /**
      * Destroys the actor and cleans up its resources.
