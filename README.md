@@ -4,7 +4,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-2.6.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-2.10.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 **Design background and early architecture notes** are documented on Medium:
 [POJO-actor v1.0: A Lightweight Actor Model Library for Java](https://medium.com/@devteam_58690/pojo-actor-v1-0-a-lightweight-actor-model-library-for-java-dc3227c17acb)
@@ -46,6 +46,12 @@ POJO-actor implements a practical actor model built on modern Java features with
 - **DynamicActorLoaderActor**: Generic actor for loading plugins dynamically from workflows
 - **Enhanced Workflow Engine**: Improved workflow documentation and tooling
 
+### Key Features in v2.10.0
+
+- **JsonState API**: Save and restore actor state to/from JSON format
+- **State Persistence**: `ActorRef.saveState()` and `ActorRef.restoreState()` methods
+- **Type-Safe Serialization**: Works with any POJO using Jackson ObjectMapper
+- **Checkpoint Support**: Save actor state for recovery and debugging
 
 ## Quick Start
 
@@ -55,7 +61,7 @@ POJO-actor implements a practical actor model built on modern Java features with
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>POJO-actor</artifactId>
-    <version>2.6.0</version>
+    <version>2.10.0</version>
 </dependency>
 ```
 
@@ -880,6 +886,59 @@ This foundation enables future distributed actor systems where workflows can spa
 - **Workflow Integration**: Actor-WF engine merged into core for unified workflow execution
 - **Plugin System**: Runtime-extensible architecture for modular applications
 - **Proven Performance**: Tests show 80% job cancellation rate (80 out of 100 jobs cancelled)
+
+## What's New in v2.10.0
+
+### JsonState API for Actor State Persistence
+
+POJO-actor v2.10.0 introduces the **JsonState API** for saving and restoring actor state:
+
+- **`ActorRef.saveState()`**: Serialize actor state to JSON
+- **`ActorRef.restoreState()`**: Restore actor state from JSON
+- **`JsonState`**: Wrapper class with metadata (actorName, timestamp, checksum)
+- **Type-Safe**: Works with any POJO, leverages Jackson ObjectMapper
+
+#### Example Usage
+
+```java
+// Create an actor
+ActorSystem system = new ActorSystem("mySystem");
+ActorRef<Counter> counter = system.actorOf("counter", new Counter());
+
+// Modify state
+counter.tell(c -> c.increment()).get();
+counter.tell(c -> c.increment()).get();
+
+// Save state to JSON
+JsonState state = counter.saveState().get();
+String json = state.toJson();  // Portable JSON string
+System.out.println(json);
+// {"actorName":"counter","timestamp":"2026-01-10T12:00:00","state":{"count":2},"checksum":"abc123"}
+
+// Later: Restore state
+JsonState loaded = JsonState.fromJson(json);
+counter.restoreState(loaded).get();
+```
+
+#### Benefits
+
+- **Checkpoint/Recovery**: Save actor state before risky operations
+- **Debugging**: Inspect actor state at specific points
+- **Testing**: Set up known states for unit tests
+- **Migration**: Transfer actor state between systems
+- **Audit Trail**: Log state changes with timestamps
+
+#### File-Based Persistence
+
+```java
+// Save to file
+Path stateFile = Path.of("counter-state.json");
+counter.saveState().get().toFile(stateFile);
+
+// Load from file
+JsonState restored = JsonState.fromFile(stateFile);
+counter.restoreState(restored).get();
+```
 
 ## What's New in v2.6.0
 
