@@ -22,252 +22,218 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.ActorRef;
-import com.scivicslab.pojoactor.core.ActorSystem;
-import com.scivicslab.pojoactor.core.CallableByActionName;
-import com.scivicslab.pojoactor.workflow.IIActorRef;
-import com.scivicslab.pojoactor.workflow.IIActorSystem;
 
 /**
- * A scheduler for periodic task execution in an actor system.
+ * A scheduler for periodic task execution with ActorRef.
  *
- * <p>This class provides scheduling capabilities for actors, allowing tasks to be
- * executed at fixed rates, with fixed delays, or as one-time scheduled tasks.
- * It integrates with the POJO-actor framework by sending messages to actors via
- * their action names.</p>
+ * <p>This class provides scheduling capabilities for actors using lambda expressions.
+ * Tasks are executed on actors via {@link ActorRef#ask(java.util.function.Function)},
+ * ensuring thread-safe access to actor state.</p>
  *
- * <p><b>Usage Example:</b></p>
+ * <p><strong>Usage Example:</strong></p>
  * <pre>{@code
- * IIActorSystem system = new IIActorSystem("my-system");
- * Scheduler scheduler = new Scheduler(system);
- * IIActorRef<Scheduler> schedulerRef = new SchedulerIIAR("scheduler", scheduler, system);
- * system.addIIActor(schedulerRef);
+ * ActorSystem system = new ActorSystem("my-system", 4);
+ * Scheduler scheduler = new Scheduler();
+ *
+ * ActorRef<MyActor> actorRef = system.actorOf("myActor", new MyActor());
  *
  * // Schedule a task to run every 10 seconds
- * schedulerRef.callByActionName("scheduleAtFixedRate",
- *     "task1,targetActor,actionName,args,0,10,SECONDS");
+ * scheduler.scheduleAtFixedRate("health-check", actorRef,
+ *     actor -> actor.checkHealth(),
+ *     0, 10, TimeUnit.SECONDS);
  *
- * // Cancel the task
- * schedulerRef.callByActionName("cancel", "task1");
+ * // Schedule with fixed delay (waits for completion before next run)
+ * scheduler.scheduleWithFixedDelay("cleanup", actorRef,
+ *     actor -> actor.cleanup(),
+ *     60, 300, TimeUnit.SECONDS);
+ *
+ * // Schedule a one-time task
+ * scheduler.scheduleOnce("init", actorRef,
+ *     actor -> actor.initialize(),
+ *     5, TimeUnit.SECONDS);
+ *
+ * // Cancel a task
+ * scheduler.cancelTask("health-check");
  *
  * // Cleanup
  * scheduler.close();
  * }</pre>
  *
- * <p>This class implements {@link AutoCloseable} to ensure proper cleanup of
- * scheduled tasks and the executor service.</p>
+ * <p>For workflow-based scheduling with action names, use
+ * {@link com.scivicslab.pojoactor.workflow.scheduler.SchedulerIIAR} instead.</p>
  *
  * @author devteam@scivics-lab.com
- * @since 2.5.0
- * @see com.scivicslab.pojoactor.workflow.scheduler.SchedulerIIAR
- * @see CallableByActionName
+ * @since 2.11.0 (refactored from IIActorRef-based to ActorRef-based)
+ * @see ActorRef
  */
-public class Scheduler implements CallableByActionName, AutoCloseable {
+public class Scheduler implements AutoCloseable {
 
     private static final Logger logger = Logger.getLogger(Scheduler.class.getName());
 
-    private final ScheduledExecutorService schedulerExecutor;
-    private final ActorSystem system;
+    private final ScheduledExecutorService executor;
     private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledTasks;
 
     /**
-     * Constructs a new Scheduler with the specified actor system.
-     *
-     * <p>The scheduler uses a thread pool of size 2 for executing scheduled tasks.</p>
-     *
-     * @param system the actor system to use for looking up target actors
+     * Constructs a new Scheduler with default thread pool size (2).
      */
-    public Scheduler(ActorSystem system) {
-        this(system, 2);
+    public Scheduler() {
+        this(2);
     }
 
     /**
-     * Constructs a new Scheduler with the specified actor system and thread pool size.
+     * Constructs a new Scheduler with the specified thread pool size.
      *
-     * @param system the actor system to use for looking up target actors
      * @param poolSize the number of threads in the scheduler's thread pool
      */
-    public Scheduler(ActorSystem system, int poolSize) {
-        this.system = system;
-        this.schedulerExecutor = Executors.newScheduledThreadPool(poolSize);
+    public Scheduler(int poolSize) {
+        this.executor = Executors.newScheduledThreadPool(poolSize, r -> {
+            Thread t = new Thread(r, "Scheduler-Worker");
+            t.setDaemon(true);
+            return t;
+        });
         this.scheduledTasks = new ConcurrentHashMap<>();
-    }
-
-    /**
-     * Helper method to get an ActorRef, trying both IIActorRef and regular ActorRef.
-     *
-     * @param actorName the name of the actor to retrieve
-     * @return the ActorRef, or null if not found
-     */
-    private ActorRef<?> getActorRef(String actorName) {
-        // Try IIActorRef first if system is IIActorSystem
-        if (system instanceof IIActorSystem) {
-            IIActorRef<?> iiActor = ((IIActorSystem) system).getIIActor(actorName);
-            if (iiActor != null) {
-                return iiActor;
-            }
-        }
-        // Fall back to regular ActorRef
-        return system.getActor(actorName);
     }
 
     /**
      * Schedules a task to execute periodically at a fixed rate.
      *
-     * <p>The task will be executed every {@code period} time units after the initial delay.
-     * If a task execution takes longer than the period, subsequent executions may start
-     * before the previous one completes.</p>
+     * <p>The task is executed on the target actor via {@code ActorRef.ask()},
+     * ensuring thread-safe access to the actor's state.</p>
      *
+     * <p><strong>Fixed Rate vs Fixed Delay:</strong></p>
+     * <p>With {@code scheduleAtFixedRate}, executions are scheduled to start at
+     * regular intervals (0, period, 2*period, 3*period, ...) regardless of how
+     * long each execution takes. If an execution takes longer than the period,
+     * the next execution starts immediately after the previous one completes
+     * (no delay accumulation).</p>
+     *
+     * <p>Use this method when you need consistent timing intervals, such as
+     * metrics collection or heartbeat checks at precise intervals.</p>
+     *
+     * <p>In contrast, {@link #scheduleWithFixedDelay} waits for a fixed delay
+     * <em>after</em> each execution completes before starting the next one.</p>
+     *
+     * <pre>
+     * scheduleAtFixedRate (period=100ms, task takes 30ms):
+     * |task|          |task|          |task|
+     * 0    30   100   130   200   230   300ms
+     *      └─period─┘      └─period─┘
+     * </pre>
+     *
+     * @param <T> the type of the actor
      * @param taskId unique identifier for this scheduled task
-     * @param targetActorName name of the target actor in the actor system
-     * @param action action name to invoke on the target actor
-     * @param args arguments to pass to the action
+     * @param actorRef reference to the target actor
+     * @param action the action to perform on the actor
      * @param initialDelay delay before first execution
-     * @param period interval between successive executions
+     * @param period interval between successive execution starts
      * @param unit time unit for the delays
-     * @return result message indicating success or failure
+     * @return the taskId for reference
+     * @see #scheduleWithFixedDelay
      */
-    public String scheduleAtFixedRate(String taskId, String targetActorName,
-                                     String action, String args,
-                                     long initialDelay, long period, TimeUnit unit) {
-        ActorRef<?> target = getActorRef(targetActorName);
-        if (target == null) {
-            String msg = "Actor not found: " + targetActorName;
-            logger.log(Level.WARNING, msg);
-            return msg;
-        }
-
-        ScheduledFuture<?> task = schedulerExecutor.scheduleAtFixedRate(() -> {
-            try {
-                if (target instanceof IIActorRef) {
-                    ((IIActorRef<?>)target).callByActionName(action, args);
-                } else {
-                    logger.log(Level.WARNING,
-                        "Target actor is not IIActorRef, cannot call by action name: " + targetActorName);
-                }
-            } catch (Exception e) {
-                logger.log(Level.SEVERE,
-                    String.format("Error executing scheduled task %s", taskId), e);
-            }
+    public <T> String scheduleAtFixedRate(String taskId, ActorRef<T> actorRef,
+                                          Consumer<T> action,
+                                          long initialDelay, long period, TimeUnit unit) {
+        ScheduledFuture<?> task = executor.scheduleAtFixedRate(() -> {
+            executeOnActor(taskId, actorRef, action);
         }, initialDelay, period, unit);
 
-        ScheduledFuture<?> oldTask = scheduledTasks.put(taskId, task);
-        if (oldTask != null) {
-            oldTask.cancel(false);
-            logger.log(Level.INFO, "Replaced existing scheduled task: " + taskId);
-        }
+        registerTask(taskId, task);
 
-        String msg = String.format("Scheduled at fixed rate: %s (initial=%d, period=%d %s)",
-            taskId, initialDelay, period, unit);
-        logger.log(Level.INFO, msg);
-        return msg;
+        logger.log(Level.INFO, String.format(
+            "Scheduled at fixed rate: %s (initial=%d, period=%d %s)",
+            taskId, initialDelay, period, unit));
+
+        return taskId;
     }
 
     /**
      * Schedules a task to execute periodically with a fixed delay between executions.
      *
-     * <p>The delay between the termination of one execution and the start of the next
-     * will be {@code delay} time units. This ensures that executions never overlap.</p>
+     * <p>The task is executed on the target actor via {@code ActorRef.ask()},
+     * ensuring thread-safe access to the actor's state.</p>
      *
+     * <p><strong>Fixed Delay vs Fixed Rate:</strong></p>
+     * <p>With {@code scheduleWithFixedDelay}, the delay between the <em>termination</em>
+     * of one execution and the <em>start</em> of the next is always {@code delay} time
+     * units. This ensures that executions never overlap and there is always a guaranteed
+     * rest period between executions.</p>
+     *
+     * <p>Use this method when you need to ensure a minimum gap between executions,
+     * such as polling operations where you want to avoid overwhelming a resource,
+     * or when each execution depends on external state that needs time to stabilize.</p>
+     *
+     * <p>In contrast, {@link #scheduleAtFixedRate} schedules executions at fixed
+     * intervals regardless of execution duration.</p>
+     *
+     * <pre>
+     * scheduleWithFixedDelay (delay=100ms, task takes 30ms):
+     * |task|              |task|              |task|
+     * 0    30        130  160        260  290ms
+     *      └──delay──┘    └──delay──┘
+     * </pre>
+     *
+     * @param <T> the type of the actor
      * @param taskId unique identifier for this scheduled task
-     * @param targetActorName name of the target actor in the actor system
-     * @param action action name to invoke on the target actor
-     * @param args arguments to pass to the action
+     * @param actorRef reference to the target actor
+     * @param action the action to perform on the actor
      * @param initialDelay delay before first execution
-     * @param delay delay between successive executions
+     * @param delay delay between termination of one execution and start of next
      * @param unit time unit for the delays
-     * @return result message indicating success or failure
+     * @return the taskId for reference
+     * @see #scheduleAtFixedRate
      */
-    public String scheduleWithFixedDelay(String taskId, String targetActorName,
-                                        String action, String args,
-                                        long initialDelay, long delay, TimeUnit unit) {
-        ActorRef<?> target = getActorRef(targetActorName);
-        if (target == null) {
-            String msg = "Actor not found: " + targetActorName;
-            logger.log(Level.WARNING, msg);
-            return msg;
-        }
-
-        ScheduledFuture<?> task = schedulerExecutor.scheduleWithFixedDelay(() -> {
-            try {
-                if (target instanceof IIActorRef) {
-                    ((IIActorRef<?>)target).callByActionName(action, args);
-                } else {
-                    logger.log(Level.WARNING,
-                        "Target actor is not IIActorRef, cannot call by action name: " + targetActorName);
-                }
-            } catch (Exception e) {
-                logger.log(Level.SEVERE,
-                    String.format("Error executing scheduled task %s", taskId), e);
-            }
+    public <T> String scheduleWithFixedDelay(String taskId, ActorRef<T> actorRef,
+                                             Consumer<T> action,
+                                             long initialDelay, long delay, TimeUnit unit) {
+        ScheduledFuture<?> task = executor.scheduleWithFixedDelay(() -> {
+            executeOnActor(taskId, actorRef, action);
         }, initialDelay, delay, unit);
 
-        ScheduledFuture<?> oldTask = scheduledTasks.put(taskId, task);
-        if (oldTask != null) {
-            oldTask.cancel(false);
-            logger.log(Level.INFO, "Replaced existing scheduled task: " + taskId);
-        }
+        registerTask(taskId, task);
 
-        String msg = String.format("Scheduled with fixed delay: %s (initial=%d, delay=%d %s)",
-            taskId, initialDelay, delay, unit);
-        logger.log(Level.INFO, msg);
-        return msg;
+        logger.log(Level.INFO, String.format(
+            "Scheduled with fixed delay: %s (initial=%d, delay=%d %s)",
+            taskId, initialDelay, delay, unit));
+
+        return taskId;
     }
 
     /**
      * Schedules a task to execute once after a specified delay.
      *
-     * <p>The task will be executed once after the specified delay and then automatically
-     * removed from the scheduled tasks map.</p>
+     * <p>The task will be executed once after the specified delay and then
+     * automatically removed from the scheduled tasks.</p>
      *
+     * @param <T> the type of the actor
      * @param taskId unique identifier for this scheduled task
-     * @param targetActorName name of the target actor in the actor system
-     * @param action action name to invoke on the target actor
-     * @param args arguments to pass to the action
+     * @param actorRef reference to the target actor
+     * @param action the action to perform on the actor
      * @param delay delay before execution
      * @param unit time unit for the delay
-     * @return result message indicating success or failure
+     * @return the taskId for reference
      */
-    public String scheduleOnce(String taskId, String targetActorName,
-                              String action, String args,
-                              long delay, TimeUnit unit) {
-        ActorRef<?> target = getActorRef(targetActorName);
-        if (target == null) {
-            String msg = "Actor not found: " + targetActorName;
-            logger.log(Level.WARNING, msg);
-            return msg;
-        }
-
-        ScheduledFuture<?> task = schedulerExecutor.schedule(() -> {
+    public <T> String scheduleOnce(String taskId, ActorRef<T> actorRef,
+                                   Consumer<T> action,
+                                   long delay, TimeUnit unit) {
+        ScheduledFuture<?> task = executor.schedule(() -> {
             try {
-                if (target instanceof IIActorRef) {
-                    ((IIActorRef<?>)target).callByActionName(action, args);
-                } else {
-                    logger.log(Level.WARNING,
-                        "Target actor is not IIActorRef, cannot call by action name: " + targetActorName);
-                }
-            } catch (Exception e) {
-                logger.log(Level.SEVERE,
-                    String.format("Error executing scheduled task %s", taskId), e);
+                executeOnActor(taskId, actorRef, action);
             } finally {
                 scheduledTasks.remove(taskId);
             }
         }, delay, unit);
 
-        ScheduledFuture<?> oldTask = scheduledTasks.put(taskId, task);
-        if (oldTask != null) {
-            oldTask.cancel(false);
-            logger.log(Level.INFO, "Replaced existing scheduled task: " + taskId);
-        }
+        registerTask(taskId, task);
 
-        String msg = String.format("Scheduled once: %s (delay=%d %s)",
-            taskId, delay, unit);
-        logger.log(Level.INFO, msg);
-        return msg;
+        logger.log(Level.INFO, String.format(
+            "Scheduled once: %s (delay=%d %s)", taskId, delay, unit));
+
+        return taskId;
     }
 
     /**
@@ -277,21 +243,19 @@ public class Scheduler implements CallableByActionName, AutoCloseable {
      * The task will not be executed again after cancellation.</p>
      *
      * @param taskId identifier of the task to cancel
-     * @return result message indicating success or failure
+     * @return true if the task was found and cancelled, false otherwise
      */
-    public String cancelTask(String taskId) {
+    public boolean cancelTask(String taskId) {
         ScheduledFuture<?> task = scheduledTasks.remove(taskId);
         if (task != null) {
             boolean cancelled = task.cancel(false);
-            String msg = cancelled ?
+            logger.log(Level.INFO, cancelled ?
                 "Cancelled: " + taskId :
-                "Task already completed or cancelled: " + taskId;
-            logger.log(Level.INFO, msg);
-            return msg;
+                "Task already completed or cancelled: " + taskId);
+            return cancelled;
         }
-        String msg = "Task not found: " + taskId;
-        logger.log(Level.WARNING, msg);
-        return msg;
+        logger.log(Level.WARNING, "Task not found: " + taskId);
+        return false;
     }
 
     /**
@@ -315,111 +279,10 @@ public class Scheduler implements CallableByActionName, AutoCloseable {
     }
 
     /**
-     * Invokes an action on the scheduler by name with the given arguments.
-     *
-     * <p>Supported actions:</p>
-     * <ul>
-     * <li>{@code scheduleAtFixedRate} - Arguments: taskId,targetActor,action,args,initialDelay,period,unit</li>
-     * <li>{@code scheduleWithFixedDelay} - Arguments: taskId,targetActor,action,args,initialDelay,delay,unit</li>
-     * <li>{@code scheduleOnce} - Arguments: taskId,targetActor,action,args,delay,unit</li>
-     * <li>{@code cancel} - Arguments: taskId</li>
-     * <li>{@code getTaskCount} - Arguments: none (returns task count)</li>
-     * <li>{@code isScheduled} - Arguments: taskId (returns true/false)</li>
-     * </ul>
-     *
-     * @param actionName the name of the action to execute
-     * @param args comma-separated argument string
-     * @return an {@link ActionResult} indicating success or failure with a message
-     */
-    @Override
-    public ActionResult callByActionName(String actionName, String args) {
-        try {
-            switch (actionName) {
-                case "scheduleAtFixedRate": {
-                    // Format: taskId,targetActor,action,args,initialDelay,period,unit
-                    String[] parts = args.split(",", 7);
-                    if (parts.length < 7) {
-                        return new ActionResult(false,
-                            "Invalid arguments for scheduleAtFixedRate. Expected: taskId,targetActor,action,args,initialDelay,period,unit");
-                    }
-                    String result = scheduleAtFixedRate(
-                        parts[0], parts[1], parts[2], parts[3],
-                        Long.parseLong(parts[4]), Long.parseLong(parts[5]),
-                        TimeUnit.valueOf(parts[6])
-                    );
-                    return new ActionResult(true, result);
-                }
-
-                case "scheduleWithFixedDelay": {
-                    // Format: taskId,targetActor,action,args,initialDelay,delay,unit
-                    String[] parts = args.split(",", 7);
-                    if (parts.length < 7) {
-                        return new ActionResult(false,
-                            "Invalid arguments for scheduleWithFixedDelay. Expected: taskId,targetActor,action,args,initialDelay,delay,unit");
-                    }
-                    String result = scheduleWithFixedDelay(
-                        parts[0], parts[1], parts[2], parts[3],
-                        Long.parseLong(parts[4]), Long.parseLong(parts[5]),
-                        TimeUnit.valueOf(parts[6])
-                    );
-                    return new ActionResult(true, result);
-                }
-
-                case "scheduleOnce": {
-                    // Format: taskId,targetActor,action,args,delay,unit
-                    String[] parts = args.split(",", 6);
-                    if (parts.length < 6) {
-                        return new ActionResult(false,
-                            "Invalid arguments for scheduleOnce. Expected: taskId,targetActor,action,args,delay,unit");
-                    }
-                    String result = scheduleOnce(
-                        parts[0], parts[1], parts[2], parts[3],
-                        Long.parseLong(parts[4]), TimeUnit.valueOf(parts[5])
-                    );
-                    return new ActionResult(true, result);
-                }
-
-                case "cancel": {
-                    String result = cancelTask(args);
-                    return new ActionResult(true, result);
-                }
-
-                case "getTaskCount": {
-                    int count = getScheduledTaskCount();
-                    return new ActionResult(true, "Scheduled tasks: " + count);
-                }
-
-                case "isScheduled": {
-                    boolean scheduled = isScheduled(args);
-                    return new ActionResult(true, scheduled ? "true" : "false");
-                }
-
-                default:
-                    String msg = "Unknown action: " + actionName;
-                    logger.log(Level.WARNING, msg);
-                    return new ActionResult(false, msg);
-            }
-        } catch (NumberFormatException e) {
-            String msg = "Invalid number format in arguments: " + args;
-            logger.log(Level.SEVERE, msg, e);
-            return new ActionResult(false, msg);
-        } catch (IllegalArgumentException e) {
-            String msg = "Invalid argument: " + e.getMessage();
-            logger.log(Level.SEVERE, msg, e);
-            return new ActionResult(false, msg);
-        } catch (Exception e) {
-            String msg = "Error executing action " + actionName + ": " + e.getMessage();
-            logger.log(Level.SEVERE, msg, e);
-            return new ActionResult(false, msg);
-        }
-    }
-
-    /**
      * Shuts down the scheduler and cancels all scheduled tasks.
      *
      * <p>This method will attempt to gracefully shutdown the scheduler executor,
-     * waiting up to 5 seconds for tasks to terminate. If tasks do not complete
-     * in time, a forceful shutdown will be attempted.</p>
+     * waiting up to 5 seconds for tasks to terminate.</p>
      */
     @Override
     public void close() {
@@ -431,19 +294,46 @@ public class Scheduler implements CallableByActionName, AutoCloseable {
         scheduledTasks.clear();
 
         // Shutdown the executor
-        schedulerExecutor.shutdown();
+        executor.shutdown();
         try {
-            if (!schedulerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                logger.log(Level.WARNING, "Scheduler did not terminate within 5 seconds, forcing shutdown");
-                schedulerExecutor.shutdownNow();
-                if (!schedulerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    logger.log(Level.SEVERE, "Scheduler did not terminate after forced shutdown");
-                }
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                logger.log(Level.WARNING,
+                    "Scheduler did not terminate within 5 seconds, forcing shutdown");
+                executor.shutdownNow();
             }
         } catch (InterruptedException e) {
-            logger.log(Level.WARNING, "Interrupted while waiting for scheduler termination", e);
-            schedulerExecutor.shutdownNow();
+            logger.log(Level.WARNING,
+                "Interrupted while waiting for scheduler termination", e);
+            executor.shutdownNow();
             Thread.currentThread().interrupt();
+        }
+    }
+
+    // ========== Private Helper Methods ==========
+
+    /**
+     * Executes an action on an actor via ask().
+     */
+    private <T> void executeOnActor(String taskId, ActorRef<T> actorRef, Consumer<T> action) {
+        try {
+            actorRef.ask(actor -> {
+                action.accept(actor);
+                return null;
+            }).join();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE,
+                String.format("Error executing scheduled task %s: %s", taskId, e.getMessage()), e);
+        }
+    }
+
+    /**
+     * Registers a task, replacing any existing task with the same ID.
+     */
+    private void registerTask(String taskId, ScheduledFuture<?> task) {
+        ScheduledFuture<?> oldTask = scheduledTasks.put(taskId, task);
+        if (oldTask != null) {
+            oldTask.cancel(false);
+            logger.log(Level.INFO, "Replaced existing scheduled task: " + taskId);
         }
     }
 }

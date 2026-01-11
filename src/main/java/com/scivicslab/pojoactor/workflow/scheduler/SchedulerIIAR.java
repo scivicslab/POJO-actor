@@ -18,23 +18,22 @@
 package com.scivicslab.pojoactor.workflow.scheduler;
 
 import com.scivicslab.pojoactor.core.ActionResult;
-import com.scivicslab.pojoactor.core.scheduler.Scheduler;
 import com.scivicslab.pojoactor.workflow.IIActorRef;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 
 /**
- * Interpreter-interfaced actor reference for {@link Scheduler} instances.
+ * Interpreter-interfaced actor reference for {@link WorkflowScheduler} instances.
  *
  * <p>This class provides a concrete implementation of {@link IIActorRef}
- * specifically for {@link Scheduler} objects. It delegates action invocations
- * directly to the scheduler's {@link Scheduler#callByActionName(String, String)} method.</p>
+ * specifically for {@link WorkflowScheduler} objects. It delegates action invocations
+ * directly to the scheduler's {@link WorkflowScheduler#callByActionName(String, String)} method.</p>
  *
  * <p><b>Usage Example:</b></p>
  * <pre>{@code
  * IIActorSystem system = new IIActorSystem("my-system");
  *
  * // Create scheduler
- * Scheduler scheduler = new Scheduler(system);
+ * WorkflowScheduler scheduler = new WorkflowScheduler(system);
  * SchedulerIIAR schedulerRef = new SchedulerIIAR("scheduler", scheduler, system);
  * system.addIIActor(schedulerRef);
  *
@@ -48,18 +47,18 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  *
  * @author devteam@scivics-lab.com
  * @since 2.5.0
- * @see Scheduler
+ * @see WorkflowScheduler
  * @see IIActorRef
  */
-public class SchedulerIIAR extends IIActorRef<Scheduler> {
+public class SchedulerIIAR extends IIActorRef<WorkflowScheduler> {
 
     /**
      * Constructs a new SchedulerIIAR with the specified actor name and scheduler object.
      *
      * @param actorName the name of this actor
-     * @param object the {@link Scheduler} instance managed by this actor reference
+     * @param object the {@link WorkflowScheduler} instance managed by this actor reference
      */
-    public SchedulerIIAR(String actorName, Scheduler object) {
+    public SchedulerIIAR(String actorName, WorkflowScheduler object) {
         super(actorName, object);
     }
 
@@ -68,10 +67,10 @@ public class SchedulerIIAR extends IIActorRef<Scheduler> {
      * and actor system.
      *
      * @param actorName the name of this actor
-     * @param object the {@link Scheduler} instance managed by this actor reference
+     * @param object the {@link WorkflowScheduler} instance managed by this actor reference
      * @param system the actor system managing this actor
      */
-    public SchedulerIIAR(String actorName, Scheduler object, IIActorSystem system) {
+    public SchedulerIIAR(String actorName, WorkflowScheduler object, IIActorSystem system) {
         super(actorName, object, system);
     }
 
@@ -79,7 +78,7 @@ public class SchedulerIIAR extends IIActorRef<Scheduler> {
      * Invokes an action on the scheduler by name with the given arguments.
      *
      * <p>This method delegates to the scheduler's
-     * {@link Scheduler#callByActionName(String, String)} method.</p>
+     * {@link WorkflowScheduler#callByActionName(String, String)} method.</p>
      *
      * <p>Supported actions:</p>
      * <ul>

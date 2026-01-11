@@ -6,11 +6,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.scivicslab</groupId>
-    <artifactId>POJO-actor</artifactId>
-    <version>2.10.0</version>
+    <artifactId>pojo-actor</artifactId>
+    <version>2.11.0</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
+    <description>A lightweight actor model library for Java that turns any Plain Old Java Object into a concurrent actor with built-in thread safety and async messaging.</description>
     <url>https://github.com/scivicslab/POJO-actor</url>
 
     <licenses>
@@ -21,10 +22,39 @@
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <id>scivicslab</id>
+            <name>Scivics Lab</name>
+            <email>devteam@scivics-lab.com</email>
+            <organization>Scivics Lab</organization>
+            <organizationUrl>https://scivics-lab.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/scivicslab/POJO-actor.git</connection>
+        <developerConnection>scm:git:ssh://github.com:scivicslab/POJO-actor.git</developerConnection>
+        <url>https://github.com/scivicslab/POJO-actor</url>
+    </scm>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
     </properties>
-    
+
     <dependencies>
 
       <!-- Workflow engine dependencies -->
@@ -53,7 +83,6 @@
         <version>20240303</version>
       </dependency>
 
-
       <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-math3 -->
       <dependency>
         <groupId>org.apache.commons</groupId>
@@ -67,7 +96,6 @@
         <artifactId>commons-jexl3</artifactId>
         <version>3.3</version>
       </dependency>
-
 
       <dependency>
         <groupId>org.junit.jupiter</groupId>
@@ -101,24 +129,76 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <doclint>none</doclint>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.6.0</version>
-
                 <configuration>
                     <archive>
                         <manifest>
                             <mainClass>com.scivicslab.pojoactor.App</mainClass>
                         </manifest>
                     </archive>
-
-                    
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
                     <finalName>${project.artifactId}-${project.version}-fat</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
-
                 <executions>
                     <execution>
                         <id>make-assembly</id>
@@ -128,7 +208,6 @@
                         </goals>
                     </execution>
                 </executions>
-
             </plugin>
 
             <plugin>
@@ -143,30 +222,10 @@
                 </dependencies>
                 <configuration>
                     <reportFormat>plain</reportFormat>
-                    <!--
-                        <consoleOutputReporter>
-                        <disable>true</disable>
-                        </consoleOutputReporter>
-                    -->
                     <statelessTestsetInfoReporter
                         implementation="org.apache.maven.plugin.surefire.extensions.junit5.JUnit5StatelessTestsetInfoTreeReporter">
                     </statelessTestsetInfoReporter>
                 </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.6.3</version>
-                <executions>
-                    <execution>
-                        <id>generate-javadoc</id>
-                        <goals>
-                            <goal>javadoc</goal>
-                        </goals>
-                        <phase>prepare-package</phase>
-                    </execution>
-                </executions>
             </plugin>
 
             <!-- Clean up old Javadoc in docs/ -->
@@ -191,7 +250,7 @@
                     </execution>
                 </executions>
             </plugin>
-            
+
             <!-- Copy the generated javadoc to the docs/ directory -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -216,9 +275,7 @@
                     </execution>
                 </executions>
             </plugin>
-            
 
         </plugins>
     </build>
-</project>    
-
+</project>

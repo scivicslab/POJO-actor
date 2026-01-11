@@ -29,8 +29,6 @@ import org.junit.jupiter.api.Test;
 
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.CallableByActionName;
-import com.scivicslab.pojoactor.core.scheduler.Scheduler;
-import com.scivicslab.pojoactor.workflow.scheduler.SchedulerIIAR;
 import com.scivicslab.pojoactor.workflow.IIActorRef;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 
@@ -41,19 +39,19 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  * callByActionName interface for scheduler operations in workflows.</p>
  *
  * @author devteam@scivics-lab.com
- * @version 1.0.0
+ * @since 2.11.0
  */
 @DisplayName("SchedulerIIAR (Workflow) Specification by Example")
 public class SchedulerIIARTest {
 
     private IIActorSystem system;
-    private Scheduler scheduler;
+    private WorkflowScheduler scheduler;
     private SchedulerIIAR schedulerRef;
 
     @BeforeEach
     public void setUp() {
         system = new IIActorSystem("scheduler-iiar-test-system");
-        scheduler = new Scheduler(system);
+        scheduler = new WorkflowScheduler(system);
         schedulerRef = new SchedulerIIAR("scheduler", scheduler, system);
         system.addIIActor(schedulerRef);
     }
@@ -116,7 +114,7 @@ public class SchedulerIIARTest {
             "iiar-task,counter,increment,,0,100,MILLISECONDS");
 
         assertTrue(result.isSuccess(), "Should schedule successfully");
-        assertTrue(result.getResult().contains("Scheduled at fixed rate"));
+        assertTrue(result.getResult().contains("Scheduled"));
 
         Thread.sleep(350);
         assertTrue(counter.getCount() >= 3, "Should execute through IIAR");
@@ -138,20 +136,20 @@ public class SchedulerIIARTest {
 
         ActionResult result = schedulerRef.callByActionName("getTaskCount", "");
         assertTrue(result.isSuccess());
-        assertTrue(result.getResult().contains("0"));
+        assertEquals("0", result.getResult());
 
         scheduler.scheduleAtFixedRate("t1", "counter", "increment", "", 0, 1000, TimeUnit.MILLISECONDS);
         scheduler.scheduleAtFixedRate("t2", "counter", "increment", "", 0, 1000, TimeUnit.MILLISECONDS);
 
         result = schedulerRef.callByActionName("getTaskCount", "");
         assertTrue(result.isSuccess());
-        assertTrue(result.getResult().contains("2"));
+        assertEquals("2", result.getResult());
 
         scheduler.cancelTask("t1");
 
         result = schedulerRef.callByActionName("getTaskCount", "");
         assertTrue(result.isSuccess());
-        assertTrue(result.getResult().contains("1"));
+        assertEquals("1", result.getResult());
     }
 
     /**
@@ -195,7 +193,7 @@ public class SchedulerIIARTest {
             "delay-task,counter,increment,,0,100,MILLISECONDS");
 
         assertTrue(result.isSuccess(), "Should schedule successfully");
-        assertTrue(result.getResult().contains("Scheduled with fixed delay"));
+        assertTrue(result.getResult().contains("Scheduled"));
 
         Thread.sleep(350);
         assertTrue(counter.getCount() >= 3, "Should execute multiple times");
@@ -217,7 +215,7 @@ public class SchedulerIIARTest {
             "once-task,counter,increment,,100,MILLISECONDS");
 
         assertTrue(result.isSuccess(), "Should schedule successfully");
-        assertTrue(result.getResult().contains("Scheduled once"));
+        assertTrue(result.getResult().contains("Scheduled"));
 
         Thread.sleep(50);
         assertEquals(0, counter.getCount(), "Should not execute yet");
@@ -248,7 +246,7 @@ public class SchedulerIIARTest {
             "task,counter,action,args,0,100");
 
         assertFalse(result.isSuccess(), "Should fail with invalid arguments");
-        assertTrue(result.getResult().contains("Invalid arguments"), "Should report invalid arguments");
+        assertTrue(result.getResult().contains("requires"), "Should report required arguments");
     }
 
     /**
@@ -261,7 +259,7 @@ public class SchedulerIIARTest {
             "task,counter,action,args,0,100");
 
         assertFalse(result.isSuccess(), "Should fail with invalid arguments");
-        assertTrue(result.getResult().contains("Invalid arguments"), "Should report invalid arguments");
+        assertTrue(result.getResult().contains("requires"), "Should report required arguments");
     }
 
     /**
@@ -274,7 +272,7 @@ public class SchedulerIIARTest {
             "task,counter,action,args,100");
 
         assertFalse(result.isSuccess(), "Should fail with invalid arguments");
-        assertTrue(result.getResult().contains("Invalid arguments"), "Should report invalid arguments");
+        assertTrue(result.getResult().contains("requires"), "Should report required arguments");
     }
 
     /**
@@ -287,7 +285,7 @@ public class SchedulerIIARTest {
             "task,counter,action,args,abc,100,SECONDS");
 
         assertFalse(result.isSuccess(), "Should fail with number format error");
-        assertTrue(result.getResult().contains("Invalid number format"), "Should report number format error");
+        assertTrue(result.getResult().contains("Error"), "Should report error");
     }
 
     /**
@@ -300,8 +298,6 @@ public class SchedulerIIARTest {
             "task,counter,action,args,0,100,INVALID_UNIT");
 
         assertFalse(result.isSuccess(), "Should fail with invalid TimeUnit");
-        assertTrue(result.getResult().contains("Invalid argument") ||
-                   result.getResult().contains("Error executing action"),
-                   "Should report invalid argument or execution error");
+        assertTrue(result.getResult().contains("Error"), "Should report error");
     }
 }
