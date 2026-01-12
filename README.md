@@ -4,7 +4,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-2.10.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-2.12.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 
 
 The actor model is a programming paradigm where independent entities (actors) communicate through message passing, eliminating the need for locks and avoiding the complexities of shared-state concurrency. Traditionally, using the actor model required specialized frameworks, and because these frameworks relied on real operating system threads, you could only create as many actors as you had CPU cores — typically just a handful. However, recent advancements in the JDK, particularly the introduction of virtual threads in Java 21, have changed everything: now even an ordinary laptop can handle tens of thousands of actors simultaneously.
@@ -14,7 +14,7 @@ The actor model is a programming paradigm where independent entities (actors) co
 
 POJO-actor implements a simplified actor model built on modern Java features. Built with just ~800 lines of code, POJO-actor delivers a practical actor model implementation without sacrificing functionality or performance.
 
-- ActorSystem: Manages actor lifecycle and configurable work-stealing thread pools
+- ActorSystem: Manages actor lifecycle and configurable managed thread pools
 - ActorRef: Reference to an actor that provides tell() and ask() messaging interface
 - Virtual Threads: Each actor runs on its own virtual thread for lightweight message handling
 - Managed Thread Pools: Heavy computations are delegated to configurable thread pools
@@ -59,7 +59,7 @@ mvn javadoc:javadoc
 
 
 
-## Basic Usage of Core Components
+## Basic Usage of the Core Components
 
 ### Any POJO Can Become an Actor
 
@@ -153,7 +153,7 @@ actor.ask(a -> a.performMatrixMultiplication(), system.getManagedThreadPool());
 ```
 
 
-## Workflow Engine : From Actor to Agent
+## Workflow Engine: From Actor to Agent
 
 In the traditional actor model, actors are passive entities—they wait for messages and react to them. While this simplifies concurrent programming by eliminating locks, actors themselves don't decide what to do next; they only respond to external stimuli.
 
@@ -182,7 +182,7 @@ This follows the same mental model as `tell()`/`ask()` in Java code. The combina
 
 The following is a Turing machine that outputs an irrational number. It outputs 001011011101111011111...
 
-![](Turing87.png)
+![](Turing87.jpg)
 
 > — Charles Petzold, "The Annotated Turing", Wiley Publishing, Inc. (2008) page 87.
 
@@ -260,7 +260,7 @@ steps:
   - {actor: turing, method: move, arguments: "L"}
 ```
 
-This example includes conditional branching using multiple vertices with the same from-state:
+This example includes conditional branching using multiple transitions with the same from-state:
 
 ```yaml
 # From state 2: if current value is "1", stay in state 2
@@ -279,8 +279,8 @@ This example includes conditional branching using multiple vertices with the sam
       arguments: "0"
 ```
 
-- If `matchCurrentValue("1")` returns true → Execute first vertex, remain in state 2
-- If `matchCurrentValue("1")` returns false → Abort this vertex, try next vertex
+- If `matchCurrentValue("1")` returns true → Execute first transition, remain in state 2
+- If `matchCurrentValue("1")` returns false → Abort this transition, try next transition
 - If `matchCurrentValue("0")` returns true → Transition to state 3
 
 **Running the Example:**
@@ -359,7 +359,7 @@ POJO-actor was inspired by Alexander Zakusylo's [`actr`](https://medium.com/@zak
 
 - **Message ordering guarantee**: Unlike `actr`, POJO-actor ensures that messages sent to an actor are processed in the order they were sent
 - **Modern Java features**: Built with Java 21+ virtual threads and modern concurrency patterns
-- **Enhanced thread pool management**: `actr` used real threads for actors, limiting scalability to CPU core count and causing performance issues with heavy computations. POJO-actor uses virtual threads for actors and delegates heavy computations to configurable work-stealing pools, allowing thousands of actors while controlling CPU core usage
+- **Enhanced thread pool management**: `actr` used real threads for actors, limiting scalability to CPU core count and causing performance issues with heavy computations. POJO-actor uses virtual threads for actors and delegates heavy computations to configurable managed thread pools, allowing thousands of actors while controlling CPU core usage
 
 
 We acknowledge the foundational work done by the `actr` library team in making actor model programming more accessible to Java developers.
