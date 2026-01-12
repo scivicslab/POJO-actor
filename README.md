@@ -36,7 +36,7 @@ Maven Dependency
 ```
 <dependency>
     <groupId>com.scivicslab</groupId>
-    <artifactId>POJO-actor</artifactId>
+    <artifactId>pojo-actor</artifactId>
     <version>2.11.0</version>
 </dependency>
 ```
