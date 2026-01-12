@@ -110,7 +110,7 @@ public class ActorSystem {
      */
     public ActorSystem(String systemName) {
         this.systemName = systemName;
-        this.workerPools.add(new ControllableWorkStealingPool(Runtime.getRuntime().availableProcessors()));
+        this.workerPools.add(new ManagedThreadPool(Runtime.getRuntime().availableProcessors()));
     }
 
     /**
@@ -121,7 +121,7 @@ public class ActorSystem {
      */
     public ActorSystem(String systemName, int threadNum) {
         this.systemName = systemName;
-        this.workerPools.add(new ControllableWorkStealingPool(threadNum));
+        this.workerPools.add(new ManagedThreadPool(threadNum));
     }
 
 
@@ -209,19 +209,27 @@ public class ActorSystem {
     }
 
 
-    /** Add a new WorkStealingPool to the ActorSystem.
+    /**
+     * Adds a new managed thread pool to the actor system.
      *
-     * @param threadNum The number of threads in the WorkStealingPool.
-     * @return true if the WorkStealingPool is successfully added to the ActorSystem.
+     * @param threadNum the number of threads in the new pool
+     * @return true if the pool was successfully added
+     * @since 2.12.0
      */
+    public boolean addManagedThreadPool(int threadNum) {
+        return this.workerPools.add(new ManagedThreadPool(threadNum));
+    }
+
     /**
      * Adds a new work stealing pool to the actor system.
      *
      * @param threadNum the number of threads in the new pool
      * @return true if the pool was successfully added
+     * @deprecated Use {@link #addManagedThreadPool(int)} instead.
      */
+    @Deprecated
     public boolean addWorkStealingPool(int threadNum) {
-        return this.workerPools.add(new ControllableWorkStealingPool(threadNum));
+        return this.workerPools.add(new ManagedThreadPool(threadNum));
     }
 
 
@@ -365,29 +373,47 @@ public class ActorSystem {
 
 
     
-    /** Returns the default workStealingPool of the ActorSystem.
+    /**
+     * Returns the default managed thread pool of the actor system.
      *
-     * @return The default workStealingPool of the ActorSystem (the 0th workStealingPool).
+     * @return the default managed thread pool (index 0)
+     * @since 2.12.0
      */
+    public ExecutorService getManagedThreadPool() {
+        return this.workerPools.get(0);
+    }
+
+    /**
+     * Returns a managed thread pool at the specified index.
+     *
+     * @param n the index of the managed thread pool to return
+     * @return the managed thread pool at the specified index
+     * @since 2.12.0
+     */
+    public ExecutorService getManagedThreadPool(int n) {
+        return this.workerPools.get(n);
+    }
+
     /**
      * Returns the default work stealing pool of the actor system.
-     * 
+     *
      * @return the default work stealing pool (index 0)
+     * @deprecated Use {@link #getManagedThreadPool()} instead.
      */
+    @Deprecated
     public ExecutorService getWorkStealingPool() {
         return this.workerPools.get(0);
     }
 
     /**
      * Returns a work stealing pool at the specified index.
-     * 
+     *
      * @param n the index of the work stealing pool to return
      * @return the work stealing pool at the specified index
+     * @deprecated Use {@link #getManagedThreadPool(int)} instead.
      */
-    public ExecutorService getWorkStealingPool(int  n) {
+    @Deprecated
+    public ExecutorService getWorkStealingPool(int n) {
         return this.workerPools.get(n);
     }
-
-
-    
 }
