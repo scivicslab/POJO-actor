@@ -2,14 +2,14 @@ name: SetupWorkflow
 
 steps:
   - states: ["0", "1"]
-    vertexName: setup-step-one
+    label: setup-step-one
     actions:
       - actor: this
         method: doNothing
         arguments: ["setup-1"]
 
   - states: ["1", "end"]
-    vertexName: setup-step-two
+    label: setup-step-two
     actions:
       - actor: this
         method: doNothing

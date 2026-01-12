@@ -20,10 +20,6 @@ import java.util.concurrent.ExecutorService;
 /**
  * Interface for worker pools that execute CPU-bound jobs for actors.
  *
- * This interface abstracts two implementation strategies:
- * 1. ForkJoinPool-based (work-stealing, default)
- * 2. ControllableWorkStealingPool (ThreadPoolExecutor-based with job cancellation)
- *
  * Implementations must provide ExecutorService compatibility for use with
  * ActorRef.tell(action, pool) and ActorRef.ask(action, pool).
  *

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import com.scivicslab.pojoactor.workflow.Interpreter;
 import com.scivicslab.pojoactor.workflow.MatrixCode;
-import com.scivicslab.pojoactor.workflow.Vertex;
+import com.scivicslab.pojoactor.workflow.Transition;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -89,7 +89,7 @@ class WorkflowKustomizerTest {
         assertEquals(4, steps.size());
 
         // Check init vertex was overwritten to use json
-        Map<String, Object> initStep = findStepByVertexName(steps, "init");
+        Map<String, Object> initStep = findStepByLabel(steps, "init");
         assertNotNull(initStep);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> initActions = (List<Map<String, Object>>) initStep.get("actions");
@@ -98,7 +98,7 @@ class WorkflowKustomizerTest {
         assertEquals("json", initArgs.get(0));
 
         // Check create-nodes was overwritten to use webservers
-        Map<String, Object> createNodesStep = findStepByVertexName(steps, "create-nodes");
+        Map<String, Object> createNodesStep = findStepByLabel(steps, "create-nodes");
         assertNotNull(createNodesStep);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> createActions = (List<Map<String, Object>>) createNodesStep.get("actions");
@@ -119,12 +119,12 @@ class WorkflowKustomizerTest {
         List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
 
         // Find the inserted vertex
-        Map<String, Object> setupLoggingStep = findStepByVertexName(steps, "setup-logging");
+        Map<String, Object> setupLoggingStep = findStepByLabel(steps, "setup-logging");
         assertNotNull(setupLoggingStep, "setup-logging vertex should be inserted");
 
         // Verify it was inserted after create-nodes
-        int createNodesIndex = findIndexByVertexName(steps, "create-nodes");
-        int setupLoggingIndex = findIndexByVertexName(steps, "setup-logging");
+        int createNodesIndex = findIndexByLabel(steps, "create-nodes");
+        int setupLoggingIndex = findIndexByLabel(steps, "setup-logging");
         assertEquals(createNodesIndex + 1, setupLoggingIndex,
             "setup-logging should be inserted after create-nodes");
     }
@@ -150,7 +150,7 @@ class WorkflowKustomizerTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
 
-        Map<String, Object> runTasksStep = findStepByVertexName(steps, "run-tasks");
+        Map<String, Object> runTasksStep = findStepByLabel(steps, "run-tasks");
         assertNotNull(runTasksStep);
 
         @SuppressWarnings("unchecked")
@@ -165,15 +165,15 @@ class WorkflowKustomizerTest {
     }
 
     @Test
-    @DisplayName("Should throw OrphanVertexException for orphan vertex")
-    void testOrphanVertexException() throws IOException, URISyntaxException {
+    @DisplayName("Should throw OrphanTransitionException for orphan transition")
+    void testOrphanTransitionException() throws IOException, URISyntaxException {
         // Create a temporary orphan patch scenario
         // For now, we'll test the exception class directly
-        OrphanVertexException ex = new OrphanVertexException("orphan-vertex", "bad-patch.yaml");
+        OrphanTransitionException ex = new OrphanTransitionException("orphan-transition", "bad-patch.yaml");
 
-        assertEquals("orphan-vertex", ex.getVertexName());
+        assertEquals("orphan-transition", ex.getLabel());
         assertEquals("bad-patch.yaml", ex.getPatchFile());
-        assertTrue(ex.getMessage().contains("orphan-vertex"));
+        assertTrue(ex.getMessage().contains("orphan-transition"));
         assertTrue(ex.getMessage().contains("bad-patch.yaml"));
     }
 
@@ -185,7 +185,7 @@ class WorkflowKustomizerTest {
 
         assertNotNull(yaml);
         assertTrue(yaml.contains("prod-MainWorkflow"));
-        assertTrue(yaml.contains("vertexName: init"));
+        assertTrue(yaml.contains("label: init"));
         assertTrue(yaml.contains("json"));
         assertTrue(yaml.contains("webservers"));
     }
@@ -193,16 +193,16 @@ class WorkflowKustomizerTest {
     // Helper methods
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> findStepByVertexName(List<Map<String, Object>> steps, String vertexName) {
+    private Map<String, Object> findStepByLabel(List<Map<String, Object>> steps, String vertexName) {
         return steps.stream()
-            .filter(s -> vertexName.equals(s.get("vertexName")))
+            .filter(s -> vertexName.equals(s.get("label")))
             .findFirst()
             .orElse(null);
     }
 
-    private int findIndexByVertexName(List<Map<String, Object>> steps, String vertexName) {
+    private int findIndexByLabel(List<Map<String, Object>> steps, String vertexName) {
         for (int i = 0; i < steps.size(); i++) {
-            if (vertexName.equals(steps.get(i).get("vertexName"))) {
+            if (vertexName.equals(steps.get(i).get("label"))) {
                 return i;
             }
         }
@@ -228,7 +228,7 @@ class WorkflowKustomizerTest {
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> mainSteps = (List<Map<String, Object>>) mainWorkflow.get("steps");
-            Map<String, Object> initStep = findStepByVertexName(mainSteps, "init");
+            Map<String, Object> initStep = findStepByLabel(mainSteps, "init");
             assertNotNull(initStep);
 
             @SuppressWarnings("unchecked")
@@ -251,7 +251,7 @@ class WorkflowKustomizerTest {
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> setupSteps = (List<Map<String, Object>>) setupWorkflow.get("steps");
-            Map<String, Object> setupStep = findStepByVertexName(setupSteps, "setup-step-one");
+            Map<String, Object> setupStep = findStepByLabel(setupSteps, "setup-step-one");
             assertNotNull(setupStep);
 
             @SuppressWarnings("unchecked")
@@ -287,7 +287,7 @@ class WorkflowKustomizerTest {
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> mainSteps = (List<Map<String, Object>>) mainWorkflow.get("steps");
-            Map<String, Object> initStep = findStepByVertexName(mainSteps, "init");
+            Map<String, Object> initStep = findStepByLabel(mainSteps, "init");
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> initActions = (List<Map<String, Object>>) initStep.get("actions");
@@ -302,7 +302,7 @@ class WorkflowKustomizerTest {
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> setupSteps = (List<Map<String, Object>>) setupWorkflow.get("steps");
-            Map<String, Object> setupStep = findStepByVertexName(setupSteps, "setup-step-one");
+            Map<String, Object> setupStep = findStepByLabel(setupSteps, "setup-step-one");
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> setupActions = (List<Map<String, Object>>) setupStep.get("actions");
@@ -380,15 +380,15 @@ class WorkflowKustomizerTest {
             // Should have 4 steps (3 original + 1 inserted)
             assertEquals(4, code.getSteps().size());
 
-            // Verify vertexName is preserved
-            Vertex initVertex = code.getSteps().stream()
-                .filter(r -> "init".equals(r.getVertexName()))
+            // Verify transitionName is preserved
+            Transition initTransition = code.getSteps().stream()
+                .filter(r -> "init".equals(r.getLabel()))
                 .findFirst()
                 .orElse(null);
-            assertNotNull(initVertex, "init vertex should exist");
+            assertNotNull(initTransition, "init transition should exist");
 
             // Verify overlay was applied - init should use 'json' argument
-            Object args = initVertex.getActions().get(0).getArguments();
+            Object args = initTransition.getActions().get(0).getArguments();
             assertTrue(args instanceof List);
             @SuppressWarnings("unchecked")
             List<String> argList = (List<String>) args;
@@ -410,14 +410,14 @@ class WorkflowKustomizerTest {
             MatrixCode code = interpreter.getCode();
 
             // Check all vertices have their names
-            List<String> vertexNames = code.getSteps().stream()
-                .map(Vertex::getVertexName)
+            List<String> transitionNames = code.getSteps().stream()
+                .map(Transition::getLabel)
                 .toList();
 
-            assertTrue(vertexNames.contains("init"));
-            assertTrue(vertexNames.contains("create-nodes"));
-            assertTrue(vertexNames.contains("setup-logging")); // inserted vertex
-            assertTrue(vertexNames.contains("run-tasks"));
+            assertTrue(transitionNames.contains("init"));
+            assertTrue(transitionNames.contains("create-nodes"));
+            assertTrue(transitionNames.contains("setup-logging")); // inserted vertex
+            assertTrue(transitionNames.contains("run-tasks"));
         }
 
         @Test
@@ -443,11 +443,11 @@ class WorkflowKustomizerTest {
             assertEquals(2, code.getSteps().size());
 
             // Verify correct vertices are loaded
-            List<String> vertexNames = code.getSteps().stream()
-                .map(Vertex::getVertexName)
+            List<String> transitionNames = code.getSteps().stream()
+                .map(Transition::getLabel)
                 .toList();
-            assertTrue(vertexNames.contains("step-one"));
-            assertTrue(vertexNames.contains("step-two"));
+            assertTrue(transitionNames.contains("step-one"));
+            assertTrue(transitionNames.contains("step-two"));
         }
 
         @Test
@@ -495,11 +495,11 @@ class WorkflowKustomizerTest {
             assertEquals(2, code.getSteps().size());
 
             // Verify correct vertices are loaded
-            List<String> vertexNames = code.getSteps().stream()
-                .map(Vertex::getVertexName)
+            List<String> transitionNames = code.getSteps().stream()
+                .map(Transition::getLabel)
                 .toList();
-            assertTrue(vertexNames.contains("setup-step-one"));
-            assertTrue(vertexNames.contains("setup-step-two"));
+            assertTrue(transitionNames.contains("setup-step-one"));
+            assertTrue(transitionNames.contains("setup-step-two"));
         }
 
         @Test

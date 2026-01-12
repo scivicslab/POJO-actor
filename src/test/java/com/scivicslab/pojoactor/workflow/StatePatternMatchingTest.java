@@ -478,14 +478,14 @@ public class StatePatternMatchingTest {
             );
             setCode(code);
 
-            Vertex wildcardVertex = new Vertex();
-            wildcardVertex.setStates(Arrays.asList("*", "error"));
+            Transition wildcardTransition = new Transition();
+            wildcardTransition.setStates(Arrays.asList("*", "error"));
 
-            Vertex negationVertex = new Vertex();
-            negationVertex.setStates(Arrays.asList("!end", "error"));
+            Transition negationTransition = new Transition();
+            negationTransition.setStates(Arrays.asList("!end", "error"));
 
-            Vertex numericVertex = new Vertex();
-            numericVertex.setStates(Arrays.asList(">=5", "high"));
+            Transition numericTransition = new Transition();
+            numericTransition.setStates(Arrays.asList(">=5", "high"));
 
             // Test pattern matching directly (without transitionTo which needs code)
             // Use reflection to set currentState
@@ -494,16 +494,16 @@ public class StatePatternMatchingTest {
                 stateField.setAccessible(true);
 
                 stateField.set(interpreter, "3");
-                assertTrue(interpreter.matchesCurrentState(wildcardVertex));
-                assertTrue(interpreter.matchesCurrentState(negationVertex));
-                assertFalse(interpreter.matchesCurrentState(numericVertex));
+                assertTrue(interpreter.matchesCurrentState(wildcardTransition));
+                assertTrue(interpreter.matchesCurrentState(negationTransition));
+                assertFalse(interpreter.matchesCurrentState(numericTransition));
 
                 stateField.set(interpreter, "10");
-                assertTrue(interpreter.matchesCurrentState(numericVertex));
+                assertTrue(interpreter.matchesCurrentState(numericTransition));
 
                 stateField.set(interpreter, "end");
-                assertTrue(interpreter.matchesCurrentState(wildcardVertex));
-                assertFalse(interpreter.matchesCurrentState(negationVertex));
+                assertTrue(interpreter.matchesCurrentState(wildcardTransition));
+                assertFalse(interpreter.matchesCurrentState(negationTransition));
             } catch (Exception e) {
                 fail("Failed to set currentState: " + e.getMessage());
             }
@@ -512,17 +512,17 @@ public class StatePatternMatchingTest {
 
     // ==================== Helper Methods ====================
 
-    private Vertex step(String fromState, String toState, String actionName) {
-        Vertex vertex = new Vertex();
-        vertex.setStates(Arrays.asList(fromState, toState));
+    private Transition step(String fromState, String toState, String actionName) {
+        Transition transition = new Transition();
+        transition.setStates(Arrays.asList(fromState, toState));
         Action action = new Action();
         action.setActor("tracker");
         action.setMethod(actionName);
-        vertex.setActions(Arrays.asList(action));
-        return vertex;
+        transition.setActions(Arrays.asList(action));
+        return transition;
     }
 
-    private MatrixCode createWorkflow(Vertex... steps) {
+    private MatrixCode createWorkflow(Transition... steps) {
         MatrixCode code = new MatrixCode();
         code.setName("test-workflow");
         code.setSteps(Arrays.asList(steps));

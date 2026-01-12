@@ -30,21 +30,21 @@ public class Vertex extends Transition {
      * Returns the vertex name.
      *
      * @return the vertex name, or null if not set
-     * @deprecated Use {@link #getTransitionName()} instead.
+     * @deprecated Use {@link #getLabel()} instead.
      */
     @Deprecated
     public String getVertexName() {
-        return getTransitionName();
+        return getLabel();
     }
 
     /**
      * Sets the vertex name.
      *
      * @param vertexName the vertex name identifier
-     * @deprecated Use {@link #setTransitionName(String)} instead.
+     * @deprecated Use {@link #setLabel(String)} instead.
      */
     @Deprecated
     public void setVertexName(String vertexName) {
-        setTransitionName(vertexName);
+        setLabel(vertexName);
     }
 }

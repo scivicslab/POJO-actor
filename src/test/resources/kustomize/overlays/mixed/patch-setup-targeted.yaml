@@ -1,7 +1,7 @@
 name: SetupWorkflow
 
 steps:
-  - vertexName: setup-step-one
+  - label: setup-step-one
     actions:
       - actor: this
         method: doNothing

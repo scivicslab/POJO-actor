@@ -2,7 +2,7 @@ name: MainWorkflow
 
 steps:
   # Overwrite init to use json accumulator
-  - vertexName: init
+  - label: init
     actions:
       - actor: nodeGroup
         method: createAccumulator
@@ -10,7 +10,7 @@ steps:
           - json
 
   # Overwrite create-nodes to use webservers group
-  - vertexName: create-nodes
+  - label: create-nodes
     actions:
       - actor: nodeGroup
         method: createNodeActors
@@ -19,7 +19,7 @@ steps:
 
   # Insert new vertex after create-nodes
   - states: ["1.5", "2"]
-    vertexName: setup-logging
+    label: setup-logging
     actions:
       - actor: logger
         method: setLevel

@@ -40,7 +40,7 @@ import java.util.List;
 public class Transition {
 
     List<String> states;
-    String transitionName;  // Optional identifier for overlay matching
+    String label;  // Optional identifier for overlay matching
     List<Action> actions;  // Unified format for all workflow types
 
     /**
@@ -82,25 +82,25 @@ public class Transition {
     }
 
     /**
-     * Returns the transition name.
+     * Returns the label.
      *
-     * <p>The transition name is used as a stable identifier for overlay matching.
-     * When applying patches, transitions are matched by this name rather than
+     * <p>The label is used as a stable identifier for overlay matching.
+     * When applying patches, transitions are matched by this label rather than
      * by states or array index.</p>
      *
-     * @return the transition name, or null if not set
+     * @return the label, or null if not set
      */
-    public String getTransitionName() {
-        return this.transitionName;
+    public String getLabel() {
+        return this.label;
     }
 
     /**
-     * Sets the transition name.
+     * Sets the label.
      *
-     * @param transitionName the transition name identifier
+     * @param label the label identifier
      */
-    public void setTransitionName(String transitionName) {
-        this.transitionName = transitionName;
+    public void setLabel(String label) {
+        this.label = label;
     }
 
     /**
@@ -133,9 +133,9 @@ public class Transition {
             return sb.toString();
         }
 
-        // transitionName (if present)
-        if (transitionName != null && !transitionName.isEmpty()) {
-            sb.append("  transitionName: ").append(transitionName).append("\n");
+        // label (if present)
+        if (label != null && !label.isEmpty()) {
+            sb.append("  label: ").append(label).append("\n");
             lineCount++;
             if (maxLines > 0 && lineCount >= maxLines) {
                 return sb.toString();

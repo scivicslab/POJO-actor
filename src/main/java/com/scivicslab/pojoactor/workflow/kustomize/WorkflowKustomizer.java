@@ -274,13 +274,13 @@ public class WorkflowKustomizer {
         }
 
         // Build index of base vertices by vertexName
-        Map<String, Integer> baseVertexIndex = buildVertexIndex(baseSteps);
+        Map<String, Integer> baseLabelIndex = buildLabelIndex(baseSteps);
 
         // Check for orphan vertices
-        validatePatchVertices(patchSteps, baseVertexIndex, patchFile);
+        validatePatchSteps(patchSteps, baseLabelIndex, patchFile);
 
         // Apply patches and replace steps
-        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseVertexIndex, patchFile);
+        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseLabelIndex, patchFile);
         targetWorkflow.put("steps", newSteps);
     }
 
@@ -316,13 +316,13 @@ public class WorkflowKustomizer {
         }
 
         // Build index of base vertices by vertexName
-        Map<String, Integer> baseVertexIndex = buildVertexIndex(baseSteps);
+        Map<String, Integer> baseLabelIndex = buildLabelIndex(baseSteps);
 
         // Check for orphan vertices
-        validatePatchVertices(patchSteps, baseVertexIndex, patchFile);
+        validatePatchSteps(patchSteps, baseLabelIndex, patchFile);
 
         // Apply patches and replace steps
-        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseVertexIndex, patchFile);
+        List<Map<String, Object>> newSteps = applyPatchSteps(baseSteps, patchSteps, baseLabelIndex, patchFile);
         targetWorkflow.put("steps", newSteps);
     }
 
@@ -354,12 +354,12 @@ public class WorkflowKustomizer {
      * @param steps the list of workflow steps
      * @return map of vertexName to index
      */
-    private Map<String, Integer> buildVertexIndex(List<Map<String, Object>> steps) {
+    private Map<String, Integer> buildLabelIndex(List<Map<String, Object>> steps) {
         Map<String, Integer> index = new HashMap<>();
         for (int i = 0; i < steps.size(); i++) {
-            String vertexName = (String) steps.get(i).get("vertexName");
-            if (vertexName != null) {
-                index.put(vertexName, i);
+            String label = (String)steps.get(i).get("label");
+            if (label != null) {
+                index.put(label, i);
             }
         }
         return index;
@@ -369,32 +369,32 @@ public class WorkflowKustomizer {
      * Validates that patch vertices have proper anchors.
      *
      * @param patchSteps the patch steps to validate
-     * @param baseVertexIndex the index of base vertices
+     * @param baseLabelIndex the index of base vertices
      * @param patchFile the patch file name for error messages
      * @throws OrphanVertexException if orphan vertices are found
      */
-    private void validatePatchVertices(
+    private void validatePatchSteps(
             List<Map<String, Object>> patchSteps,
-            Map<String, Integer> baseVertexIndex,
+            Map<String, Integer> baseLabelIndex,
             String patchFile) {
         boolean hasAnchor = false;
-        List<String> newVertexNames = new ArrayList<>();
+        List<String> newLabels = new ArrayList<>();
 
-        for (Map<String, Object> patchVertex : patchSteps) {
-            String vertexName = (String) patchVertex.get("vertexName");
-            if (vertexName == null) {
+        for (Map<String, Object> patchStep : patchSteps) {
+            String label = (String)patchStep.get("label");
+            if (label == null) {
                 throw new IllegalArgumentException(
-                    "Patch vertex must have vertexName: " + patchFile);
+                    "Patch step must have label:" + patchFile);
             }
-            if (baseVertexIndex.containsKey(vertexName)) {
+            if (baseLabelIndex.containsKey(label)) {
                 hasAnchor = true;
             } else {
-                newVertexNames.add(vertexName);
+                newLabels.add(label);
             }
         }
 
-        if (!hasAnchor && !newVertexNames.isEmpty()) {
-            throw new OrphanVertexException(newVertexNames.get(0), patchFile);
+        if (!hasAnchor && !newLabels.isEmpty()) {
+            throw new OrphanVertexException(newLabels.get(0), patchFile);
         }
     }
 
@@ -403,26 +403,26 @@ public class WorkflowKustomizer {
      *
      * @param baseSteps the original steps
      * @param patchSteps the patch steps to apply
-     * @param baseVertexIndex the index of base vertices
+     * @param baseLabelIndex the index of base vertices
      * @param patchFile the patch file name for error messages
      * @return the new steps list with patches applied
      */
     private List<Map<String, Object>> applyPatchSteps(
             List<Map<String, Object>> baseSteps,
             List<Map<String, Object>> patchSteps,
-            Map<String, Integer> baseVertexIndex,
+            Map<String, Integer> baseLabelIndex,
             String patchFile) {
         List<Map<String, Object>> newSteps = new ArrayList<>(baseSteps);
         int insertionOffset = 0;
         int lastAnchorNewIndex = -1;
 
-        for (Map<String, Object> patchVertex : patchSteps) {
-            String vertexName = (String) patchVertex.get("vertexName");
-            Boolean deleteMarker = (Boolean) patchVertex.get("$delete");
+        for (Map<String, Object> patchStep : patchSteps) {
+            String label = (String)patchStep.get("label");
+            Boolean deleteMarker = (Boolean) patchStep.get("$delete");
 
-            if (baseVertexIndex.containsKey(vertexName)) {
+            if (baseLabelIndex.containsKey(label)) {
                 // This is an anchor - update or delete existing vertex
-                int originalIndex = baseVertexIndex.get(vertexName);
+                int originalIndex = baseLabelIndex.get(label);
                 int newIndex = originalIndex + insertionOffset;
 
                 if (Boolean.TRUE.equals(deleteMarker)) {
@@ -430,17 +430,17 @@ public class WorkflowKustomizer {
                     insertionOffset--;
                     lastAnchorNewIndex = newIndex - 1;
                 } else {
-                    Map<String, Object> baseVertex = newSteps.get(newIndex);
-                    mergeVertex(baseVertex, patchVertex);
+                    Map<String, Object> baseStep = newSteps.get(newIndex);
+                    mergeStep(baseStep, patchStep);
                     lastAnchorNewIndex = newIndex;
                 }
             } else {
                 // This is a new vertex - insert after the last anchor
                 if (lastAnchorNewIndex < 0) {
-                    throw new OrphanVertexException(vertexName, patchFile);
+                    throw new OrphanTransitionException(label, patchFile);
                 }
                 int insertIndex = lastAnchorNewIndex + 1;
-                newSteps.add(insertIndex, new LinkedHashMap<>(patchVertex));
+                newSteps.add(insertIndex, new LinkedHashMap<>(patchStep));
                 insertionOffset++;
                 lastAnchorNewIndex = insertIndex;
             }
@@ -455,20 +455,20 @@ public class WorkflowKustomizer {
      * <p>Actions are matched by actor+method. Non-matching actions are added.</p>
      */
     @SuppressWarnings("unchecked")
-    private void mergeVertex(Map<String, Object> baseVertex, Map<String, Object> patchVertex) {
+    private void mergeStep(Map<String, Object> baseStep, Map<String, Object> patchStep) {
         // Update states if provided in patch
-        if (patchVertex.containsKey("states")) {
-            baseVertex.put("states", patchVertex.get("states"));
+        if (patchStep.containsKey("states")) {
+            baseStep.put("states", patchStep.get("states"));
         }
 
         // Merge actions
-        List<Map<String, Object>> baseActions = (List<Map<String, Object>>) baseVertex.get("actions");
-        List<Map<String, Object>> patchActions = (List<Map<String, Object>>) patchVertex.get("actions");
+        List<Map<String, Object>> baseActions = (List<Map<String, Object>>) baseStep.get("actions");
+        List<Map<String, Object>> patchActions = (List<Map<String, Object>>) patchStep.get("actions");
 
         if (patchActions != null && !patchActions.isEmpty()) {
             if (baseActions == null) {
                 baseActions = new ArrayList<>();
-                baseVertex.put("actions", baseActions);
+                baseStep.put("actions", baseActions);
             }
 
             // Build index of base actions by actor+method

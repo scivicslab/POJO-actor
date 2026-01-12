@@ -2,7 +2,7 @@ name: MainWorkflow
 
 steps:
   - states: ["0", "1"]
-    vertexName: init
+    label: init
     actions:
       - actor: nodeGroup
         method: createAccumulator
@@ -10,7 +10,7 @@ steps:
           - streaming
 
   - states: ["1", "2"]
-    vertexName: create-nodes
+    label: create-nodes
     actions:
       - actor: nodeGroup
         method: createNodeActors
@@ -18,7 +18,7 @@ steps:
           - local
 
   - states: ["2", "end"]
-    vertexName: run-tasks
+    label: run-tasks
     actions:
       - actor: nodeGroup
         method: apply

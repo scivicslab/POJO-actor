@@ -32,31 +32,31 @@ package com.scivicslab.pojoactor.workflow.kustomize;
  */
 public class OrphanTransitionException extends RuntimeException {
 
-    private final String transitionName;
+    private final String label;
     private final String patchFile;
 
     /**
      * Constructs a new OrphanTransitionException.
      *
-     * @param transitionName the name of the orphan transition
+     * @param label the label of the orphan transition
      * @param patchFile the patch file containing the orphan transition
      */
-    public OrphanTransitionException(String transitionName, String patchFile) {
+    public OrphanTransitionException(String label, String patchFile) {
         super(String.format(
             "Orphan transition '%s' in patch '%s'. " +
             "New transitions must be accompanied by at least one transition that exists in the base workflow.",
-            transitionName, patchFile));
-        this.transitionName = transitionName;
+            label, patchFile));
+        this.label = label;
         this.patchFile = patchFile;
     }
 
     /**
-     * Gets the name of the orphan transition.
+     * Gets the label of the orphan transition.
      *
-     * @return the transition name
+     * @return the transition label
      */
-    public String getTransitionName() {
-        return transitionName;
+    public String getLabel() {
+        return label;
     }
 
     /**

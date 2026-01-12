@@ -478,7 +478,7 @@ public class Interpreter {
             for (Map<String, Object> stepData : stepsData) {
                 Transition transition = new Transition();
                 transition.setStates((List<String>) stepData.get("states"));
-                transition.setVertexName((String) stepData.get("vertexName"));
+                transition.setLabel((String) stepData.get("label"));
 
                 List<Map<String, Object>> actionsData = (List<Map<String, Object>>) stepData.get("actions");
                 if (actionsData != null) {
@@ -1064,7 +1064,7 @@ public class Interpreter {
      */
     public void transitionTo(String toState) {
         currentState = toState;
-        findNextMatchingVertex();
+        findNextMatchingTransition();
     }
 
     /**
@@ -1074,12 +1074,12 @@ public class Interpreter {
      * currentTransitionIndex to the index of the first matching step. Supports
      * state patterns including wildcards, negations, and numeric comparisons.</p>
      */
-    protected void findNextMatchingVertex() {
+    protected void findNextMatchingTransition() {
         int stepsCount = code.getTransitions().size();
         for (int i = 0; i < stepsCount; i++) {
-            Transition nextVertex = code.getTransitions().get(i);
-            if (!nextVertex.getStates().isEmpty() &&
-                matchesStatePattern(nextVertex.getStates().get(0), currentState)) {
+            Transition nextTransition = code.getTransitions().get(i);
+            if (!nextTransition.getStates().isEmpty() &&
+                matchesStatePattern(nextTransition.getStates().get(0), currentState)) {
                 currentTransitionIndex = i;
                 return;
             }
@@ -1100,7 +1100,7 @@ public class Interpreter {
      *
      * @return the current step index
      */
-    public int getCurrentVertexIndex() {
+    public int getCurrentTransitionIndex() {
         return currentTransitionIndex;
     }
 
