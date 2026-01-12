@@ -72,8 +72,8 @@ class WorkflowKustomizerTest {
     }
 
     @Test
-    @DisplayName("Should apply patch and overwrite vertex by vertexName")
-    void testPatchOverwriteVertex() throws IOException {
+    @DisplayName("Should apply patch and overwrite transition by label")
+    void testPatchOverwriteTransition() throws IOException {
         Path overlayPath = testResourcesPath.resolve("overlays/production");
         Map<String, Map<String, Object>> result = kustomizer.build(overlayPath);
 
@@ -88,7 +88,7 @@ class WorkflowKustomizerTest {
         // Should have 4 steps now (3 original + 1 inserted)
         assertEquals(4, steps.size());
 
-        // Check init vertex was overwritten to use json
+        // Check init step was overwritten to use json
         Map<String, Object> initStep = findStepByLabel(steps, "init");
         assertNotNull(initStep);
         @SuppressWarnings("unchecked")
@@ -108,8 +108,8 @@ class WorkflowKustomizerTest {
     }
 
     @Test
-    @DisplayName("Should insert new vertex after anchor")
-    void testInsertNewVertex() throws IOException {
+    @DisplayName("Should insert new transition after anchor")
+    void testInsertNewTransition() throws IOException {
         Path overlayPath = testResourcesPath.resolve("overlays/production");
         Map<String, Map<String, Object>> result = kustomizer.build(overlayPath);
 
@@ -118,9 +118,9 @@ class WorkflowKustomizerTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
 
-        // Find the inserted vertex
+        // Find the inserted transition
         Map<String, Object> setupLoggingStep = findStepByLabel(steps, "setup-logging");
-        assertNotNull(setupLoggingStep, "setup-logging vertex should be inserted");
+        assertNotNull(setupLoggingStep, "setup-logging transition should be inserted");
 
         // Verify it was inserted after create-nodes
         int createNodesIndex = findIndexByLabel(steps, "create-nodes");
@@ -193,16 +193,16 @@ class WorkflowKustomizerTest {
     // Helper methods
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> findStepByLabel(List<Map<String, Object>> steps, String vertexName) {
+    private Map<String, Object> findStepByLabel(List<Map<String, Object>> steps, String label) {
         return steps.stream()
-            .filter(s -> vertexName.equals(s.get("label")))
+            .filter(s -> label.equals(s.get("label")))
             .findFirst()
             .orElse(null);
     }
 
-    private int findIndexByLabel(List<Map<String, Object>> steps, String vertexName) {
+    private int findIndexByLabel(List<Map<String, Object>> steps, String label) {
         for (int i = 0; i < steps.size(); i++) {
-            if (vertexName.equals(steps.get(i).get("label"))) {
+            if (label.equals(steps.get(i).get("label"))) {
                 return i;
             }
         }
@@ -396,8 +396,8 @@ class WorkflowKustomizerTest {
         }
 
         @Test
-        @DisplayName("Should preserve vertexName in loaded workflow")
-        void testVertexNamePreserved() throws IOException {
+        @DisplayName("Should preserve label in loaded workflow")
+        void testLabelPreserved() throws IOException {
             Path workflowPath = testResourcesPath.resolve("base/main-workflow.yaml");
             Path overlayPath = testResourcesPath.resolve("overlays/production");
 
@@ -409,15 +409,15 @@ class WorkflowKustomizerTest {
 
             MatrixCode code = interpreter.getCode();
 
-            // Check all vertices have their names
-            List<String> transitionNames = code.getSteps().stream()
+            // Check all transitions have their labels
+            List<String> transitionLabels = code.getSteps().stream()
                 .map(Transition::getLabel)
                 .toList();
 
-            assertTrue(transitionNames.contains("init"));
-            assertTrue(transitionNames.contains("create-nodes"));
-            assertTrue(transitionNames.contains("setup-logging")); // inserted vertex
-            assertTrue(transitionNames.contains("run-tasks"));
+            assertTrue(transitionLabels.contains("init"));
+            assertTrue(transitionLabels.contains("create-nodes"));
+            assertTrue(transitionLabels.contains("setup-logging")); // inserted transition
+            assertTrue(transitionLabels.contains("run-tasks"));
         }
 
         @Test

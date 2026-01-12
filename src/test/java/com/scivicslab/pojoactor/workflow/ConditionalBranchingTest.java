@@ -469,7 +469,7 @@ public class ConditionalBranchingTest {
 
         @Test
         @DisplayName("should find next matching row after transition")
-        void shouldFindNextMatchingVertex() {
+        void shouldFindNextMatchingTransition() {
             Interpreter interpreter = createInterpreter();
 
             MatrixCode code = createCode("test",
@@ -483,7 +483,7 @@ public class ConditionalBranchingTest {
 
             assertEquals("2", interpreter.getCurrentState());
             assertEquals(2, interpreter.getCurrentTransitionIndex(),
-                "Should point to vertex with from-state='2'");
+                "Should point to transition with from-state='2'");
         }
     }
 

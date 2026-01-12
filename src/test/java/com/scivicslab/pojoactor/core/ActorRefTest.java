@@ -319,7 +319,7 @@ public class ActorRefTest {
                     Math.sqrt(Math.random());
                 }
                 counter.incrementAndGet();
-            }, system.getWorkStealingPool());
+            }, system.getManagedThreadPool());
             futures.add(future);
         }
 

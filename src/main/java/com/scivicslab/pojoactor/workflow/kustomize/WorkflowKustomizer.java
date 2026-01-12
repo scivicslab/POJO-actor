@@ -37,10 +37,10 @@ import java.util.stream.Collectors;
  *
  * <h2>Key Features:</h2>
  * <ul>
- *   <li>Strategic merge patches using vertexName as the matching key</li>
+ *   <li>Strategic merge patches using label as the matching key</li>
  *   <li>Variable substitution with ${varName} syntax</li>
  *   <li>Name prefix/suffix for workflow names</li>
- *   <li>Vertex insertion with anchor-based positioning</li>
+ *   <li>Transition insertion with anchor-based positioning</li>
  * </ul>
  *
  * <h2>Usage:</h2>
@@ -248,9 +248,9 @@ public class WorkflowKustomizer {
      *
      * <p>Matching rules:</p>
      * <ul>
-     *   <li>Vertices with matching vertexName are overwritten</li>
-     *   <li>New vertices are inserted after their anchor (preceding matched vertex)</li>
-     *   <li>Patches with only new vertices (no anchor) throw OrphanVertexException</li>
+     *   <li>Transitions with matching label are overwritten</li>
+     *   <li>New transitions are inserted after their anchor (preceding matched transition)</li>
+     *   <li>Patches with only new transitions (no anchor) throw OrphanTransitionException</li>
      * </ul>
      */
     @SuppressWarnings("unchecked")
@@ -273,10 +273,10 @@ public class WorkflowKustomizer {
             return;
         }
 
-        // Build index of base vertices by vertexName
+        // Build index by label
         Map<String, Integer> baseLabelIndex = buildLabelIndex(baseSteps);
 
-        // Check for orphan vertices
+        // Check for orphan transitions
         validatePatchSteps(patchSteps, baseLabelIndex, patchFile);
 
         // Apply patches and replace steps
@@ -315,10 +315,10 @@ public class WorkflowKustomizer {
             return;
         }
 
-        // Build index of base vertices by vertexName
+        // Build index by label
         Map<String, Integer> baseLabelIndex = buildLabelIndex(baseSteps);
 
-        // Check for orphan vertices
+        // Check for orphan transitions
         validatePatchSteps(patchSteps, baseLabelIndex, patchFile);
 
         // Apply patches and replace steps
@@ -349,10 +349,10 @@ public class WorkflowKustomizer {
     }
 
     /**
-     * Builds an index mapping vertexName to position in the steps list.
+     * Builds an index mapping label to position in the steps list.
      *
      * @param steps the list of workflow steps
-     * @return map of vertexName to index
+     * @return map of label to index
      */
     private Map<String, Integer> buildLabelIndex(List<Map<String, Object>> steps) {
         Map<String, Integer> index = new HashMap<>();
@@ -366,12 +366,12 @@ public class WorkflowKustomizer {
     }
 
     /**
-     * Validates that patch vertices have proper anchors.
+     * Validates that patch transitions have proper anchors.
      *
      * @param patchSteps the patch steps to validate
-     * @param baseLabelIndex the index of base vertices
+     * @param baseLabelIndex the index of base transitions
      * @param patchFile the patch file name for error messages
-     * @throws OrphanVertexException if orphan vertices are found
+     * @throws OrphanTransitionException if orphan transitions are found
      */
     private void validatePatchSteps(
             List<Map<String, Object>> patchSteps,
@@ -394,7 +394,7 @@ public class WorkflowKustomizer {
         }
 
         if (!hasAnchor && !newLabels.isEmpty()) {
-            throw new OrphanVertexException(newLabels.get(0), patchFile);
+            throw new OrphanTransitionException(newLabels.get(0), patchFile);
         }
     }
 
@@ -403,7 +403,7 @@ public class WorkflowKustomizer {
      *
      * @param baseSteps the original steps
      * @param patchSteps the patch steps to apply
-     * @param baseLabelIndex the index of base vertices
+     * @param baseLabelIndex the index of base transitions
      * @param patchFile the patch file name for error messages
      * @return the new steps list with patches applied
      */
@@ -421,7 +421,7 @@ public class WorkflowKustomizer {
             Boolean deleteMarker = (Boolean) patchStep.get("$delete");
 
             if (baseLabelIndex.containsKey(label)) {
-                // This is an anchor - update or delete existing vertex
+                // This is an anchor - update or delete existing step
                 int originalIndex = baseLabelIndex.get(label);
                 int newIndex = originalIndex + insertionOffset;
 
@@ -435,7 +435,7 @@ public class WorkflowKustomizer {
                     lastAnchorNewIndex = newIndex;
                 }
             } else {
-                // This is a new vertex - insert after the last anchor
+                // This is a new transition - insert after the last anchor
                 if (lastAnchorNewIndex < 0) {
                     throw new OrphanTransitionException(label, patchFile);
                 }
@@ -450,7 +450,7 @@ public class WorkflowKustomizer {
     }
 
     /**
-     * Merges a patch vertex into a base vertex.
+     * Merges a patch step into a base step.
      *
      * <p>Actions are matched by actor+method. Non-matching actions are added.</p>
      */

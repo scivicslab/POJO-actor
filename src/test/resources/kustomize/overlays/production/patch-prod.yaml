@@ -17,7 +17,7 @@ steps:
         arguments:
           - webservers
 
-  # Insert new vertex after create-nodes
+  # Insert new transition after create-nodes
   - states: ["1.5", "2"]
     label: setup-logging
     actions:
