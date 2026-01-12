@@ -265,9 +265,9 @@ public class WorkflowKustomizer {
         // Find the target workflow
         Map<String, Object> targetWorkflow = findTargetWorkflow(workflows, patchWorkflowName, patchFile);
 
-        // Get steps from both
-        List<Map<String, Object>> baseSteps = (List<Map<String, Object>>) targetWorkflow.get("steps");
-        List<Map<String, Object>> patchSteps = (List<Map<String, Object>>) patch.get("steps");
+        // Get steps from both (support both "steps" and "transitions" keys)
+        List<Map<String, Object>> baseSteps = getStepsOrTransitions(targetWorkflow);
+        List<Map<String, Object>> patchSteps = getStepsOrTransitions(patch);
 
         if (patchSteps == null || patchSteps.isEmpty()) {
             return;
@@ -307,9 +307,9 @@ public class WorkflowKustomizer {
                 "Target workflow file not found: " + targetFile + " (patch: " + patchFile + ")");
         }
 
-        // Get steps from both
-        List<Map<String, Object>> baseSteps = (List<Map<String, Object>>) targetWorkflow.get("steps");
-        List<Map<String, Object>> patchSteps = (List<Map<String, Object>>) patch.get("steps");
+        // Get steps from both (support both "steps" and "transitions" keys)
+        List<Map<String, Object>> baseSteps = getStepsOrTransitions(targetWorkflow);
+        List<Map<String, Object>> patchSteps = getStepsOrTransitions(patch);
 
         if (patchSteps == null || patchSteps.isEmpty()) {
             return;
@@ -346,6 +346,22 @@ public class WorkflowKustomizer {
         }
         throw new IllegalArgumentException(
             "Patch target workflow not found: " + workflowName + " in " + patchFile);
+    }
+
+    /**
+     * Gets the steps/transitions list from a workflow map.
+     * Supports both "steps" and "transitions" keys for backward compatibility.
+     *
+     * @param workflow the workflow map
+     * @return the list of steps/transitions, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getStepsOrTransitions(Map<String, Object> workflow) {
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
+        if (steps == null) {
+            steps = (List<Map<String, Object>>) workflow.get("transitions");
+        }
+        return steps;
     }
 
     /**
@@ -622,7 +638,7 @@ public class WorkflowKustomizer {
     private void updateWorkflowReferences(Map<String, Object> workflow,
                                           Map<String, String> nameMapping,
                                           String prefix, String suffix) {
-        List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
+        List<Map<String, Object>> steps = getStepsOrTransitions(workflow);
         if (steps == null) return;
 
         for (Map<String, Object> step : steps) {
