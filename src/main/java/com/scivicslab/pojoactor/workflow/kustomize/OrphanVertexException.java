@@ -29,7 +29,9 @@ package com.scivicslab.pojoactor.workflow.kustomize;
  *
  * @author devteam@scivics-lab.com
  * @since 2.9.0
+ * @deprecated Use {@link OrphanTransitionException} instead. This class will be removed in a future version.
  */
+@Deprecated
 public class OrphanVertexException extends RuntimeException {
 
     private final String vertexName;

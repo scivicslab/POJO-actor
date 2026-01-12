@@ -21,9 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a single vertex in the workflow graph.
+ * Represents a single transition in the workflow graph.
  *
- * <p>Each vertex defines a state transition with associated actions. The states
+ * <p>Each transition defines a state change with associated actions. The states
  * list typically contains two elements: the current state and the next state.
  * The actions can be represented in two ways:</p>
  * <ul>
@@ -35,17 +35,16 @@ import java.util.List;
  * using deserialization frameworks like SnakeYAML or Jackson.</p>
  *
  * @author devteam@scivics-lab.com
- * @deprecated Use {@link Transition} instead. This class will be removed in a future version.
+ * @since 2.12.0
  */
-@Deprecated
-public class Vertex {
+public class Transition {
 
     List<String> states;
-    String vertexName;  // Optional identifier for overlay matching
+    String transitionName;  // Optional identifier for overlay matching
     List<Action> actions;  // Unified format for all workflow types
 
     /**
-     * Returns the list of Action objects for this vertex.
+     * Returns the list of Action objects for this transition.
      *
      * @return a list of Action objects
      */
@@ -54,7 +53,7 @@ public class Vertex {
     }
 
     /**
-     * Returns the list of states for this vertex.
+     * Returns the list of states for this transition.
      *
      * <p>Typically contains two elements: [currentState, nextState]</p>
      *
@@ -65,7 +64,7 @@ public class Vertex {
     }
 
     /**
-     * Sets the list of actions for this vertex.
+     * Sets the list of actions for this transition.
      *
      * @param actions a list of Action objects
      */
@@ -74,7 +73,7 @@ public class Vertex {
     }
 
     /**
-     * Sets the list of states for this vertex.
+     * Sets the list of states for this transition.
      *
      * @param list a list of state identifiers
      */
@@ -83,35 +82,33 @@ public class Vertex {
     }
 
     /**
-     * Returns the vertex name.
+     * Returns the transition name.
      *
-     * <p>The vertex name is used as a stable identifier for overlay matching.
-     * When applying patches, vertices are matched by this name rather than
+     * <p>The transition name is used as a stable identifier for overlay matching.
+     * When applying patches, transitions are matched by this name rather than
      * by states or array index.</p>
      *
-     * @return the vertex name, or null if not set
-     * @since 2.9.0
+     * @return the transition name, or null if not set
      */
-    public String getVertexName() {
-        return this.vertexName;
+    public String getTransitionName() {
+        return this.transitionName;
     }
 
     /**
-     * Sets the vertex name.
+     * Sets the transition name.
      *
-     * @param vertexName the vertex name identifier
-     * @since 2.9.0
+     * @param transitionName the transition name identifier
      */
-    public void setVertexName(String vertexName) {
-        this.vertexName = vertexName;
+    public void setTransitionName(String transitionName) {
+        this.transitionName = transitionName;
     }
 
     /**
-     * Returns a YAML-formatted string representation of this vertex.
+     * Returns a YAML-formatted string representation of this transition.
      *
      * <p>This method reconstructs a YAML-like format from the parsed data,
      * useful for debugging and visualization. The output shows the first
-     * N lines of the vertex definition.</p>
+     * N lines of the transition definition.</p>
      *
      * <p>Example output:</p>
      * <pre>
@@ -124,7 +121,6 @@ public class Vertex {
      *
      * @param maxLines maximum number of lines to include (0 for unlimited)
      * @return YAML-formatted string representation
-     * @since 2.9.0
      */
     public String toYamlString(int maxLines) {
         StringBuilder sb = new StringBuilder();
@@ -137,9 +133,9 @@ public class Vertex {
             return sb.toString();
         }
 
-        // vertexName (if present)
-        if (vertexName != null && !vertexName.isEmpty()) {
-            sb.append("  vertexName: ").append(vertexName).append("\n");
+        // transitionName (if present)
+        if (transitionName != null && !transitionName.isEmpty()) {
+            sb.append("  transitionName: ").append(transitionName).append("\n");
             lineCount++;
             if (maxLines > 0 && lineCount >= maxLines) {
                 return sb.toString();
