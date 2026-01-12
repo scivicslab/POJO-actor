@@ -98,7 +98,7 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
 
         try {
             if (actionName.equals("execCode")) {
-                ActionResult result = this.ask(i -> i.execCode(), this.system().getWorkStealingPool()).get();
+                ActionResult result = this.ask(i -> i.execCode(), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("runUntilEnd")) {
@@ -115,14 +115,14 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                     }
                 }
                 final int iterations = maxIterations;
-                ActionResult result = this.ask(i -> i.runUntilEnd(iterations), this.system().getWorkStealingPool()).get();
+                ActionResult result = this.ask(i -> i.runUntilEnd(iterations), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("call")) {
                 // Subworkflow call (creates child actor)
                 org.json.JSONArray args = new org.json.JSONArray(arg);
                 String workflowFile = args.getString(0);
-                ActionResult result = this.ask(i -> i.call(workflowFile), this.system().getWorkStealingPool()).get();
+                ActionResult result = this.ask(i -> i.call(workflowFile), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("runWorkflow")) {
@@ -130,12 +130,12 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 org.json.JSONArray args = new org.json.JSONArray(arg);
                 String workflowFile = args.getString(0);
                 int maxIterations = args.length() > 1 ? args.getInt(1) : 10000;
-                ActionResult result = this.ask(i -> i.runWorkflow(workflowFile, maxIterations), this.system().getWorkStealingPool()).get();
+                ActionResult result = this.ask(i -> i.runWorkflow(workflowFile, maxIterations), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("apply")) {
                 // Apply action to child actors
-                ActionResult result = this.ask(i -> i.apply(arg), this.system().getWorkStealingPool()).get();
+                ActionResult result = this.ask(i -> i.apply(arg), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("readYaml")) {

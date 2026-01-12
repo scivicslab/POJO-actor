@@ -22,7 +22,7 @@ package com.scivicslab.pojoactor.workflow;
  *
  * <p>Determines how an action is executed:</p>
  * <ul>
- *   <li>POOL - Execute on work-stealing pool (default, safe for heavy operations)</li>
+ *   <li>POOL - Execute on managed thread pool (default, safe for heavy operations)</li>
  *   <li>DIRECT - Direct synchronous call (optimization for light operations)</li>
  * </ul>
  *
@@ -31,10 +31,10 @@ package com.scivicslab.pojoactor.workflow;
  */
 public enum ExecutionMode {
     /**
-     * Execute action on work-stealing pool thread.
+     * Execute action on managed thread pool.
      *
      * <p>This is the default and recommended mode. Actions execute on
-     * real CPU threads from the work-stealing pool, preventing heavy
+     * real CPU threads from the managed thread pool, preventing heavy
      * computations from blocking virtual threads.</p>
      *
      * <p>Use for:</p>

@@ -614,14 +614,14 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * Clears all pending messages from this actor's message queue and WorkStealingPool.
+     * Clears all pending messages from this actor's message queue and managed thread pool.
      *
      * This method removes all messages that are currently waiting to be processed
      * by this actor, without affecting other actors in the system.
      * The currently running message will complete normally.
      * Only affects messages sent via tell() and ask() - tellNow() messages are not queued.
      *
-     * When using ActorSystem's WorkStealingPool (ControllableWorkStealingPool),
+     * When using ActorSystem's managed thread pool (ControllableWorkStealingPool),
      * this method will also cancel CPU-bound jobs that are waiting in the pool's queue.
      * Jobs that are already executing will continue to completion.
      *
@@ -640,13 +640,13 @@ public class ActorRef<T> implements AutoCloseable {
      *
      * // Queue CPU-bound jobs
      * for (int i = 0; i < 100; i++) {
-     *     counter.tell(c -> c.heavyComputation(), system.getWorkStealingPool());
+     *     counter.tell(c -> c.heavyComputation(), system.getManagedThreadPool());
      * }
      *
      * // Clear all pending messages and jobs
      * int cleared = counter.clearPendingMessages();
      * System.out.println("Cleared " + cleared + " messages and jobs");
-     * // Clears both message queue and WorkStealingPool jobs
+     * // Clears both message queue and managed thread pool jobs
      *
      * // Use cases:
      * // 1. Cancel batch operations
@@ -663,10 +663,10 @@ public class ActorRef<T> implements AutoCloseable {
         int clearedFromQueue = messageQueue.size();
         messageQueue.clear();
 
-        // Cancel WorkStealingPool jobs if using ControllableWorkStealingPool
+        // Cancel managed thread pool jobs if using ControllableWorkStealingPool
         int clearedFromPool = 0;
         if (this.actorSystem != null) {
-            ExecutorService pool = this.actorSystem.getWorkStealingPool();
+            ExecutorService pool = this.actorSystem.getManagedThreadPool();
             if (pool instanceof ControllableWorkStealingPool) {
                 ControllableWorkStealingPool controllablePool = (ControllableWorkStealingPool) pool;
                 clearedFromPool = controllablePool.cancelJobsForActor(this.actorName);

@@ -21,7 +21,7 @@ package com.scivicslab.pojoactor.workflow;
  * Represents a single action in a workflow transition.
  *
  * <p>An action specifies which actor to invoke, which method to call,
- * with what arguments, and how to execute it (direct call vs work-stealing pool).</p>
+ * with what arguments, and how to execute it (direct call vs managed thread pool).</p>
  *
  * <p>The {@code arguments} field supports multiple formats:</p>
  * <ul>

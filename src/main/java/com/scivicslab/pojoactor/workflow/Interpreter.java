@@ -80,7 +80,7 @@ public class Interpreter {
 
     protected MatrixCode code = null;
 
-    protected int currentVertexIndex = 0;
+    protected int currentTransitionIndex = 0;
 
     protected String currentState = "0";
 
@@ -183,8 +183,8 @@ public class Interpreter {
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult action() {
-        Vertex vertex = code.getVertices().get(currentVertexIndex);
-        for (Action a: vertex.getActions()) {
+        Transition transition = code.getTransitions().get(currentTransitionIndex);
+        for (Action a: transition.getActions()) {
             String actorPath = a.getActor();
             String action    = a.getMethod();
 
@@ -216,11 +216,11 @@ public class Interpreter {
                 }
 
                 if (executionMode == ExecutionMode.POOL && system != null) {
-                    // POOL: Execute on WorkStealingPool (safe for heavy operations)
+                    // POOL: Execute on managed thread pool (safe for heavy operations)
                     try {
                         result = CompletableFuture.supplyAsync(
                             () -> actorAR.callByActionName(action, argumentString),
-                            system.getWorkStealingPool()
+                            system.getManagedThreadPool()
                         ).get();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -474,11 +474,11 @@ public class Interpreter {
 
         List<Map<String, Object>> stepsData = (List<Map<String, Object>>) data.get("steps");
         if (stepsData != null) {
-            List<Vertex> vertices = new ArrayList<>();
+            List<Transition> vertices = new ArrayList<>();
             for (Map<String, Object> stepData : stepsData) {
-                Vertex vertex = new Vertex();
-                vertex.setStates((List<String>) stepData.get("states"));
-                vertex.setVertexName((String) stepData.get("vertexName"));
+                Transition transition = new Transition();
+                transition.setStates((List<String>) stepData.get("states"));
+                transition.setVertexName((String) stepData.get("vertexName"));
 
                 List<Map<String, Object>> actionsData = (List<Map<String, Object>>) stepData.get("actions");
                 if (actionsData != null) {
@@ -490,9 +490,9 @@ public class Interpreter {
                         action.setArguments(actionData.get("arguments"));
                         actions.add(action);
                     }
-                    vertex.setActions(actions);
+                    transition.setActions(actions);
                 }
-                vertices.add(vertex);
+                vertices.add(transition);
             }
             mc.setSteps(vertices);
         }
@@ -545,7 +545,7 @@ public class Interpreter {
         code.setName(workflowName);
 
         // Parse steps
-        List<Vertex> steps = new ArrayList<>();
+        List<Transition> steps = new ArrayList<>();
         NodeList stepsNodes = workflowElement.getElementsByTagName("steps");
 
         if (stepsNodes.getLength() > 0) {
@@ -555,14 +555,14 @@ public class Interpreter {
             for (int i = 0; i < transitionNodes.getLength(); i++) {
                 Element transitionElement = (Element) transitionNodes.item(i);
 
-                // Create Vertex instance
-                Vertex vertex = new Vertex();
+                // Create Transition instance
+                Transition transition = new Transition();
 
                 // Parse states (from, to)
                 List<String> states = new ArrayList<>();
                 states.add(transitionElement.getAttribute("from"));
                 states.add(transitionElement.getAttribute("to"));
-                vertex.setStates(states);
+                transition.setStates(states);
 
                 // Parse actions
                 List<Action> actions = new ArrayList<>();
@@ -606,8 +606,8 @@ public class Interpreter {
                     actions.add(action);
                 }
 
-                vertex.setActions(actions);
-                steps.add(vertex);
+                transition.setActions(actions);
+                steps.add(transition);
             }
         }
 
@@ -635,32 +635,32 @@ public class Interpreter {
             return new ActionResult(false, "No code loaded");
         }
 
-        // Try all steps, starting from currentVertexIndex and wrapping around
-        int stepsCount = code.getVertices().size();
+        // Try all steps, starting from currentTransitionIndex and wrapping around
+        int stepsCount = code.getTransitions().size();
         for (int attempts = 0; attempts < stepsCount; attempts++) {
             // Wrap around to the beginning when reaching the end
-            if (currentVertexIndex >= stepsCount) {
-                currentVertexIndex = 0;
+            if (currentTransitionIndex >= stepsCount) {
+                currentTransitionIndex = 0;
             }
 
-            Vertex vertex = code.getVertices().get(currentVertexIndex);
+            Transition transition = code.getTransitions().get(currentTransitionIndex);
 
             // Check if from-state matches current state
-            if (matchesCurrentState(vertex)) {
-                // Hook: notify subclasses that we're entering this vertex
-                onEnterVertex(vertex);
+            if (matchesCurrentState(transition)) {
+                // Hook: notify subclasses that we're entering this transition
+                onEnterTransition(transition);
 
                 // Try to execute actions
                 ActionResult actionResult = action();
 
                 if (actionResult.isSuccess()) {
                     // All actions succeeded, transition to to-state
-                    transitionTo(getToState(vertex));
+                    transitionTo(getToState(transition));
                     return new ActionResult(true, "State: " + currentState);
                 }
                 // Action failed, try next step
             }
-            currentVertexIndex++;
+            currentTransitionIndex++;
         }
 
         return new ActionResult(false, "No matching state transition");
@@ -837,13 +837,13 @@ public class Interpreter {
      * @return true if code is loaded and has at least one step
      */
     public boolean hasCodeLoaded() {
-        return code != null && !code.getVertices().isEmpty();
+        return code != null && !code.getTransitions().isEmpty();
     }
 
     /**
-     * Checks if a vertex's from-state matches the current state.
+     * Checks if a transition's from-state matches the current state.
      *
-     * <p>A vertex matches if it has at least 2 states (from and to) and
+     * <p>A transition matches if it has at least 2 states (from and to) and
      * the from-state pattern (index 0) matches the interpreter's current state.</p>
      *
      * <p>Supported state patterns:</p>
@@ -855,11 +855,11 @@ public class Interpreter {
      *   <li>Numeric comparison: {@code ">=1"}, {@code "<=5"}, {@code ">1"}, {@code "<5"}</li>
      * </ul>
      *
-     * @param vertex the vertex to check
-     * @return true if the vertex's from-state pattern matches current state
+     * @param transition the transition to check
+     * @return true if the transition's from-state pattern matches current state
      */
-    public boolean matchesCurrentState(Vertex vertex) {
-        List<String> states = vertex.getStates();
+    public boolean matchesCurrentState(Transition transition) {
+        List<String> states = transition.getStates();
         if (states.size() < 2) {
             return false;
         }
@@ -1040,13 +1040,13 @@ public class Interpreter {
     }
 
     /**
-     * Gets the to-state from a vertex.
+     * Gets the to-state from a transition.
      *
-     * @param vertex the vertex containing the state transition
+     * @param transition the transition containing the state transition
      * @return the to-state (second element), or null if not present
      */
-    public String getToState(Vertex vertex) {
-        List<String> states = vertex.getStates();
+    public String getToState(Transition transition) {
+        List<String> states = transition.getStates();
         return states.size() >= 2 ? states.get(1) : null;
     }
 
@@ -1057,7 +1057,7 @@ public class Interpreter {
      * <ol>
      *   <li>Updates the current state to the specified to-state</li>
      *   <li>Searches for the first step whose from-state matches the new current state</li>
-     *   <li>Updates currentVertexIndex to point to that step</li>
+     *   <li>Updates currentTransitionIndex to point to that step</li>
      * </ol>
      *
      * @param toState the state to transition to
@@ -1071,16 +1071,16 @@ public class Interpreter {
      * Finds the first step whose from-state pattern matches the current state.
      *
      * <p>Searches from the beginning of the steps list and updates
-     * currentVertexIndex to the index of the first matching step. Supports
+     * currentTransitionIndex to the index of the first matching step. Supports
      * state patterns including wildcards, negations, and numeric comparisons.</p>
      */
     protected void findNextMatchingVertex() {
-        int stepsCount = code.getVertices().size();
+        int stepsCount = code.getTransitions().size();
         for (int i = 0; i < stepsCount; i++) {
-            Vertex nextVertex = code.getVertices().get(i);
+            Transition nextVertex = code.getTransitions().get(i);
             if (!nextVertex.getStates().isEmpty() &&
                 matchesStatePattern(nextVertex.getStates().get(0), currentState)) {
-                currentVertexIndex = i;
+                currentTransitionIndex = i;
                 return;
             }
         }
@@ -1101,7 +1101,7 @@ public class Interpreter {
      * @return the current step index
      */
     public int getCurrentVertexIndex() {
-        return currentVertexIndex;
+        return currentTransitionIndex;
     }
 
     /**
@@ -1153,24 +1153,24 @@ public class Interpreter {
      * @since 2.5.0
      */
     public void reset() {
-        this.currentVertexIndex = 0;
+        this.currentTransitionIndex = 0;
         this.currentState = "0";
         this.code = null;
     }
 
     /**
-     * Hook method called when entering a vertex during workflow execution.
+     * Hook method called when entering a transition during workflow execution.
      *
-     * <p>This method is called just before executing the actions of a matching vertex.
+     * <p>This method is called just before executing the actions of a matching transition.
      * Subclasses can override this method to provide custom behavior such as
      * logging, visualization, or debugging output.</p>
      *
      * <p>The default implementation does nothing.</p>
      *
-     * @param vertex the vertex being entered
+     * @param transition the transition being entered
      * @since 2.9.0
      */
-    protected void onEnterVertex(Vertex vertex) {
+    protected void onEnterTransition(Transition transition) {
         // Default: do nothing. Subclasses can override.
     }
 
