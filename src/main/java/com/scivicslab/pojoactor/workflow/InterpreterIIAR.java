@@ -98,7 +98,7 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
 
         try {
             if (actionName.equals("execCode")) {
-                ActionResult result = this.ask(i -> i.execCode(), this.system().getManagedThreadPool()).get();
+                ActionResult result = this.ask((Interpreter i) -> i.execCode(), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("runUntilEnd")) {
@@ -115,14 +115,14 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                     }
                 }
                 final int iterations = maxIterations;
-                ActionResult result = this.ask(i -> i.runUntilEnd(iterations), this.system().getManagedThreadPool()).get();
+                ActionResult result = this.ask((Interpreter i) -> i.runUntilEnd(iterations), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("call")) {
                 // Subworkflow call (creates child actor)
                 org.json.JSONArray args = new org.json.JSONArray(arg);
                 String workflowFile = args.getString(0);
-                ActionResult result = this.ask(i -> i.call(workflowFile), this.system().getManagedThreadPool()).get();
+                ActionResult result = this.ask((Interpreter i) -> i.call(workflowFile), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("runWorkflow")) {
@@ -130,17 +130,17 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 org.json.JSONArray args = new org.json.JSONArray(arg);
                 String workflowFile = args.getString(0);
                 int maxIterations = args.length() > 1 ? args.getInt(1) : 10000;
-                ActionResult result = this.ask(i -> i.runWorkflow(workflowFile, maxIterations), this.system().getManagedThreadPool()).get();
+                ActionResult result = this.ask((Interpreter i) -> i.runWorkflow(workflowFile, maxIterations), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("apply")) {
                 // Apply action to child actors
-                ActionResult result = this.ask(i -> i.apply(arg), this.system().getManagedThreadPool()).get();
+                ActionResult result = this.ask((Interpreter i) -> i.apply(arg), this.system().getManagedThreadPool()).get();
                 return result;
             }
             else if (actionName.equals("readYaml")) {
                 try (InputStream input = new FileInputStream(new File(arg))) {
-                    this.tell(i -> i.readYaml(input)).get();
+                    this.tell((Interpreter i) -> i.readYaml(input)).get();
                     success = true;
                     message = "YAML loaded successfully";
                 } catch (FileNotFoundException e) {
@@ -152,7 +152,7 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 }
             } else if (actionName.equals("readJson")) {
                 try (InputStream input = new FileInputStream(new File(arg))) {
-                    this.tell(i -> {
+                    this.tell((Interpreter i) -> {
                         try {
                             i.readJson(input);
                         } catch (IOException e) {

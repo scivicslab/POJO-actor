@@ -104,15 +104,15 @@ public class ActorRefTest {
         ActorRef<ArrayList<Integer>> actor = new ActorRef<>("counter", new ArrayList<Integer>());
 
         // Send messages with tell()
-        CompletableFuture<Void> f1 = actor.tell(list -> list.add(1));
-        CompletableFuture<Void> f2 = actor.tell(list -> list.add(2));
-        CompletableFuture<Void> f3 = actor.tell(list -> list.add(3));
+        CompletableFuture<Void> f1 = actor.tell((ArrayList<Integer> list) -> list.add(1));
+        CompletableFuture<Void> f2 = actor.tell((ArrayList<Integer> list) -> list.add(2));
+        CompletableFuture<Void> f3 = actor.tell((ArrayList<Integer> list) -> list.add(3));
 
         // Wait for all messages to be processed
         CompletableFuture.allOf(f1, f2, f3).get(3, TimeUnit.SECONDS);
 
         // Get result
-        CompletableFuture<String> result = actor.ask(list -> list.toString());
+        CompletableFuture<String> result = actor.ask((ArrayList<Integer> list) -> list.toString());
         String value = result.get(3, TimeUnit.SECONDS);
 
         assertEquals("[1, 2, 3]", value, "Messages should be processed in order");
@@ -133,17 +133,17 @@ public class ActorRefTest {
         ActorRef<StringBuilder> actor = new ActorRef<>("builder", new StringBuilder());
 
         // Modify state with tell()
-        actor.tell(sb -> sb.append("Hello, "));
-        actor.tell(sb -> sb.append("World!"));
+        actor.tell((StringBuilder sb) -> sb.append("Hello, "));
+        actor.tell((StringBuilder sb) -> sb.append("World!"));
 
         // Get result with ask()
-        CompletableFuture<String> future = actor.ask(sb -> sb.toString());
+        CompletableFuture<String> future = actor.ask((StringBuilder sb) -> sb.toString());
         String result = future.get(3, TimeUnit.SECONDS);
 
         assertEquals("Hello, World!", result, "ask() should return the correct result");
 
         // Get computed result
-        CompletableFuture<Integer> lengthFuture = actor.ask(sb -> sb.length());
+        CompletableFuture<Integer> lengthFuture = actor.ask((StringBuilder sb) -> sb.length());
         int length = lengthFuture.get(3, TimeUnit.SECONDS);
 
         assertEquals(13, length, "ask() should return computed value");
@@ -166,7 +166,7 @@ public class ActorRefTest {
         // Send messages with random processing times
         for (int i = 0; i < 10; i++) {
             final int value = i;
-            actor.tell(list -> {
+            actor.tell((ArrayList<Integer> list) -> {
                 // Random sleep (0-50ms) to simulate varying processing times
                 try {
                     Thread.sleep((long) (Math.random() * 50));
@@ -178,7 +178,7 @@ public class ActorRefTest {
         }
 
         // Get result
-        CompletableFuture<String> future = actor.ask(list -> list.toString());
+        CompletableFuture<String> future = actor.ask((ArrayList<Integer> list) -> list.toString());
         String result = future.get(10, TimeUnit.SECONDS);
 
         assertEquals("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]", result,
@@ -204,8 +204,8 @@ public class ActorRefTest {
         ActorRef<ArrayList<String>> child2 = parent.createChild("child2", new ArrayList<String>());
 
         // Use child actor
-        child1.tell(list -> list.add(100));
-        CompletableFuture<String> result = child1.ask(list -> list.toString());
+        child1.tell((ArrayList<Integer> list) -> list.add(100));
+        CompletableFuture<String> result = child1.ask((ArrayList<Integer> list) -> list.toString());
         assertEquals("[100]", result.get(3, TimeUnit.SECONDS), "Child actor should process messages");
 
         // Verify parent-child relationships
@@ -235,8 +235,8 @@ public class ActorRefTest {
         ActorRef<ArrayList<Integer>> actor = system.actorOf("tempActor", new ArrayList<Integer>());
 
         // Use actor
-        actor.tell(list -> list.add(1));
-        CompletableFuture<String> result = actor.ask(list -> list.toString());
+        actor.tell((ArrayList<Integer> list) -> list.add(1));
+        CompletableFuture<String> result = actor.ask((ArrayList<Integer> list) -> list.toString());
         result.get(3, TimeUnit.SECONDS);
 
         // Verify actor is alive
@@ -264,7 +264,7 @@ public class ActorRefTest {
         ActorRef<String> actor = new ActorRef<>("errorActor", "data");
 
         // Send message that throws exception
-        CompletableFuture<Void> future = actor.tell(s -> {
+        CompletableFuture<Void> future = actor.tell((String s) -> {
             throw new RuntimeException("Test error");
         });
 
@@ -284,7 +284,7 @@ public class ActorRefTest {
         assertTrue(actor.isAlive(), "Actor should survive exception");
 
         // Verify actor can still process messages
-        CompletableFuture<Integer> lengthFuture = actor.ask(s -> s.length());
+        CompletableFuture<Integer> lengthFuture = actor.ask((String s) -> s.length());
         try {
             int length = lengthFuture.get(3, TimeUnit.SECONDS);
             assertEquals(4, length, "Actor should still process messages after exception");
@@ -312,7 +312,7 @@ public class ActorRefTest {
 
         // Submit CPU-intensive tasks to WorkStealingPool
         for (int i = 0; i < 10; i++) {
-            CompletableFuture<Void> future = actor.tell(counter -> {
+            CompletableFuture<Void> future = actor.tell((AtomicInteger counter) -> {
                 // Simulate CPU-intensive work (~30ms)
                 long endTime = System.currentTimeMillis() + 30;
                 while (System.currentTimeMillis() < endTime) {

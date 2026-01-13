@@ -79,7 +79,7 @@ public class ThreadPoolCancelTest {
         // Submit 100 CPU-bound tasks to ManagedThreadPool
         for (int i = 0; i < 100; i++) {
             final int taskId = i;
-            CompletableFuture<Void> future = actor.tell(s -> {
+            CompletableFuture<Void> future = actor.tell((String s) -> {
                 startedCount.incrementAndGet();
                 logger.info("Task " + taskId + " started");
 
@@ -154,7 +154,7 @@ public class ThreadPoolCancelTest {
         // Submit 100 CPU-bound tasks to ManagedThreadPool
         for (int i = 0; i < 100; i++) {
             final int taskId = i;
-            futures[i] = actor.tell(s -> {
+            futures[i] = actor.tell((String s) -> {
                 startedCount.incrementAndGet();
                 logger.info("Task " + taskId + " started");
 

@@ -39,7 +39,7 @@ public class ClearPendingMessagesTest {
         ActorRef<String> actor = system.actorOf("testActor", "test");
 
         // Start a long-running task to block the actor
-        CompletableFuture<Void> longTask = actor.tell(s -> {
+        CompletableFuture<Void> longTask = actor.tell((String s) -> {
             longTaskStarted.set(true);
             try {
                 Thread.sleep(500); // Long running task
@@ -58,7 +58,7 @@ public class ClearPendingMessagesTest {
         List<CompletableFuture<Void>> queuedTasks = new ArrayList<>();
         for (int i = 1; i <= 5; i++) {
             final int messageNum = i;
-            CompletableFuture<Void> task = actor.tell(s -> {
+            CompletableFuture<Void> task = actor.tell((String s) -> {
                 processedMessages.add(messageNum);
                 processedCount.incrementAndGet();
             });
@@ -92,7 +92,7 @@ public class ClearPendingMessagesTest {
         ActorRef<String> actor = system.actorOf("testActor", "test");
 
         // Start a message that will run for a while
-        CompletableFuture<Void> runningTask = actor.tell(s -> {
+        CompletableFuture<Void> runningTask = actor.tell((String s) -> {
             try {
                 Thread.sleep(300);
                 taskCompleted.set(true);
@@ -131,7 +131,7 @@ public class ClearPendingMessagesTest {
         List<CompletableFuture<Void>> actor2Tasks = new ArrayList<>();
 
         for (int i = 0; i < 3; i++) {
-            actor1Tasks.add(actor1.tell(counter -> {
+            actor1Tasks.add(actor1.tell((AtomicInteger counter) -> {
                 try {
                     Thread.sleep(100);
                     actor1Processed.incrementAndGet();
@@ -140,7 +140,7 @@ public class ClearPendingMessagesTest {
                 }
             }));
 
-            actor2Tasks.add(actor2.tell(counter -> {
+            actor2Tasks.add(actor2.tell((AtomicInteger counter) -> {
                 try {
                     Thread.sleep(100);
                     actor2Processed.incrementAndGet();
@@ -175,7 +175,7 @@ public class ClearPendingMessagesTest {
 
         // Queue several messages
         for (int i = 0; i < 10; i++) {
-            actor.tell(s -> {
+            actor.tell((String s) -> {
                 try {
                     Thread.sleep(1000); // Long delay to keep them queued
                 } catch (InterruptedException e) {

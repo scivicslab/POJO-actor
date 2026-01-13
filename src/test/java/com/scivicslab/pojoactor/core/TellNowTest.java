@@ -86,7 +86,7 @@ public class TellNowTest {
         // Send 5 normal messages (each sleeps for 100ms)
         for (int i = 0; i < 5; i++) {
             final int value = i;
-            actor.tell(c -> {
+            actor.tell((AtomicInteger c) -> {
                 try {
                     Thread.sleep(100);
                     executionSequence.add(value);
@@ -97,7 +97,7 @@ public class TellNowTest {
         }
 
         // Send urgent task via tellNow
-        CompletableFuture<Void> urgentTask = actor.tellNow(c -> {
+        CompletableFuture<Void> urgentTask = actor.tellNow((AtomicInteger c) -> {
             executionSequence.add(999); // 999 as urgent task identifier
         });
 
@@ -134,7 +134,7 @@ public class TellNowTest {
         ActorRef<String> actor = system.actorOf("testActor", "test");
 
         // Start long-running task
-        CompletableFuture<Void> longTask = actor.tell(s -> {
+        CompletableFuture<Void> longTask = actor.tell((String s) -> {
             tellTaskRunning.set(true);
             try {
                 Thread.sleep(500); // Long-running task
@@ -147,7 +147,7 @@ public class TellNowTest {
         Thread.sleep(50); // Wait for long task to start
 
         // Execute urgent task with tellNow
-        CompletableFuture<Void> urgentTask = actor.tellNow(s -> {
+        CompletableFuture<Void> urgentTask = actor.tellNow((String s) -> {
             tellNowCompleted.set(true);
         });
 
@@ -175,7 +175,7 @@ public class TellNowTest {
     public void testTellNowWithException() {
         ActorRef<String> actor = system.actorOf("testActor", "test");
 
-        CompletableFuture<Void> futureWithException = actor.tellNow(s -> {
+        CompletableFuture<Void> futureWithException = actor.tellNow((String s) -> {
             throw new RuntimeException("Test exception");
         });
 
@@ -209,9 +209,9 @@ public class TellNowTest {
 
         // Start 5 tellNow tasks
         for (int i = 0; i < 5; i++) {
-            CompletableFuture<Void> future = actor.tellNow(s -> {
+            CompletableFuture<Void> future = actor.tellNow((String s) -> {
                 int current = concurrentCount.incrementAndGet();
-                maxConcurrent.updateAndGet(max -> Math.max(max, current));
+                maxConcurrent.updateAndGet((int max) -> Math.max(max, current));
 
                 try {
                     Thread.sleep(100); // Simulate work
@@ -244,7 +244,7 @@ public class TellNowTest {
         ActorRef<AtomicInteger> counter = system.actorOf("counter", new AtomicInteger(0));
 
         // Start long-running task (increment counter 1000 times)
-        CompletableFuture<Void> longTask = counter.tell(c -> {
+        CompletableFuture<Void> longTask = counter.tell((AtomicInteger c) -> {
             for (int i = 0; i < 1000; i++) {
                 c.incrementAndGet();
                 try {
@@ -258,7 +258,7 @@ public class TellNowTest {
         Thread.sleep(100); // Wait for task to start
 
         // Query current value immediately with askNow
-        CompletableFuture<Integer> query = counter.askNow(c -> c.get());
+        CompletableFuture<Integer> query = counter.askNow((AtomicInteger c) -> c.get());
         int currentValue = query.get(1, TimeUnit.SECONDS);
 
         // Verify we got a value without waiting for long task to complete
@@ -285,7 +285,7 @@ public class TellNowTest {
         ActorRef<String> actor = system.actorOf("processor", "data");
 
         // Start long-running task
-        CompletableFuture<Void> longTask = actor.tell(s -> {
+        CompletableFuture<Void> longTask = actor.tell((String s) -> {
             for (int i = 0; i < 10000; i++) {
                 if (shouldStop.get()) {
                     break; // Stop
@@ -303,7 +303,7 @@ public class TellNowTest {
         Thread.sleep(100); // Wait for task to start
 
         // Send stop command with tellNow
-        CompletableFuture<Void> stopCommand = actor.tellNow(s -> shouldStop.set(true));
+        CompletableFuture<Void> stopCommand = actor.tellNow((String s) -> shouldStop.set(true));
         stopCommand.get(1, TimeUnit.SECONDS);
 
         // Wait for long task to complete

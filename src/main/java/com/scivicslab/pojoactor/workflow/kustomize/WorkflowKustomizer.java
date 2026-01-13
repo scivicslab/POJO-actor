@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Processes YAML overlays to generate customized workflows.
@@ -217,10 +218,10 @@ public class WorkflowKustomizer {
             throw new IOException("Base directory not found: " + dir);
         }
 
-        try (var stream = Files.list(dir)) {
+        try (Stream<Path> stream = Files.list(dir)) {
             List<Path> yamlFiles = stream
-                .filter(p -> p.toString().endsWith(".yaml") || p.toString().endsWith(".yml"))
-                .filter(p -> !p.getFileName().toString().equals(OVERLAY_CONF_FILE))
+                .filter((Path p) -> p.toString().endsWith(".yaml") || p.toString().endsWith(".yml"))
+                .filter((Path p) -> !p.getFileName().toString().equals(OVERLAY_CONF_FILE))
                 .sorted()
                 .collect(Collectors.toList());
 

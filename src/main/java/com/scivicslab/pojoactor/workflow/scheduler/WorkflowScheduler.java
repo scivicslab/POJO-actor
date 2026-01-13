@@ -85,7 +85,7 @@ public class WorkflowScheduler implements CallableByActionName, AutoCloseable {
      */
     public WorkflowScheduler(IIActorSystem actorSystem, int poolSize) {
         this.actorSystem = actorSystem;
-        this.executor = Executors.newScheduledThreadPool(poolSize, r -> {
+        this.executor = Executors.newScheduledThreadPool(poolSize, (Runnable r) -> {
             Thread t = new Thread(r, "WorkflowScheduler-Worker");
             t.setDaemon(true);
             return t;
@@ -269,7 +269,7 @@ public class WorkflowScheduler implements CallableByActionName, AutoCloseable {
         logger.log(Level.INFO, "Shutting down workflow scheduler, cancelling " +
             scheduledTasks.size() + " scheduled tasks");
 
-        scheduledTasks.values().forEach(task -> task.cancel(false));
+        scheduledTasks.values().forEach((ScheduledFuture<?> task) -> task.cancel(false));
         scheduledTasks.clear();
 
         executor.shutdown();

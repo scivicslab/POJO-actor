@@ -67,7 +67,7 @@ public class TableAccumulator implements Accumulator {
 
     @Override
     public void add(String source, String type, String data) {
-        table.computeIfAbsent(source, k -> new LinkedHashMap<>())
+        table.computeIfAbsent(source, (String k) -> new LinkedHashMap<>())
              .put(type, data);
     }
 
@@ -79,7 +79,7 @@ public class TableAccumulator implements Accumulator {
 
         // Collect all column names
         Set<String> columns = table.values().stream()
-            .flatMap(m -> m.keySet().stream())
+            .flatMap((Map<String, String> m) -> m.keySet().stream())
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
         StringBuilder sb = new StringBuilder();

@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
+import org.json.JSONObject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -389,8 +390,8 @@ public class AccumulatorTest {
             JsonAccumulator acc = new JsonAccumulator();
             acc.add("node-1", "cpu", "Intel");
 
-            var json1 = acc.getResultsAsJson();
-            var json2 = acc.getResultsAsJson();
+            JSONObject json1 = acc.getResultsAsJson();
+            JSONObject json2 = acc.getResultsAsJson();
 
             assertNotSame(json1, json2, "Should return new copy each time");
             assertEquals(json1.toString(), json2.toString());

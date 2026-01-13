@@ -88,7 +88,7 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param task the task to execute
      */
     public void submitForActor(String actorName, Runnable task) {
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, k -> new CopyOnWriteArrayList<>());
+        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
 
         Runnable wrappedTask = new Runnable() {
             @Override
@@ -118,7 +118,7 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param task the urgent task to execute
      */
     public void submitUrgentForActor(String actorName, Runnable task) {
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, k -> new CopyOnWriteArrayList<>());
+        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
 
         Runnable wrappedTask = new Runnable() {
             @Override
