@@ -41,6 +41,7 @@ public class Transition {
 
     List<String> states;
     String label;  // Optional identifier for overlay matching
+    String note;   // Optional human-readable note for documentation
     List<Action> actions;  // Unified format for all workflow types
 
     /**
@@ -101,6 +102,27 @@ public class Transition {
      */
     public void setLabel(String label) {
         this.label = label;
+    }
+
+    /**
+     * Returns the note for this transition.
+     *
+     * <p>The note provides human-readable documentation about what this
+     * transition does. It is optional and not used at runtime.</p>
+     *
+     * @return the note, or null if not set
+     */
+    public String getNote() {
+        return this.note;
+    }
+
+    /**
+     * Sets the note for this transition.
+     *
+     * @param note the human-readable note
+     */
+    public void setNote(String note) {
+        this.note = note;
     }
 
     /**

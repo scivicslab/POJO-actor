@@ -34,6 +34,7 @@ import java.util.List;
 public class MatrixCode {
 
     String name;
+    String description;
     List<Transition> steps;
 
     /**
@@ -59,6 +60,27 @@ public class MatrixCode {
      */
     public void setName(String name) {
         this.name = name;
+    }
+
+    /**
+     * Returns the description of this workflow.
+     *
+     * <p>The description provides human-readable documentation about
+     * what the workflow does. It is optional and not used at runtime.</p>
+     *
+     * @return the workflow description, or null if not set
+     */
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * Sets the description of this workflow.
+     *
+     * @param description the workflow description
+     */
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     /**
