@@ -22,12 +22,16 @@ import com.scivicslab.pojoactor.core.ActorProvider;
 import com.scivicslab.pojoactor.core.CallableByActionName;
 import com.scivicslab.pojoactor.core.DynamicActorLoader;
 
+import org.json.JSONArray;
+
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
@@ -38,44 +42,48 @@ import java.util.ServiceLoader;
  *
  * <p><strong>Supported Actions:</strong></p>
  * <ul>
- *   <li>loadFromJar: Load actor from external JAR file</li>
+ *   <li>loadJar: Load a JAR file and make its classes available</li>
+ *   <li>createChild: Create an actor from a loaded class under a parent actor</li>
+ *   <li>listLoadedJars: List all loaded JAR files</li>
+ *   <li>loadFromJar: (Legacy) Load actor from external JAR file in one step</li>
  *   <li>createFromProvider: Create actor from ServiceLoader provider</li>
  *   <li>listProviders: List all available ActorProvider instances</li>
  *   <li>loadProvidersFromJar: Load ActorProvider plugins from JAR</li>
  * </ul>
  *
- * <p><strong>Example Workflow (Loading from JAR):</strong></p>
+ * <p><strong>Example Workflow (Two-step loading - Recommended):</strong></p>
  * <pre>{@code
- * <workflow name="dynamic-loading">
- *   <matrix>
- *     <transition from="init" to="loaded">
- *       <action actor="loader" method="loadFromJar">
- *         /plugins/my-actor.jar,com.example.MyActor,myactor
- *       </action>
- *     </transition>
+ * steps:
+ *   # Step 1: Load JAR (makes classes available)
+ *   - states: ["0", "1"]
+ *     actions:
+ *       - actor: loader
+ *         method: loadJar
+ *         arguments: ["plugins/my-actor.jar"]
  *
- *     <transition from="loaded" to="done">
- *       <action actor="myactor" method="someAction">args</action>
- *     </transition>
- *   </matrix>
- * </workflow>
+ *   # Step 2: Create actor under a parent
+ *   - states: ["1", "2"]
+ *     actions:
+ *       - actor: loader
+ *         method: createChild
+ *         arguments: ["nodeGroup", "myactor", "com.example.MyActor"]
+ *
+ *   # Step 3: Use the actor
+ *   - states: ["2", "end"]
+ *     actions:
+ *       - actor: myactor
+ *         method: someAction
+ *         arguments: ["arg1", "arg2"]
  * }</pre>
  *
- * <p><strong>Example Workflow (Loading from ServiceLoader):</strong></p>
+ * <p><strong>Example Workflow (Legacy one-step loading):</strong></p>
  * <pre>{@code
- * <workflow name="service-loader">
- *   <matrix>
- *     <transition from="init" to="loaded">
- *       <action actor="loader" method="createFromProvider">
- *         math,mathactor
- *       </action>
- *     </transition>
- *
- *     <transition from="loaded" to="done">
- *       <action actor="mathactor" method="add">5,3</action>
- *     </transition>
- *   </matrix>
- * </workflow>
+ * steps:
+ *   - states: ["0", "1"]
+ *     actions:
+ *       - actor: loader
+ *         method: loadFromJar
+ *         arguments: ["plugins/my-actor.jar", "com.example.MyActor", "myactor"]
  * }</pre>
  *
  * @author devteam@scivics-lab.com
@@ -84,7 +92,9 @@ import java.util.ServiceLoader;
 public class DynamicActorLoaderActor implements CallableByActionName {
 
     protected final IIActorSystem system;
-    private final List<URLClassLoader> loadedClassLoaders = new ArrayList<>();
+
+    /** Map of JAR path to ClassLoader for loaded JARs */
+    private final Map<String, URLClassLoader> loadedJars = new LinkedHashMap<>();
 
     /**
      * Constructs a new DynamicActorLoaderActor.
@@ -99,6 +109,15 @@ public class DynamicActorLoaderActor implements CallableByActionName {
     public ActionResult callByActionName(String actionName, String args) {
         try {
             switch (actionName) {
+                case "loadJar":
+                    return loadJar(args);
+
+                case "createChild":
+                    return createChild(args);
+
+                case "listLoadedJars":
+                    return listLoadedJars();
+
                 case "loadFromJar":
                     return loadFromJar(args);
 
@@ -120,32 +139,238 @@ public class DynamicActorLoaderActor implements CallableByActionName {
     }
 
     /**
-     * Loads an actor from an external JAR file.
+     * Loads a JAR file and makes its classes available for actor creation.
      *
-     * <p>Arguments format: "jarPath,className,actorName"</p>
-     * <p>Example: "/plugins/my-actor.jar,com.example.MyActor,myactor"</p>
+     * <p>Arguments format:</p>
+     * <pre>{@code
+     * arguments: ["plugins/my-plugin.jar"]
+     * }</pre>
      *
-     * @param args comma-separated: jarPath,className,actorName
+     * <p>After loading, use {@code createChild} to create actors from classes in the JAR.</p>
+     *
+     * @param args JSON array or plain string containing the JAR path
+     * @return ActionResult indicating success or failure
+     */
+    private ActionResult loadJar(String args) {
+        try {
+            String jarPath;
+
+            // Try to parse as JSON array first
+            if (args.trim().startsWith("[")) {
+                JSONArray jsonArray = new JSONArray(args);
+                if (jsonArray.length() < 1) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected array: [jarPath]");
+                }
+                jarPath = jsonArray.getString(0).trim();
+            } else {
+                jarPath = args.trim();
+            }
+
+            // Check if already loaded
+            if (loadedJars.containsKey(jarPath)) {
+                return new ActionResult(true, "JAR already loaded: " + jarPath);
+            }
+
+            // Load the JAR
+            Path path = Paths.get(jarPath);
+            URL jarUrl = path.toUri().toURL();
+
+            URLClassLoader classLoader = new URLClassLoader(
+                new URL[]{jarUrl},
+                getClass().getClassLoader()
+            );
+
+            loadedJars.put(jarPath, classLoader);
+
+            return new ActionResult(true, "Loaded JAR: " + jarPath);
+
+        } catch (Exception e) {
+            return new ActionResult(false, "Failed to load JAR: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Creates a child actor from a loaded class under a specified parent actor.
+     *
+     * <p>Arguments format:</p>
+     * <pre>{@code
+     * arguments: ["parentActorName", "newActorName", "com.example.MyActorClass"]
+     * }</pre>
+     *
+     * <p>The class must implement {@link CallableByActionName} and have a public
+     * no-argument constructor.</p>
+     *
+     * @param args JSON array: [parentActorName, actorName, className]
+     * @return ActionResult indicating success or failure
+     */
+    private ActionResult createChild(String args) {
+        try {
+            String parentName;
+            String actorName;
+            String className;
+
+            // Parse as JSON array
+            if (args.trim().startsWith("[")) {
+                JSONArray jsonArray = new JSONArray(args);
+                if (jsonArray.length() < 3) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected array: [parentActorName, actorName, className]");
+                }
+                parentName = jsonArray.getString(0).trim();
+                actorName = jsonArray.getString(1).trim();
+                className = jsonArray.getString(2).trim();
+            } else {
+                // Fall back to comma-separated format
+                String[] parts = args.split(",", 3);
+                if (parts.length < 3) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected: parentActorName,actorName,className");
+                }
+                parentName = parts[0].trim();
+                actorName = parts[1].trim();
+                className = parts[2].trim();
+            }
+
+            // Find parent actor
+            IIActorRef<?> parent = system.getIIActor(parentName);
+            if (parent == null) {
+                return new ActionResult(false, "Parent actor not found: " + parentName);
+            }
+
+            // Try to load class from any loaded JAR
+            Class<?> clazz = null;
+            for (URLClassLoader loader : loadedJars.values()) {
+                try {
+                    clazz = loader.loadClass(className);
+                    break;
+                } catch (ClassNotFoundException e) {
+                    // Try next loader
+                }
+            }
+
+            if (clazz == null) {
+                return new ActionResult(false,
+                    "Class not found in loaded JARs: " + className +
+                    ". Make sure to call loadJar first.");
+            }
+
+            // Instantiate the class
+            Object instance = clazz.getDeclaredConstructor().newInstance();
+
+            // Verify it implements CallableByActionName
+            if (!(instance instanceof CallableByActionName)) {
+                return new ActionResult(false,
+                    "Class must implement CallableByActionName: " + className);
+            }
+
+            // Inject ActorSystem if the plugin implements ActorSystemAware
+            if (instance instanceof ActorSystemAware) {
+                ((ActorSystemAware) instance).setActorSystem(system);
+            }
+
+            // Wrap as IIActorRef
+            GenericIIAR<?> actorRef = new GenericIIAR<>(actorName, instance, system);
+
+            // Set parent-child relationship
+            actorRef.setParentName(parentName);
+            parent.getNamesOfChildren().add(actorName);
+
+            // Register with system
+            system.addIIActor(actorRef);
+
+            return new ActionResult(true,
+                "Created actor '" + actorName + "' under '" + parentName +
+                "' from class: " + className);
+
+        } catch (Exception e) {
+            return new ActionResult(false, "Failed to create child: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Lists all loaded JAR files.
+     *
+     * @return ActionResult with the list of loaded JARs
+     */
+    private ActionResult listLoadedJars() {
+        if (loadedJars.isEmpty()) {
+            return new ActionResult(true, "No JARs loaded");
+        }
+        return new ActionResult(true,
+            "Loaded JARs: " + String.join(", ", loadedJars.keySet()));
+    }
+
+    /**
+     * Loads an actor from an external JAR file (legacy one-step method).
+     *
+     * <p>Arguments format (YAML array, recommended):</p>
+     * <pre>{@code
+     * arguments: ["plugins/my-actor.jar", "com.example.MyActor", "myactor"]
+     * }</pre>
+     *
+     * <p>Legacy format (comma-separated string) is also supported for backward compatibility:</p>
+     * <pre>{@code
+     * arguments: "plugins/my-actor.jar,com.example.MyActor,myactor"
+     * }</pre>
+     *
+     * <p><strong>Note:</strong> This method registers the actor at the top level
+     * (no parent). For proper actor tree placement, use {@code loadJar} followed
+     * by {@code createChild}.</p>
+     *
+     * @param args JSON array or comma-separated string: [jarPath, className, actorName]
      * @return ActionResult indicating success or failure
      */
     private ActionResult loadFromJar(String args) {
         try {
-            String[] parts = args.split(",", 3);
-            if (parts.length < 3) {
-                return new ActionResult(false,
-                    "Invalid args. Expected: jarPath,className,actorName");
-            }
+            String jarPath;
+            String className;
+            String actorName;
 
-            String jarPath = parts[0].trim();
-            String className = parts[1].trim();
-            String actorName = parts[2].trim();
+            // Try to parse as JSON array first
+            if (args.trim().startsWith("[")) {
+                JSONArray jsonArray = new JSONArray(args);
+                if (jsonArray.length() < 3) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected array: [jarPath, className, actorName]");
+                }
+                jarPath = jsonArray.getString(0).trim();
+                className = jsonArray.getString(1).trim();
+                actorName = jsonArray.getString(2).trim();
+            } else {
+                // Fall back to legacy comma-separated format
+                String[] parts = args.split(",", 3);
+                if (parts.length < 3) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected: jarPath,className,actorName");
+                }
+                jarPath = parts[0].trim();
+                className = parts[1].trim();
+                actorName = parts[2].trim();
+            }
 
             // Load actor using DynamicActorLoader
             Path jar = Paths.get(jarPath);
+
+            // Also store ClassLoader for potential reuse by createChild
+            if (!loadedJars.containsKey(jarPath)) {
+                URL jarUrl = jar.toUri().toURL();
+                URLClassLoader classLoader = new URLClassLoader(
+                    new URL[]{jarUrl},
+                    getClass().getClassLoader()
+                );
+                loadedJars.put(jarPath, classLoader);
+            }
+
             Object actor = DynamicActorLoader.loadActor(jar, className, actorName);
 
             // Wrap as IIActorRef if it implements CallableByActionName
             if (actor instanceof CallableByActionName) {
+                // Inject ActorSystem if the plugin implements ActorSystemAware
+                if (actor instanceof ActorSystemAware) {
+                    ((ActorSystemAware) actor).setActorSystem(system);
+                }
+
                 GenericIIAR<?> actorRef = new GenericIIAR<>(actorName, actor, system);
                 system.addIIActor(actorRef);
 
@@ -165,18 +390,32 @@ public class DynamicActorLoaderActor implements CallableByActionName {
     /**
      * Registers actors from a ServiceLoader ActorProvider.
      *
-     * <p>Arguments format: "providerName"</p>
-     * <p>Example: "math"</p>
+     * <p>Arguments format (YAML array):</p>
+     * <pre>{@code
+     * arguments: ["providerName"]
+     * }</pre>
      *
      * <p>This calls the provider's registerActors() method to register
      * all actors provided by that plugin.</p>
      *
-     * @param args the provider plugin name
+     * @param args JSON array or plain string containing the provider name
      * @return ActionResult indicating success or failure
      */
     private ActionResult createFromProvider(String args) {
         try {
-            String providerName = args.trim();
+            String providerName;
+
+            // Try to parse as JSON array first
+            if (args.trim().startsWith("[")) {
+                JSONArray jsonArray = new JSONArray(args);
+                if (jsonArray.length() < 1) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected array: [providerName]");
+                }
+                providerName = jsonArray.getString(0).trim();
+            } else {
+                providerName = args.trim();
+            }
 
             // Find provider using ServiceLoader
             ServiceLoader<ActorProvider> loader = ServiceLoader.load(ActorProvider.class);
@@ -234,24 +473,45 @@ public class DynamicActorLoaderActor implements CallableByActionName {
     /**
      * Loads ActorProvider plugins from an external JAR file.
      *
+     * <p>Arguments format (YAML array):</p>
+     * <pre>{@code
+     * arguments: ["plugins/my-providers.jar"]
+     * }</pre>
+     *
      * <p>The JAR must contain provider implementations registered in
      * META-INF/services/com.scivicslab.pojoactor.ActorProvider</p>
      *
-     * @param jarPath path to the JAR file
+     * @param args JSON array or plain string containing the JAR path
      * @return ActionResult with loaded provider names
      */
-    private ActionResult loadProvidersFromJar(String jarPath) {
+    private ActionResult loadProvidersFromJar(String args) {
         try {
-            Path path = Paths.get(jarPath.trim());
+            String jarPath;
+
+            // Try to parse as JSON array first
+            if (args.trim().startsWith("[")) {
+                JSONArray jsonArray = new JSONArray(args);
+                if (jsonArray.length() < 1) {
+                    return new ActionResult(false,
+                        "Invalid args. Expected array: [jarPath]");
+                }
+                jarPath = jsonArray.getString(0).trim();
+            } else {
+                jarPath = args.trim();
+            }
+
+            Path path = Paths.get(jarPath);
             URL jarUrl = path.toUri().toURL();
 
-            // Create new ClassLoader for the plugin JAR
-            URLClassLoader classLoader = new URLClassLoader(
-                new URL[]{jarUrl},
-                getClass().getClassLoader()
-            );
-
-            loadedClassLoaders.add(classLoader);
+            // Create new ClassLoader for the plugin JAR (or reuse if already loaded)
+            URLClassLoader classLoader = loadedJars.get(jarPath);
+            if (classLoader == null) {
+                classLoader = new URLClassLoader(
+                    new URL[]{jarUrl},
+                    getClass().getClassLoader()
+                );
+                loadedJars.put(jarPath, classLoader);
+            }
 
             // Load providers from the JAR using ServiceLoader
             ServiceLoader<ActorProvider> loader =
