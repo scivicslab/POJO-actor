@@ -41,17 +41,30 @@ Maven Dependency
 </dependency>
 ```
 
-Building
+### Installing Development Version (v2.12.1)
+
+To use the latest development version:
+
+```bash
+git clone https://github.com/scivicslab/POJO-actor
+cd POJO-actor
+git checkout v2.12.1
+mvn install
+```
+
+**Note:** Do not use `mvn clean install`. Use `mvn install` only. The `clean` target may cause issues due to the Maven repository configuration in pom.xml.
+
+### Building from Source
 
 ```bash
 # Compile and test
-mvn clean test
+mvn test
 
 # Build JAR
-mvn clean package
+mvn package
 
 # Generate Javadoc and copy to docs/ directory
-mvn clean verify
+mvn verify
 
 # Or generate Javadoc only (without copying to docs/)
 mvn javadoc:javadoc
@@ -288,10 +301,12 @@ This example includes conditional branching using multiple transitions with the 
 ```bash
 git clone https://github.com/scivicslab/POJO-actor
 cd POJO-actor
-mvn clean install
+git checkout v2.12.1
+mvn install
 
 git clone https://github.com/scivicslab/actor-WF-examples
 cd actor-WF-examples
+git checkout v2.12.1
 mvn compile
 mvn exec:java -Dexec.mainClass="com.scivicslab.turing.TuringWorkflowApp" -Dexec.args="turing87"
 ```
