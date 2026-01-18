@@ -690,12 +690,16 @@ public class Interpreter {
                 ActionResult actionResult = action();
 
                 if (actionResult.isSuccess()) {
+                    // Hook: notify subclasses that transition succeeded
+                    onExitTransition(transition, true, actionResult);
                     // All actions succeeded, transition to to-state
                     transitionTo(getToState(transition));
                     ActionResult stateResult = new ActionResult(true, "State: " + currentState);
                     logger.exiting(CLASS_NAME, "execCode", stateResult);
                     return stateResult;
                 }
+                // Hook: notify subclasses that transition failed
+                onExitTransition(transition, false, actionResult);
                 // Action failed, try next step
             }
             currentTransitionIndex++;
@@ -1211,6 +1215,23 @@ public class Interpreter {
      * @since 2.9.0
      */
     protected void onEnterTransition(Transition transition) {
+        // Default: do nothing. Subclasses can override.
+    }
+
+    /**
+     * Hook method called after a transition completes (success or failure).
+     *
+     * <p>Subclasses can override this method to provide custom behavior such as
+     * logging transition results, timing, or debugging output.</p>
+     *
+     * <p>The default implementation does nothing.</p>
+     *
+     * @param transition the transition that was attempted
+     * @param success true if the transition succeeded, false if it failed
+     * @param result the ActionResult from executing the transition's actions
+     * @since 2.12.2
+     */
+    protected void onExitTransition(Transition transition, boolean success, ActionResult result) {
         // Default: do nothing. Subclasses can override.
     }
 

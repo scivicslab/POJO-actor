@@ -65,6 +65,9 @@ public class RootIIAR extends IIActorRef<Object> {
     /** The name of the root actor. */
     public static final String ROOT_NAME = "ROOT";
 
+    /** The actor system managing this root actor. */
+    private final IIActorSystem system;
+
     /**
      * Constructs a new RootIIAR.
      *
@@ -72,6 +75,7 @@ public class RootIIAR extends IIActorRef<Object> {
      */
     public RootIIAR(IIActorSystem system) {
         super(ROOT_NAME, new Object(), system);
+        this.system = system;
     }
 
     @Override
