@@ -26,20 +26,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test for dynamically loading the log-analyzer-plugin.
+ * Test for dynamically loading the actor-IaC-plugins.
  */
-@DisplayName("LogAnalyzerPlugin dynamic loading test")
-public class LogAnalyzerPluginTest {
+@DisplayName("SystemInfoAggregator dynamic loading test")
+public class SystemInfoAggregatorTest {
 
     private static final Path PLUGIN_JAR = Paths.get(
-        "../log-analyzer-plugin/target/log-analyzer-plugin-1.0.0.jar"
+        "../actor-IaC-plugins/target/actor-IaC-plugins-1.0.0.jar"
     );
 
     private static final String PLUGIN_CLASS =
-        "com.scivicslab.plugin.loganalyzer.LogAnalyzerPlugin";
+        "com.scivicslab.actoriac.plugins.h2analyzer.SystemInfoAggregator";
 
     @Test
-    @DisplayName("Should load LogAnalyzerPlugin from JAR")
+    @DisplayName("Should load SystemInfoAggregator from JAR")
     public void testLoadPlugin() throws Exception {
         // Skip if JAR doesn't exist
         if (!PLUGIN_JAR.toFile().exists()) {
@@ -48,16 +48,16 @@ public class LogAnalyzerPluginTest {
         }
 
         // Load the plugin
-        ActorRef<Object> analyzer = DynamicActorLoader.loadActor(
+        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
             PLUGIN_JAR,
             PLUGIN_CLASS,
-            "analyzer"
+            "aggregator"
         );
 
-        assertNotNull(analyzer, "Plugin should be loaded");
+        assertNotNull(aggregator, "Plugin should be loaded");
 
         // Test that it implements CallableByActionName
-        ActionResult result = analyzer.ask(obj -> {
+        ActionResult result = aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("list-sessions", "");
             }
@@ -68,7 +68,7 @@ public class LogAnalyzerPluginTest {
         assertFalse(result.isSuccess());
         assertTrue(result.getResult().contains("Not connected"));
 
-        analyzer.close();
+        aggregator.close();
     }
 
     @Test
@@ -88,14 +88,14 @@ public class LogAnalyzerPluginTest {
         }
 
         // Load the plugin
-        ActorRef<Object> analyzer = DynamicActorLoader.loadActor(
+        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
             PLUGIN_JAR,
             PLUGIN_CLASS,
-            "analyzer"
+            "aggregator"
         );
 
         // Connect to database
-        ActionResult connectResult = analyzer.ask(obj -> {
+        ActionResult connectResult = aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("connect", testDb.toString());
             }
@@ -105,7 +105,7 @@ public class LogAnalyzerPluginTest {
         assertTrue(connectResult.isSuccess(), "Should connect: " + connectResult.getResult());
 
         // List sessions
-        ActionResult listResult = analyzer.ask(obj -> {
+        ActionResult listResult = aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("list-sessions", "");
             }
@@ -116,14 +116,14 @@ public class LogAnalyzerPluginTest {
         System.out.println("Sessions:\n" + listResult.getResult());
 
         // Disconnect
-        analyzer.ask(obj -> {
+        aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("disconnect", "");
             }
             return new ActionResult(false, "Not CallableByActionName");
         }).get();
 
-        analyzer.close();
+        aggregator.close();
     }
 
     @Test
@@ -143,14 +143,14 @@ public class LogAnalyzerPluginTest {
         }
 
         // Load the plugin
-        ActorRef<Object> analyzer = DynamicActorLoader.loadActor(
+        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
             PLUGIN_JAR,
             PLUGIN_CLASS,
-            "analyzer"
+            "aggregator"
         );
 
         // Connect
-        analyzer.ask(obj -> {
+        aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("connect", testDb.toString());
             }
@@ -158,7 +158,7 @@ public class LogAnalyzerPluginTest {
         }).get();
 
         // Summarize disks for session 2
-        ActionResult diskResult = analyzer.ask(obj -> {
+        ActionResult diskResult = aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("summarize-disks", "2");
             }
@@ -168,13 +168,13 @@ public class LogAnalyzerPluginTest {
         System.out.println("Disk Summary:\n" + diskResult.getResult());
 
         // Disconnect
-        analyzer.ask(obj -> {
+        aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName("disconnect", "");
             }
             return new ActionResult(false, "Not CallableByActionName");
         }).get();
 
-        analyzer.close();
+        aggregator.close();
     }
 }

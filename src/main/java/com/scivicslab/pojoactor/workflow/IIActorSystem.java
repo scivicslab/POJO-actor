@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.scivicslab.pojoactor.core.ActorSystem;
 
@@ -54,27 +55,46 @@ public class IIActorSystem extends ActorSystem {
 
     ConcurrentHashMap<String, IIActorRef<?>> iiActors = new ConcurrentHashMap<>();
 
+    /** The root actor for the actor hierarchy. */
+    private final RootIIAR rootActor;
+
     /**
      * Constructs a new IIActorSystem with the specified system name.
+     *
+     * <p>A ROOT actor is automatically created as the top-level parent
+     * for all user actors.</p>
      *
      * @param systemName the name of this actor system
      */
     public IIActorSystem(String systemName) {
         super(systemName);
+        this.rootActor = new RootIIAR(this);
+        iiActors.put(RootIIAR.ROOT_NAME, rootActor);
     }
 
     /**
      * Constructs a new IIActorSystem with the specified system name and thread count.
+     *
+     * <p>A ROOT actor is automatically created as the top-level parent
+     * for all user actors.</p>
      *
      * @param systemName the name of this actor system
      * @param threadNum the number of threads in the worker pool
      */
     public IIActorSystem(String systemName, int threadNum) {
         super(systemName, threadNum);
+        this.rootActor = new RootIIAR(this);
+        iiActors.put(RootIIAR.ROOT_NAME, rootActor);
     }
 
     /**
-     * Adds an interpreter-interfaced actor to this system.
+     * Adds an interpreter-interfaced actor to this system as a child of ROOT.
+     *
+     * <p>The actor is automatically added as a child of the ROOT actor,
+     * establishing the parent-child relationship in the actor tree.</p>
+     *
+     * <p>If the actor already has a parent set, it is added to the system
+     * without modifying the parent-child relationship.</p>
      *
      * @param <T> the type of the actor object
      * @param actor the actor reference to add
@@ -83,6 +103,13 @@ public class IIActorSystem extends ActorSystem {
     public <T> IIActorRef<T> addIIActor(IIActorRef<T> actor) {
         String actorName = actor.getName();
         iiActors.put(actorName, actor);
+
+        // Add as child of ROOT if no parent is set (and it's not ROOT itself)
+        if (actor.getParentName() == null && !RootIIAR.ROOT_NAME.equals(actorName)) {
+            actor.setParentName(RootIIAR.ROOT_NAME);
+            rootActor.getNamesOfChildren().add(actorName);
+        }
+
         return actor;
     }
 
@@ -111,10 +138,16 @@ public class IIActorSystem extends ActorSystem {
     /**
      * Removes an interpreter-interfaced actor from this system.
      *
+     * <p>If the actor is a direct child of ROOT, it is also removed
+     * from ROOT's children list.</p>
+     *
      * @param name the name of the actor to remove
      */
     public void removeIIActor(String name) {
-        this.iiActors.remove(name);
+        IIActorRef<?> actor = this.iiActors.remove(name);
+        if (actor != null && RootIIAR.ROOT_NAME.equals(actor.getParentName())) {
+            rootActor.getNamesOfChildren().remove(name);
+        }
     }
 
     /**
@@ -124,6 +157,49 @@ public class IIActorSystem extends ActorSystem {
      */
     public int getIIActorCount() {
         return iiActors.size();
+    }
+
+    /**
+     * Returns the ROOT actor of this system.
+     *
+     * <p>The ROOT actor is the top-level parent for all user-created actors.
+     * Use {@code getRoot().getNamesOfChildren()} to get the names of all
+     * top-level actors.</p>
+     *
+     * @return the ROOT actor
+     * @since 2.12.0
+     */
+    public RootIIAR getRoot() {
+        return rootActor;
+    }
+
+    /**
+     * Returns a list of all top-level actors (direct children of ROOT).
+     *
+     * <p>This is a convenience method equivalent to:</p>
+     * <pre>{@code
+     * getRoot().getNamesOfChildren().stream()
+     *     .map(this::getIIActor)
+     *     .collect(Collectors.toList());
+     * }</pre>
+     *
+     * @return list of top-level actor references
+     * @since 2.12.0
+     */
+    public List<IIActorRef<?>> getTopLevelActors() {
+        return rootActor.getNamesOfChildren().stream()
+            .map(this::getIIActor)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns the names of all top-level actors (direct children of ROOT).
+     *
+     * @return set of top-level actor names
+     * @since 2.12.0
+     */
+    public Set<String> getTopLevelActorNames() {
+        return rootActor.getNamesOfChildren();
     }
 
     /**
