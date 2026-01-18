@@ -76,7 +76,7 @@ import org.apache.commons.jexl3.MapContext;
  */
 public class Interpreter {
 
-    protected Logger logger = null;
+    protected Logger logger = Logger.getLogger(Interpreter.class.getName());
 
     protected MatrixCode code = null;
 
@@ -182,7 +182,11 @@ public class Interpreter {
      *
      * @return an {@link ActionResult} indicating success or failure
      */
+    private static final String CLASS_NAME = Interpreter.class.getName();
+
     public ActionResult action() {
+        logger.entering(CLASS_NAME, "action");
+
         Transition transition = code.getTransitions().get(currentTransitionIndex);
         for (Action a: transition.getActions()) {
             String actorPath = a.getActor();
@@ -205,6 +209,23 @@ public class Interpreter {
                 actors = actor != null ? Arrays.asList(actor) : new ArrayList<>();
             }
 
+            // Log actor resolution at FINER level
+            logger.logp(Level.FINER, CLASS_NAME, "action",
+                "actorPath={0}, selfActorRef={1}, actors.size={2}",
+                new Object[]{actorPath, selfActorRef != null ? selfActorRef.getName() : "null", actors.size()});
+            for (IIActorRef<?> a2 : actors) {
+                logger.logp(Level.FINER, CLASS_NAME, "action",
+                    "resolved actor: {0} class={1}", new Object[]{a2.getName(), a2.getClass().getName()});
+            }
+
+            // Fail if no actors found
+            if (actors.isEmpty()) {
+                logger.warning("Actor not found: " + actorPath);
+                ActionResult notFoundResult = new ActionResult(false, "Actor not found: " + actorPath);
+                logger.exiting(CLASS_NAME, "action", notFoundResult);
+                return notFoundResult;
+            }
+
             // Execute action on all matching actors
             for (IIActorRef<?> actorAR : actors) {
                 ActionResult result;
@@ -225,10 +246,14 @@ public class Interpreter {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         logger.log(Level.WARNING, "Action interrupted", e);
-                        return new ActionResult(false, "Action interrupted: " + e.getMessage());
+                        ActionResult failResult = new ActionResult(false, "Action interrupted: " + e.getMessage());
+                        logger.exiting(CLASS_NAME, "action", failResult);
+                        return failResult;
                     } catch (ExecutionException e) {
                         logger.log(Level.WARNING, "Action execution failed", e);
-                        return new ActionResult(false, "Action failed: " + e.getCause().getMessage());
+                        ActionResult failResult = new ActionResult(false, "Action failed: " + e.getCause().getMessage());
+                        logger.exiting(CLASS_NAME, "action", failResult);
+                        return failResult;
                     }
                 } else {
                     // DIRECT: Direct synchronous call (for light operations)
@@ -237,11 +262,14 @@ public class Interpreter {
 
                 // If any action returns false, abort this step
                 if (!result.isSuccess()) {
+                    logger.exiting(CLASS_NAME, "action", result);
                     return result;
                 }
             }
         }
-        return new ActionResult(true, "");
+        ActionResult successResult = new ActionResult(true, "");
+        logger.exiting(CLASS_NAME, "action", successResult);
+        return successResult;
     }
 
     /**
@@ -635,8 +663,12 @@ public class Interpreter {
      * @return an {@link ActionResult} indicating success or failure
      */
     public ActionResult execCode() {
+        logger.entering(CLASS_NAME, "execCode");
+
         if (!hasCodeLoaded()) {
-            return new ActionResult(false, "No code loaded");
+            ActionResult noCodeResult = new ActionResult(false, "No code loaded");
+            logger.exiting(CLASS_NAME, "execCode", noCodeResult);
+            return noCodeResult;
         }
 
         // Try all steps, starting from currentTransitionIndex and wrapping around
@@ -660,14 +692,18 @@ public class Interpreter {
                 if (actionResult.isSuccess()) {
                     // All actions succeeded, transition to to-state
                     transitionTo(getToState(transition));
-                    return new ActionResult(true, "State: " + currentState);
+                    ActionResult stateResult = new ActionResult(true, "State: " + currentState);
+                    logger.exiting(CLASS_NAME, "execCode", stateResult);
+                    return stateResult;
                 }
                 // Action failed, try next step
             }
             currentTransitionIndex++;
         }
 
-        return new ActionResult(false, "No matching state transition");
+        ActionResult noMatchResult = new ActionResult(false, "No matching state transition");
+        logger.exiting(CLASS_NAME, "execCode", noMatchResult);
+        return noMatchResult;
     }
 
     /**

@@ -19,6 +19,8 @@ package com.scivicslab.pojoactor.workflow;
 
 import com.scivicslab.pojoactor.core.ActionResult;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -52,6 +54,7 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>{@code listChildren} - Returns names of all top-level actors</li>
  *   <li>{@code getChildCount} - Returns the number of top-level actors</li>
+ *   <li>{@code printTree} - Returns ASCII tree representation of actor hierarchy</li>
  * </ul>
  *
  * @author devteam@scivics-lab.com
@@ -76,6 +79,7 @@ public class RootIIAR extends IIActorRef<Object> {
         return switch (actionName) {
             case "listChildren" -> listChildren();
             case "getChildCount" -> getChildCount();
+            case "printTree" -> printTree();
             default -> new ActionResult(false, "Unknown action: " + actionName);
         };
     }
@@ -103,5 +107,70 @@ public class RootIIAR extends IIActorRef<Object> {
      */
     private ActionResult getChildCount() {
         return new ActionResult(true, String.valueOf(getNamesOfChildren().size()));
+    }
+
+    /**
+     * Returns an ASCII tree representation of the actor hierarchy.
+     *
+     * <p>Example output:</p>
+     * <pre>
+     * ROOT
+     * ├── loader
+     * │   └── aggregator
+     * ├── nodeGroup
+     * │   ├── node-192.168.5.13
+     * │   └── node-192.168.5.14
+     * └── outputMultiplexer
+     * </pre>
+     *
+     * @return ActionResult containing the tree representation
+     */
+    private ActionResult printTree() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ROOT_NAME).append("\n");
+
+        List<String> children = getNamesOfChildren().stream()
+            .sorted()
+            .collect(Collectors.toList());
+
+        for (int i = 0; i < children.size(); i++) {
+            boolean isLast = (i == children.size() - 1);
+            String childName = children.get(i);
+            appendActorTree(sb, childName, "", isLast);
+        }
+
+        return new ActionResult(true, sb.toString());
+    }
+
+    /**
+     * Recursively appends an actor and its children to the tree representation.
+     *
+     * @param sb the StringBuilder to append to
+     * @param actorName the name of the current actor
+     * @param prefix the prefix for indentation
+     * @param isLast whether this is the last child in its parent
+     */
+    private void appendActorTree(StringBuilder sb, String actorName, String prefix, boolean isLast) {
+        String connector = isLast ? "└── " : "├── ";
+        sb.append(prefix).append(connector).append(actorName).append("\n");
+
+        IIActorRef<?> actor = system.getIIActor(actorName);
+        if (actor == null) {
+            return;
+        }
+
+        Set<String> childNames = actor.getNamesOfChildren();
+        if (childNames.isEmpty()) {
+            return;
+        }
+
+        String newPrefix = prefix + (isLast ? "    " : "│   ");
+        List<String> sortedChildren = new ArrayList<>(childNames);
+        sortedChildren.sort(String::compareTo);
+
+        for (int i = 0; i < sortedChildren.size(); i++) {
+            boolean childIsLast = (i == sortedChildren.size() - 1);
+            appendActorTree(sb, sortedChildren.get(i), newPrefix, childIsLast);
+        }
     }
 }

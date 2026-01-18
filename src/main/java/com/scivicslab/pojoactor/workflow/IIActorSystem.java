@@ -21,6 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -52,6 +54,9 @@ import com.scivicslab.pojoactor.core.ActorSystem;
  * @author devteam@scivics-lab.com
  */
 public class IIActorSystem extends ActorSystem {
+
+    private static final Logger LOGGER = Logger.getLogger(IIActorSystem.class.getName());
+    private static final String CLASS_NAME = IIActorSystem.class.getName();
 
     ConcurrentHashMap<String, IIActorRef<?>> iiActors = new ConcurrentHashMap<>();
 
@@ -259,11 +264,15 @@ public class IIActorSystem extends ActorSystem {
      * @since 2.6.0
      */
     public List<IIActorRef<?>> resolveActorPath(String fromActorName, String actorPath) {
+        LOGGER.entering(CLASS_NAME, "resolveActorPath", new Object[]{fromActorName, actorPath});
+
         List<IIActorRef<?>> results = new ArrayList<>();
 
         // Get the actor from which the path is relative
         IIActorRef<?> fromActor = getIIActor(fromActorName);
         if (fromActor == null) {
+            LOGGER.throwing(CLASS_NAME, "resolveActorPath",
+                new IllegalArgumentException("Actor not found: " + fromActorName));
             throw new IllegalArgumentException(
                 "Actor not found: " + fromActorName);
         }
@@ -387,6 +396,10 @@ public class IIActorSystem extends ActorSystem {
             }
         }
 
+        LOGGER.logp(Level.FINER, CLASS_NAME, "resolveActorPath",
+            "resolved {0} actors: {1}",
+            new Object[]{results.size(), results.stream().map(IIActorRef::getName).toList()});
+        LOGGER.exiting(CLASS_NAME, "resolveActorPath", results);
         return results;
     }
 

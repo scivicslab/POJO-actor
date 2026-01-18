@@ -33,6 +33,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Generic actor that dynamically loads and creates other actors from plugins.
@@ -543,6 +545,8 @@ public class DynamicActorLoaderActor implements CallableByActionName {
      * @param <T> the actor type
      */
     private static class GenericIIAR<T> extends IIActorRef<T> {
+        private static final Logger LOGGER = Logger.getLogger(GenericIIAR.class.getName());
+        private static final String CLASS_NAME = GenericIIAR.class.getName();
 
         public GenericIIAR(String actorName, T object, IIActorSystem system) {
             super(actorName, object, system);
@@ -550,10 +554,31 @@ public class DynamicActorLoaderActor implements CallableByActionName {
 
         @Override
         public ActionResult callByActionName(String actionName, String args) {
-            if (object instanceof CallableByActionName) {
-                return ((CallableByActionName) object).callByActionName(actionName, args);
+            LOGGER.entering(CLASS_NAME, "callByActionName", new Object[]{actionName, args});
+
+            // Log ClassLoader information at FINER level
+            LOGGER.logp(Level.FINER, CLASS_NAME, "callByActionName",
+                "object class={0}, object classLoader={1}",
+                new Object[]{
+                    object != null ? object.getClass().getName() : "null",
+                    object != null ? object.getClass().getClassLoader() : "null"
+                });
+            LOGGER.logp(Level.FINER, CLASS_NAME, "callByActionName",
+                "CallableByActionName.class classLoader={0}",
+                CallableByActionName.class.getClassLoader());
+
+            boolean isCallable = object instanceof CallableByActionName;
+            LOGGER.logp(Level.FINER, CLASS_NAME, "callByActionName",
+                "instanceof CallableByActionName = {0}", isCallable);
+
+            if (isCallable) {
+                ActionResult result = ((CallableByActionName) object).callByActionName(actionName, args);
+                LOGGER.exiting(CLASS_NAME, "callByActionName", result);
+                return result;
             }
-            return new ActionResult(false, "Actor does not implement CallableByActionName");
+            ActionResult failResult = new ActionResult(false, "Actor does not implement CallableByActionName");
+            LOGGER.exiting(CLASS_NAME, "callByActionName", failResult);
+            return failResult;
         }
     }
 }
