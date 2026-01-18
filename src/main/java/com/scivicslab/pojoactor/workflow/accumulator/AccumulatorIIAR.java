@@ -114,7 +114,7 @@ public class AccumulatorIIAR extends IIActorRef<Accumulator> {
         String type = json.getString("type");
         String data = json.getString("data");
 
-        this.tell(acc -> acc.add(source, type, data)).get();
+        this.tell((Accumulator acc) -> acc.add(source, type, data)).get();
 
         return new ActionResult(true, "Added");
     }

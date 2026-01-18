@@ -25,43 +25,57 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * A controllable thread pool executor that supports actor-level job management.
+ * A managed thread pool for CPU-intensive tasks in POJO-actor.
  *
- * Unlike ForkJoinPool, this implementation uses ThreadPoolExecutor with LinkedBlockingDeque,
- * allowing direct access to the queue for cancellation and priority execution.
+ * <p>Virtual threads in POJO-actor excel at lightweight operations (message passing,
+ * state updates), but CPU-intensive computations should be delegated to a real
+ * thread pool to avoid blocking the virtual thread scheduler.</p>
  *
- * Features:
- * - Track jobs per actor
- * - Cancel all jobs for a specific actor
- * - Submit urgent jobs to the front of the queue
- * - Query pending job count per actor
+ * <p>This class provides a managed pool of real OS threads with actor-level job
+ * management capabilities:</p>
+ * <ul>
+ *   <li>Track jobs per actor</li>
+ *   <li>Cancel all pending jobs for a specific actor</li>
+ *   <li>Submit urgent jobs to the front of the queue</li>
+ *   <li>Query pending job count per actor</li>
+ * </ul>
  *
- * Note: This implementation does not provide work-stealing behavior like ForkJoinPool.
- * However, for POJO-actor's use case (independent CPU-bound tasks), the performance
- * difference is minimal, and the added control capabilities are more valuable.
+ * <p>Usage example:</p>
+ * <pre>{@code
+ * ActorSystem system = new ActorSystem("system", 4); // 4 CPU threads
  *
- * @author devteam@scivics-lab.com
- * @since 1.0.0
+ * // Light operation → virtual thread (default)
+ * actor.tell(a -> a.updateCounter());
+ *
+ * // Heavy computation → managed thread pool
+ * CompletableFuture<Double> result = actor.ask(
+ *     a -> a.performMatrixMultiplication(),
+ *     system.getManagedThreadPool()
+ * );
+ * }</pre>
+ *
+ * @author devteam@scivicslab.com
+ * @since 2.12.0
  */
-public class ControllableWorkStealingPool extends ThreadPoolExecutor implements WorkerPool {
+public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool {
 
-    private static final Logger logger = Logger.getLogger(ControllableWorkStealingPool.class.getName());
+    private static final Logger logger = Logger.getLogger(ManagedThreadPool.class.getName());
 
     // Track which tasks belong to which actor
     private final ConcurrentHashMap<String, CopyOnWriteArrayList<Runnable>> actorTasks;
 
     /**
-     * Creates a ControllableWorkStealingPool with the specified parallelism level.
+     * Creates a ManagedThreadPool with the specified parallelism level.
      *
-     * @param parallelism the number of threads in the pool
+     * @param parallelism the number of threads in the pool (typically matches CPU core count)
      */
-    public ControllableWorkStealingPool(int parallelism) {
+    public ManagedThreadPool(int parallelism) {
         super(
             parallelism,                          // corePoolSize
             parallelism,                          // maximumPoolSize
             0L,                                   // keepAliveTime
             TimeUnit.MILLISECONDS,
-            new LinkedBlockingDeque<>()           // workQueue - controllable
+            new LinkedBlockingDeque<>()           // workQueue - allows front insertion
         );
         this.actorTasks = new ConcurrentHashMap<>();
     }
@@ -74,17 +88,14 @@ public class ControllableWorkStealingPool extends ThreadPoolExecutor implements 
      * @param task the task to execute
      */
     public void submitForActor(String actorName, Runnable task) {
-        // Track the wrapped task (this is what's in the queue)
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, k -> new CopyOnWriteArrayList<>());
+        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
 
-        // Wrap task to track completion
         Runnable wrappedTask = new Runnable() {
             @Override
             public void run() {
                 try {
                     task.run();
                 } finally {
-                    // Remove from tracking when completed
                     synchronized (tasks) {
                         tasks.remove(this);
                     }
@@ -96,7 +107,6 @@ public class ControllableWorkStealingPool extends ThreadPoolExecutor implements 
             tasks.add(wrappedTask);
         }
 
-        // Submit to pool
         execute(wrappedTask);
     }
 
@@ -108,17 +118,14 @@ public class ControllableWorkStealingPool extends ThreadPoolExecutor implements 
      * @param task the urgent task to execute
      */
     public void submitUrgentForActor(String actorName, Runnable task) {
-        // Track the wrapped task (this is what's in the queue)
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, k -> new CopyOnWriteArrayList<>());
+        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
 
-        // Wrap task to track completion
         Runnable wrappedTask = new Runnable() {
             @Override
             public void run() {
                 try {
                     task.run();
                 } finally {
-                    // Remove from tracking when completed
                     synchronized (tasks) {
                         tasks.remove(this);
                     }
@@ -130,7 +137,6 @@ public class ControllableWorkStealingPool extends ThreadPoolExecutor implements 
             tasks.add(wrappedTask);
         }
 
-        // Add to front of queue
         LinkedBlockingDeque<Runnable> deque = (LinkedBlockingDeque<Runnable>) getQueue();
         deque.offerFirst(wrappedTask);
     }
@@ -158,14 +164,12 @@ public class ControllableWorkStealingPool extends ThreadPoolExecutor implements 
         int cancelled = 0;
         BlockingQueue<Runnable> queue = getQueue();
 
-        // Remove each task from the queue
         for (Runnable task : tasks) {
             if (queue.remove(task)) {
                 cancelled++;
             }
         }
 
-        // Clear tracking
         tasks.clear();
         actorTasks.remove(actorName);
 

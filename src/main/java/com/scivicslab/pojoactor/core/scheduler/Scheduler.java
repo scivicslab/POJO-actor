@@ -91,7 +91,7 @@ public class Scheduler implements AutoCloseable {
      * @param poolSize the number of threads in the scheduler's thread pool
      */
     public Scheduler(int poolSize) {
-        this.executor = Executors.newScheduledThreadPool(poolSize, r -> {
+        this.executor = Executors.newScheduledThreadPool(poolSize, (Runnable r) -> {
             Thread t = new Thread(r, "Scheduler-Worker");
             t.setDaemon(true);
             return t;
@@ -290,7 +290,7 @@ public class Scheduler implements AutoCloseable {
             scheduledTasks.size() + " scheduled tasks");
 
         // Cancel all scheduled tasks
-        scheduledTasks.values().forEach(task -> task.cancel(false));
+        scheduledTasks.values().forEach((ScheduledFuture<?> task) -> task.cancel(false));
         scheduledTasks.clear();
 
         // Shutdown the executor
@@ -316,7 +316,7 @@ public class Scheduler implements AutoCloseable {
      */
     private <T> void executeOnActor(String taskId, ActorRef<T> actorRef, Consumer<T> action) {
         try {
-            actorRef.ask(actor -> {
+            actorRef.ask((T actor) -> {
                 action.accept(actor);
                 return null;
             }).join();

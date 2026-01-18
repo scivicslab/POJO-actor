@@ -30,19 +30,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test to verify if CompletableFuture.cancel() actually cancels jobs in WorkStealingPool.
+ * Test to verify if CompletableFuture.cancel() actually cancels jobs in ManagedThreadPool.
  *
  * This test investigates whether calling cancel() on CompletableFutures removes
- * the actual tasks from the WorkStealingPool, or if the tasks continue to execute
+ * the actual tasks from the ManagedThreadPool, or if the tasks continue to execute
  * and consume CPU resources.
  *
  * @author devteam@scivics-lab.com
  * @version 1.0.0
  */
-@DisplayName("WorkStealingPool cancel test")
-public class WorkStealingPoolCancelTest {
+@DisplayName("ThreadPool cancel test")
+public class ThreadPoolCancelTest {
 
-    private static final Logger logger = Logger.getLogger(WorkStealingPoolCancelTest.class.getName());
+    private static final Logger logger = Logger.getLogger(ThreadPoolCancelTest.class.getName());
     private ActorSystem system;
 
     @BeforeEach
@@ -58,10 +58,10 @@ public class WorkStealingPoolCancelTest {
     }
 
     /**
-     * Test if CompletableFuture.cancel(true) stops CPU-bound jobs in WorkStealingPool.
+     * Test if CompletableFuture.cancel(true) stops CPU-bound jobs in ManagedThreadPool.
      *
      * Test scenario:
-     * 1. Submit 100 CPU-bound tasks to WorkStealingPool (each takes ~100ms)
+     * 1. Submit 100 CPU-bound tasks to ManagedThreadPool (each takes ~100ms)
      * 2. After 500ms, cancel all remaining tasks
      * 3. Count how many tasks actually completed
      *
@@ -69,17 +69,17 @@ public class WorkStealingPoolCancelTest {
      * - If cancel() works: ~50-60 tasks completed (5 seconds / 100ms * 4 threads)
      * - If cancel() doesn't work: All 100 tasks complete
      */
-    @DisplayName("Should cancel CPU-bound jobs in WorkStealingPool")
+    @DisplayName("Should cancel CPU-bound jobs in ManagedThreadPool")
     @Test
-    public void testCancelWorkStealingPoolJobs() throws InterruptedException {
+    public void testCancelManagedThreadPoolJobs() throws InterruptedException {
         AtomicInteger completedCount = new AtomicInteger(0);
         AtomicInteger startedCount = new AtomicInteger(0);
         ActorRef<String> actor = system.actorOf("testActor", "test");
 
-        // Submit 100 CPU-bound tasks to WorkStealingPool
+        // Submit 100 CPU-bound tasks to ManagedThreadPool
         for (int i = 0; i < 100; i++) {
             final int taskId = i;
-            CompletableFuture<Void> future = actor.tell(s -> {
+            CompletableFuture<Void> future = actor.tell((String s) -> {
                 startedCount.incrementAndGet();
                 logger.info("Task " + taskId + " started");
 
@@ -97,7 +97,7 @@ public class WorkStealingPoolCancelTest {
 
                 completedCount.incrementAndGet();
                 logger.info("Task " + taskId + " completed");
-            }, system.getWorkStealingPool());
+            }, system.getManagedThreadPool());
 
             // Store the future for cancellation (in real implementation, this would be done in ActorRef)
             // For now, we just let them run
@@ -151,10 +151,10 @@ public class WorkStealingPoolCancelTest {
         // Store futures for cancellation
         CompletableFuture<?>[] futures = new CompletableFuture<?>[100];
 
-        // Submit 100 CPU-bound tasks to WorkStealingPool
+        // Submit 100 CPU-bound tasks to ManagedThreadPool
         for (int i = 0; i < 100; i++) {
             final int taskId = i;
-            futures[i] = actor.tell(s -> {
+            futures[i] = actor.tell((String s) -> {
                 startedCount.incrementAndGet();
                 logger.info("Task " + taskId + " started");
 
@@ -177,7 +177,7 @@ public class WorkStealingPoolCancelTest {
                 } catch (Exception e) {
                     logger.info("Task " + taskId + " exception: " + e.getMessage());
                 }
-            }, system.getWorkStealingPool());
+            }, system.getManagedThreadPool());
         }
 
         // Wait 500ms to let some tasks start

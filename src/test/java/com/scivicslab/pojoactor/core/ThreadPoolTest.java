@@ -90,12 +90,12 @@ public class ThreadPoolTest {
                     // Initialize the actor with its specific block coordinates
                     actor.tell((a) -> {
                         a.initBlock(matrixA, matrixB, startRow, endRow, startCol, endCol, matrixSize);
-                    }, system.getWorkStealingPool()).get();
+                    }, system.getManagedThreadPool()).get();
 
                     // Start the block calculation
                     CompletableFuture<Double> blockSum = actor.ask((a) -> {
                         return a.getBlockSum(); // Calculate and sum the block
-                    }, system.getWorkStealingPool());
+                    }, system.getManagedThreadPool());
 
                     futures.add(blockSum);
                     actorId++;

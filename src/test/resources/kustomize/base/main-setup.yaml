@@ -2,21 +2,21 @@ name: MainSetupWorkflow
 
 steps:
   - states: ["0", "1"]
-    vertexName: main-setup-init
+    label: main-setup-init
     actions:
       - actor: this
         method: doNothing
         arguments: ["main-init"]
 
   - states: ["1", "2"]
-    vertexName: main-setup-run
+    label: main-setup-run
     actions:
       - actor: this
         method: doNothing
         arguments: ["main-run"]
 
   - states: ["2", "end"]
-    vertexName: main-setup-cleanup
+    label: main-setup-cleanup
     actions:
       - actor: this
         method: doNothing

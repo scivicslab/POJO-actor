@@ -21,9 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a single vertex in the workflow graph.
+ * Represents a single transition in the workflow graph.
  *
- * <p>Each vertex defines a state transition with associated actions. The states
+ * <p>Each transition defines a state change with associated actions. The states
  * list typically contains two elements: the current state and the next state.
  * The actions can be represented in two ways:</p>
  * <ul>
@@ -31,19 +31,21 @@ import java.util.List;
  *   <li>New format: List of Action objects with execution mode support</li>
  * </ul>
  *
- * <p>This class is designed to be populated from YAML, JSON, or XML workflow definitions
+ * <p>This class is designed to be populated from YAML workflow definitions
  * using deserialization frameworks like SnakeYAML or Jackson.</p>
  *
  * @author devteam@scivics-lab.com
+ * @since 2.12.0
  */
-public class Vertex {
+public class Transition {
 
     List<String> states;
-    String vertexName;  // Optional identifier for overlay matching
+    String label;  // Optional identifier for overlay matching
+    String note;   // Optional human-readable note for documentation
     List<Action> actions;  // Unified format for all workflow types
 
     /**
-     * Returns the list of Action objects for this vertex.
+     * Returns the list of Action objects for this transition.
      *
      * @return a list of Action objects
      */
@@ -52,7 +54,7 @@ public class Vertex {
     }
 
     /**
-     * Returns the list of states for this vertex.
+     * Returns the list of states for this transition.
      *
      * <p>Typically contains two elements: [currentState, nextState]</p>
      *
@@ -63,7 +65,7 @@ public class Vertex {
     }
 
     /**
-     * Sets the list of actions for this vertex.
+     * Sets the list of actions for this transition.
      *
      * @param actions a list of Action objects
      */
@@ -72,7 +74,7 @@ public class Vertex {
     }
 
     /**
-     * Sets the list of states for this vertex.
+     * Sets the list of states for this transition.
      *
      * @param list a list of state identifiers
      */
@@ -81,35 +83,54 @@ public class Vertex {
     }
 
     /**
-     * Returns the vertex name.
+     * Returns the label.
      *
-     * <p>The vertex name is used as a stable identifier for overlay matching.
-     * When applying patches, vertices are matched by this name rather than
+     * <p>The label is used as a stable identifier for overlay matching.
+     * When applying patches, transitions are matched by this label rather than
      * by states or array index.</p>
      *
-     * @return the vertex name, or null if not set
-     * @since 2.9.0
+     * @return the label, or null if not set
      */
-    public String getVertexName() {
-        return this.vertexName;
+    public String getLabel() {
+        return this.label;
     }
 
     /**
-     * Sets the vertex name.
+     * Sets the label.
      *
-     * @param vertexName the vertex name identifier
-     * @since 2.9.0
+     * @param label the label identifier
      */
-    public void setVertexName(String vertexName) {
-        this.vertexName = vertexName;
+    public void setLabel(String label) {
+        this.label = label;
     }
 
     /**
-     * Returns a YAML-formatted string representation of this vertex.
+     * Returns the note for this transition.
+     *
+     * <p>The note provides human-readable documentation about what this
+     * transition does. It is optional and not used at runtime.</p>
+     *
+     * @return the note, or null if not set
+     */
+    public String getNote() {
+        return this.note;
+    }
+
+    /**
+     * Sets the note for this transition.
+     *
+     * @param note the human-readable note
+     */
+    public void setNote(String note) {
+        this.note = note;
+    }
+
+    /**
+     * Returns a YAML-formatted string representation of this transition.
      *
      * <p>This method reconstructs a YAML-like format from the parsed data,
      * useful for debugging and visualization. The output shows the first
-     * N lines of the vertex definition.</p>
+     * N lines of the transition definition.</p>
      *
      * <p>Example output:</p>
      * <pre>
@@ -122,7 +143,6 @@ public class Vertex {
      *
      * @param maxLines maximum number of lines to include (0 for unlimited)
      * @return YAML-formatted string representation
-     * @since 2.9.0
      */
     public String toYamlString(int maxLines) {
         StringBuilder sb = new StringBuilder();
@@ -135,9 +155,9 @@ public class Vertex {
             return sb.toString();
         }
 
-        // vertexName (if present)
-        if (vertexName != null && !vertexName.isEmpty()) {
-            sb.append("  vertexName: ").append(vertexName).append("\n");
+        // label (if present)
+        if (label != null && !label.isEmpty()) {
+            sb.append("  label: ").append(label).append("\n");
             lineCount++;
             if (maxLines > 0 && lineCount >= maxLines) {
                 return sb.toString();

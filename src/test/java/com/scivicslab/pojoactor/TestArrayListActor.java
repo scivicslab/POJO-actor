@@ -12,21 +12,21 @@ public class TestArrayListActor {
         ActorRef<ArrayList<String>> listActor = system.actorOf("myList", new ArrayList<String>());
 
         // Send messages to the ArrayList actor
-        listActor.tell(list -> list.add("Hello"));
-        listActor.tell(list -> list.add("World"));
-        listActor.tell(list -> list.add("from"));
-        listActor.tell(list -> list.add("POJO-actor"));
+        listActor.tell((ArrayList<String> list) -> list.add("Hello"));
+        listActor.tell((ArrayList<String> list) -> list.add("World"));
+        listActor.tell((ArrayList<String> list) -> list.add("from"));
+        listActor.tell((ArrayList<String> list) -> list.add("POJO-actor"));
 
         // Query the list size
-        CompletableFuture<Integer> sizeResult = listActor.ask(list -> list.size());
+        CompletableFuture<Integer> sizeResult = listActor.ask((ArrayList<String> list) -> list.size());
         System.out.println("List size: " + sizeResult.get()); // Prints: List size: 4
 
         // Get specific elements
-        CompletableFuture<String> firstElement = listActor.ask(list -> list.get(0));
+        CompletableFuture<String> firstElement = listActor.ask((ArrayList<String> list) -> list.get(0));
         System.out.println("First element: " + firstElement.get()); // Prints: First element: Hello
 
         // Even complex operations work
-        CompletableFuture<String> joinedResult = listActor.ask(list -> 
+        CompletableFuture<String> joinedResult = listActor.ask((ArrayList<String> list) ->
             String.join(" ", list));
         System.out.println(joinedResult.get()); // Prints: Hello World from POJO-actor
 

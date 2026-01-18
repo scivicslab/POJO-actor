@@ -75,7 +75,7 @@ public class DynamicActorLoaderTest {
         AtomicInteger result = new AtomicInteger(0);
 
         // Send message using the actor
-        CompletableFuture<Void> future = mathActor.tell(m -> {
+        CompletableFuture<Void> future = mathActor.tell((MathPlugin m) -> {
             int sum = m.add(5, 3);
             result.set(sum);
         });
@@ -98,7 +98,7 @@ public class DynamicActorLoaderTest {
         AtomicReference<String> greeting = new AtomicReference<>();
 
         // Invoke method via reflection (as would be done with unknown plugin types)
-        CompletableFuture<Void> future = mathActor.tell(obj -> {
+        CompletableFuture<Void> future = mathActor.tell((Object obj) -> {
             try {
                 Method greetMethod = obj.getClass().getMethod("greet", String.class);
                 String result = (String) greetMethod.invoke(obj, "World");
@@ -125,15 +125,15 @@ public class DynamicActorLoaderTest {
         ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
 
         // First operation: add
-        CompletableFuture<Integer> addResult = mathActor.ask(m -> m.add(10, 5));
+        CompletableFuture<Integer> addResult = mathActor.ask((MathPlugin m) -> m.add(10, 5));
         assertEquals(15, addResult.get(), "Add operation should work");
 
         // Second operation: multiply
-        CompletableFuture<Integer> multiplyResult = mathActor.ask(m -> m.multiply(3, 4));
+        CompletableFuture<Integer> multiplyResult = mathActor.ask((MathPlugin m) -> m.multiply(3, 4));
         assertEquals(12, multiplyResult.get(), "Multiply operation should work");
 
         // Third operation: get last result
-        CompletableFuture<Integer> lastResult = mathActor.ask(m -> m.getLastResult());
+        CompletableFuture<Integer> lastResult = mathActor.ask((MathPlugin m) -> m.getLastResult());
         assertEquals(12, lastResult.get(), "Should return last result");
 
         mathActor.close();
@@ -156,7 +156,7 @@ public class DynamicActorLoaderTest {
         ActorRef<MathPlugin> retrieved = system.getActor("mathActor");
         assertNotNull(retrieved, "Should retrieve registered actor");
 
-        CompletableFuture<Integer> result = retrieved.ask(m -> m.add(7, 3));
+        CompletableFuture<Integer> result = retrieved.ask((MathPlugin m) -> m.add(7, 3));
         assertEquals(10, result.get(), "Retrieved actor should work correctly");
     }
 
@@ -169,9 +169,9 @@ public class DynamicActorLoaderTest {
         ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
 
         // Send multiple messages concurrently
-        CompletableFuture<Integer> f1 = mathActor.ask(m -> m.add(1, 1));
-        CompletableFuture<Integer> f2 = mathActor.ask(m -> m.add(2, 2));
-        CompletableFuture<Integer> f3 = mathActor.ask(m -> m.add(3, 3));
+        CompletableFuture<Integer> f1 = mathActor.ask((MathPlugin m) -> m.add(1, 1));
+        CompletableFuture<Integer> f2 = mathActor.ask((MathPlugin m) -> m.add(2, 2));
+        CompletableFuture<Integer> f3 = mathActor.ask((MathPlugin m) -> m.add(3, 3));
 
         // All should complete successfully
         assertEquals(2, f1.get());
@@ -190,25 +190,25 @@ public class DynamicActorLoaderTest {
         ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
 
         // Test add action
-        CompletableFuture<ActionResult> addResult = mathActor.ask(m -> m.callByActionName("add", "5,3"));
+        CompletableFuture<ActionResult> addResult = mathActor.ask((MathPlugin m) -> m.callByActionName("add", "5,3"));
         ActionResult addOutcome = addResult.get();
         assertTrue(addOutcome.isSuccess(), "add action should succeed");
         assertEquals("8", addOutcome.getResult(), "add should return 8");
 
         // Test multiply action
-        CompletableFuture<ActionResult> multiplyResult = mathActor.ask(m -> m.callByActionName("multiply", "4,2"));
+        CompletableFuture<ActionResult> multiplyResult = mathActor.ask((MathPlugin m) -> m.callByActionName("multiply", "4,2"));
         ActionResult multiplyOutcome = multiplyResult.get();
         assertTrue(multiplyOutcome.isSuccess(), "multiply action should succeed");
         assertEquals("8", multiplyOutcome.getResult(), "multiply should return 8");
 
         // Test getLastResult action
-        CompletableFuture<ActionResult> lastResult = mathActor.ask(m -> m.callByActionName("getLastResult", ""));
+        CompletableFuture<ActionResult> lastResult = mathActor.ask((MathPlugin m) -> m.callByActionName("getLastResult", ""));
         ActionResult lastOutcome = lastResult.get();
         assertTrue(lastOutcome.isSuccess(), "getLastResult action should succeed");
         assertEquals("8", lastOutcome.getResult(), "getLastResult should return 8");
 
         // Test greet action
-        CompletableFuture<ActionResult> greetResult = mathActor.ask(m -> m.callByActionName("greet", "World"));
+        CompletableFuture<ActionResult> greetResult = mathActor.ask((MathPlugin m) -> m.callByActionName("greet", "World"));
         ActionResult greetOutcome = greetResult.get();
         assertTrue(greetOutcome.isSuccess(), "greet action should succeed");
         assertEquals("Hello, World from MathPlugin!", greetOutcome.getResult());
@@ -225,18 +225,18 @@ public class DynamicActorLoaderTest {
         ActorRef<MathPlugin> mathActor = new ActorRef<>("mathActor", new MathPlugin());
 
         // Test unknown action
-        CompletableFuture<ActionResult> unknownResult = mathActor.ask(m -> m.callByActionName("unknown", ""));
+        CompletableFuture<ActionResult> unknownResult = mathActor.ask((MathPlugin m) -> m.callByActionName("unknown", ""));
         ActionResult unknownOutcome = unknownResult.get();
         assertFalse(unknownOutcome.isSuccess(), "unknown action should fail");
         assertTrue(unknownOutcome.getResult().contains("Unknown action"));
 
         // Test invalid argument format
-        CompletableFuture<ActionResult> invalidResult = mathActor.ask(m -> m.callByActionName("add", "invalid"));
+        CompletableFuture<ActionResult> invalidResult = mathActor.ask((MathPlugin m) -> m.callByActionName("add", "invalid"));
         ActionResult invalidOutcome = invalidResult.get();
         assertFalse(invalidOutcome.isSuccess(), "invalid args should fail");
 
         // Test missing required argument
-        CompletableFuture<ActionResult> missingResult = mathActor.ask(m -> m.callByActionName("greet", ""));
+        CompletableFuture<ActionResult> missingResult = mathActor.ask((MathPlugin m) -> m.callByActionName("greet", ""));
         ActionResult missingOutcome = missingResult.get();
         assertFalse(missingOutcome.isSuccess(), "missing args should fail");
 
@@ -255,13 +255,13 @@ public class DynamicActorLoaderTest {
         // This pattern is common in YAML/JSON workflows
 
         // Step 1: add 10 + 5 = 15
-        mathActor.ask(m -> m.callByActionName("add", "10,5")).get();
+        mathActor.ask((MathPlugin m) -> m.callByActionName("add", "10,5")).get();
 
         // Step 2: multiply 3 * 4 = 12 (overwrites lastResult)
-        mathActor.ask(m -> m.callByActionName("multiply", "3,4")).get();
+        mathActor.ask((MathPlugin m) -> m.callByActionName("multiply", "3,4")).get();
 
         // Step 3: get the last result (should be 12)
-        ActionResult finalResult = mathActor.ask(m -> m.callByActionName("getLastResult", "")).get();
+        ActionResult finalResult = mathActor.ask((MathPlugin m) -> m.callByActionName("getLastResult", "")).get();
 
         assertTrue(finalResult.isSuccess());
         assertEquals("12", finalResult.getResult(), "Should return result of last operation");

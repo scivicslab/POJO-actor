@@ -168,18 +168,18 @@ public class ConditionalBranchingTest {
                 .build();
     }
 
-    private MatrixCode createCode(String name, Vertex... steps) {
+    private MatrixCode createCode(String name, Transition... steps) {
         MatrixCode code = new MatrixCode();
         code.setName(name);
         code.setSteps(Arrays.asList(steps));
         return code;
     }
 
-    private Vertex createVertex(String fromState, String toState, Action... actions) {
-        Vertex vertex = new Vertex();
-        vertex.setStates(Arrays.asList(fromState, toState));
-        vertex.setActions(Arrays.asList(actions));
-        return vertex;
+    private Transition createTransition(String fromState, String toState, Action... actions) {
+        Transition transition = new Transition();
+        transition.setStates(Arrays.asList(fromState, toState));
+        transition.setActions(Arrays.asList(actions));
+        return transition;
     }
 
     private Action createAction(String actor, String method, String argument) {
@@ -212,7 +212,7 @@ public class ConditionalBranchingTest {
         @DisplayName("should return true when from-state matches current state")
         void shouldMatchWhenFromStateMatchesCurrentState() {
             Interpreter interpreter = createInterpreter();
-            Vertex row = createVertex("0", "1", createAction("checker", "alwaysTrue", ""));
+            Transition row = createTransition("0", "1", createAction("checker", "alwaysTrue", ""));
 
             assertTrue(interpreter.matchesCurrentState(row));
         }
@@ -221,7 +221,7 @@ public class ConditionalBranchingTest {
         @DisplayName("should return false when from-state does not match current state")
         void shouldNotMatchWhenFromStateDiffers() {
             Interpreter interpreter = createInterpreter();
-            Vertex row = createVertex("1", "2", createAction("checker", "alwaysTrue", ""));
+            Transition row = createTransition("1", "2", createAction("checker", "alwaysTrue", ""));
 
             assertFalse(interpreter.matchesCurrentState(row));
         }
@@ -230,7 +230,7 @@ public class ConditionalBranchingTest {
         @DisplayName("should return false when states list is too short")
         void shouldReturnFalseForShortStatesList() {
             Interpreter interpreter = createInterpreter();
-            Vertex row = new Vertex();
+            Transition row = new Transition();
             row.setStates(Arrays.asList("0")); // Only one state
             row.setActions(Arrays.asList());
 
@@ -250,7 +250,7 @@ public class ConditionalBranchingTest {
             Interpreter interpreter = createInterpreter();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "alwaysTrue", ""),
                     createAction("checker", "alwaysTrue", ""),
                     createAction("checker", "alwaysTrue", "")
@@ -271,7 +271,7 @@ public class ConditionalBranchingTest {
             conditionalActor.reset();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "alwaysFalse", ""),
                     createAction("checker", "doAction", "should-not-run")
                 )
@@ -296,7 +296,7 @@ public class ConditionalBranchingTest {
             conditionalActor.reset();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "alwaysTrue", ""),
                     createAction("checker", "alwaysFalse", ""),
                     createAction("checker", "doAction", "should-not-run")
@@ -331,10 +331,10 @@ public class ConditionalBranchingTest {
             // First step: condition fails -> should try second
             // Second step: condition succeeds -> should transition
             MatrixCode code = createCode("test",
-                createVertex("0", "path_a",
+                createTransition("0", "path_a",
                     createAction("checker", "alwaysFalse", "")
                 ),
-                createVertex("0", "path_b",
+                createTransition("0", "path_b",
                     createAction("checker", "alwaysTrue", "")
                 )
             );
@@ -357,15 +357,15 @@ public class ConditionalBranchingTest {
             // Multiple steps with same from-state
             // matchValue("A") should succeed on first step
             MatrixCode code = createCode("test",
-                createVertex("0", "path_a",
+                createTransition("0", "path_a",
                     createAction("checker", "matchValue", "A"),
                     createAction("checker", "doAction", "action_a")
                 ),
-                createVertex("0", "path_b",
+                createTransition("0", "path_b",
                     createAction("checker", "matchValue", "B"),
                     createAction("checker", "doAction", "action_b")
                 ),
-                createVertex("0", "path_c",
+                createTransition("0", "path_c",
                     createAction("checker", "doAction", "action_c")
                 )
             );
@@ -390,13 +390,13 @@ public class ConditionalBranchingTest {
             conditionalActor.setValue("X"); // Neither A nor B
 
             MatrixCode code = createCode("test",
-                createVertex("0", "path_a",
+                createTransition("0", "path_a",
                     createAction("checker", "matchValue", "A")
                 ),
-                createVertex("0", "path_b",
+                createTransition("0", "path_b",
                     createAction("checker", "matchValue", "B")
                 ),
-                createVertex("0", "default",
+                createTransition("0", "default",
                     createAction("checker", "doAction", "default_action")
                 )
             );
@@ -423,11 +423,11 @@ public class ConditionalBranchingTest {
             conditionalActor.setValue("loop");
 
             MatrixCode code = createCode("test",
-                createVertex("0", "0",
+                createTransition("0", "0",
                     createAction("checker", "matchValue", "loop"),
                     createAction("checker", "setValue", "stop")
                 ),
-                createVertex("0", "end",
+                createTransition("0", "end",
                     createAction("checker", "doAction", "finished")
                 )
             );
@@ -457,8 +457,8 @@ public class ConditionalBranchingTest {
             Interpreter interpreter = createInterpreter();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "new_state"),
-                createVertex("new_state", "end")
+                createTransition("0", "new_state"),
+                createTransition("new_state", "end")
             );
             setInterpreterCode(interpreter, code);
 
@@ -469,21 +469,21 @@ public class ConditionalBranchingTest {
 
         @Test
         @DisplayName("should find next matching row after transition")
-        void shouldFindNextMatchingVertex() {
+        void shouldFindNextMatchingTransition() {
             Interpreter interpreter = createInterpreter();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1"),
-                createVertex("1", "2"),
-                createVertex("2", "end")
+                createTransition("0", "1"),
+                createTransition("1", "2"),
+                createTransition("2", "end")
             );
             setInterpreterCode(interpreter, code);
 
             interpreter.transitionTo("2");
 
             assertEquals("2", interpreter.getCurrentState());
-            assertEquals(2, interpreter.getCurrentVertexIndex(),
-                "Should point to vertex with from-state='2'");
+            assertEquals(2, interpreter.getCurrentTransitionIndex(),
+                "Should point to transition with from-state='2'");
         }
     }
 
@@ -502,23 +502,23 @@ public class ConditionalBranchingTest {
 
             MatrixCode code = createCode("test",
                 // State 0: Check value, branch to A or B or default
-                createVertex("0", "process_a",
+                createTransition("0", "process_a",
                     createAction("checker", "matchValue", "A")
                 ),
-                createVertex("0", "process_b",
+                createTransition("0", "process_b",
                     createAction("checker", "matchValue", "B")
                 ),
-                createVertex("0", "process_default",
+                createTransition("0", "process_default",
                     createAction("checker", "alwaysTrue", "")
                 ),
                 // Processing states
-                createVertex("process_a", "end",
+                createTransition("process_a", "end",
                     createAction("checker", "doAction", "processed_A")
                 ),
-                createVertex("process_b", "end",
+                createTransition("process_b", "end",
                     createAction("checker", "doAction", "processed_B")
                 ),
-                createVertex("process_default", "end",
+                createTransition("process_default", "end",
                     createAction("checker", "doAction", "processed_default")
                 )
             );
@@ -555,10 +555,10 @@ public class ConditionalBranchingTest {
 
             // All steps fail their conditions
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "alwaysFalse", "")
                 ),
-                createVertex("0", "2",
+                createTransition("0", "2",
                     createAction("checker", "alwaysFalse", "")
                 )
             );
@@ -576,7 +576,7 @@ public class ConditionalBranchingTest {
             Interpreter interpreter = createInterpreter();
 
             // Step with no actions should succeed
-            Vertex row = createVertex("0", "1");
+            Transition row = createTransition("0", "1");
             row.setActions(Arrays.asList());
 
             MatrixCode code = createCode("test", row);
@@ -602,13 +602,13 @@ public class ConditionalBranchingTest {
             conditionalActor.reset();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "doAction", "step1")
                 ),
-                createVertex("1", "2",
+                createTransition("1", "2",
                     createAction("checker", "doAction", "step2")
                 ),
-                createVertex("2", "end",
+                createTransition("2", "end",
                     createAction("checker", "doAction", "step3")
                 )
             );
@@ -635,13 +635,13 @@ public class ConditionalBranchingTest {
             conditionalActor.reset();
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "doAction", "step1")
                 ),
-                createVertex("1", "2",
+                createTransition("1", "2",
                     createAction("checker", "alwaysFalse", "") // This will fail
                 ),
-                createVertex("2", "end",
+                createTransition("2", "end",
                     createAction("checker", "doAction", "step3")
                 )
             );
@@ -678,7 +678,7 @@ public class ConditionalBranchingTest {
 
             // Infinite loop: 0 -> 0 (no end state)
             MatrixCode code = createCode("test",
-                createVertex("0", "0",
+                createTransition("0", "0",
                     createAction("checker", "alwaysTrue", "")
                 )
             );
@@ -700,17 +700,17 @@ public class ConditionalBranchingTest {
 
             MatrixCode code = createCode("test",
                 // State 0: branch based on value
-                createVertex("0", "process_a",
+                createTransition("0", "process_a",
                     createAction("checker", "matchValue", "A")
                 ),
-                createVertex("0", "process_b",
+                createTransition("0", "process_b",
                     createAction("checker", "matchValue", "B")
                 ),
                 // Processing states lead to end
-                createVertex("process_a", "end",
+                createTransition("process_a", "end",
                     createAction("checker", "doAction", "done_a")
                 ),
-                createVertex("process_b", "end",
+                createTransition("process_b", "end",
                     createAction("checker", "doAction", "done_b")
                 )
             );
@@ -756,12 +756,12 @@ public class ConditionalBranchingTest {
 
             MatrixCode code = createCode("test",
                 // Loop: increment and check if less than 3
-                createVertex("0", "0",
+                createTransition("0", "0",
                     createAction("counter", "lessThan", "3"),
                     createAction("counter", "increment", "")
                 ),
                 // Exit to end when condition fails
-                createVertex("0", "end",
+                createTransition("0", "end",
                     createAction("checker", "doAction", "finished")
                 )
             );
@@ -789,7 +789,7 @@ public class ConditionalBranchingTest {
             }
 
             MatrixCode code = createCode("test",
-                createVertex("0", "1",
+                createTransition("0", "1",
                     createAction("checker", "doAction", "should-not-run")
                 )
             );

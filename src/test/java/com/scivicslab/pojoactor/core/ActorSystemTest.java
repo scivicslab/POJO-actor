@@ -95,12 +95,12 @@ public class ActorSystemTest {
         ActorRef<ArrayList<Integer>> actor = system.actorOf("counter", new ArrayList<Integer>());
 
         // Send messages
-        actor.tell(list -> list.add(1));
-        actor.tell(list -> list.add(2));
-        actor.tell(list -> list.add(3));
+        actor.tell((ArrayList<Integer> list) -> list.add(1));
+        actor.tell((ArrayList<Integer> list) -> list.add(2));
+        actor.tell((ArrayList<Integer> list) -> list.add(3));
 
         // Get result
-        CompletableFuture<String> future = actor.ask(list -> list.toString());
+        CompletableFuture<String> future = actor.ask((ArrayList<Integer> list) -> list.toString());
         String result = future.get(3, TimeUnit.SECONDS);
 
         // Verify result
@@ -144,8 +144,8 @@ public class ActorSystemTest {
 
         // Use actor through system
         ActorRef<ArrayList<Integer>> a1 = system.getActor("actor1");
-        a1.tell(list -> list.add(100));
-        CompletableFuture<String> future = a1.ask(list -> list.toString());
+        a1.tell((ArrayList<Integer> list) -> list.add(100));
+        CompletableFuture<String> future = a1.ask((ArrayList<Integer> list) -> list.toString());
         String result = future.get(3, TimeUnit.SECONDS);
 
         assertEquals("[100]", result, "Actor should process messages correctly");

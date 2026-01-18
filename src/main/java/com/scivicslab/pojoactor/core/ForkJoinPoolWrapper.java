@@ -33,7 +33,6 @@ import java.util.concurrent.TimeoutException;
  * performance with independent CPU-bound tasks.
  *
  * Note: This implementation does NOT support job cancellation per actor.
- * Use ControllableWorkStealingPool if you need that feature.
  *
  * @author devteam@scivics-lab.com
  * @since 1.0.0

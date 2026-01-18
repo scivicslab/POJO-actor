@@ -2,14 +2,14 @@ name: SubWorkflow
 
 steps:
   - states: ["0", "1"]
-    vertexName: step-one
+    label: step-one
     actions:
       - actor: this
         method: doNothing
         arguments: ["sub-step-1"]
 
   - states: ["1", "end"]
-    vertexName: step-two
+    label: step-two
     actions:
       - actor: this
         method: doNothing

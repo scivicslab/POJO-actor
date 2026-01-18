@@ -18,45 +18,45 @@
 package com.scivicslab.pojoactor.workflow.kustomize;
 
 /**
- * Exception thrown when a patch contains a new vertex without an anchor.
+ * Exception thrown when a patch contains a new transition without an anchor.
  *
- * <p>When adding new vertices via overlay, the patch must include at least
- * one vertex that matches an existing vertex in the base workflow (an "anchor").
- * New vertices are inserted relative to the anchor's position.</p>
+ * <p>When adding new transitions via overlay, the patch must include at least
+ * one transition that matches an existing transition in the base workflow (an "anchor").
+ * New transitions are inserted relative to the anchor's position.</p>
  *
- * <p>If a patch contains only vertices that don't exist in the base,
+ * <p>If a patch contains only transitions that don't exist in the base,
  * this exception is thrown because the insertion position cannot be determined.</p>
  *
  * @author devteam@scivics-lab.com
- * @since 2.9.0
+ * @since 2.12.0
  */
-public class OrphanVertexException extends RuntimeException {
+public class OrphanTransitionException extends RuntimeException {
 
-    private final String vertexName;
+    private final String label;
     private final String patchFile;
 
     /**
-     * Constructs a new OrphanVertexException.
+     * Constructs a new OrphanTransitionException.
      *
-     * @param vertexName the name of the orphan vertex
-     * @param patchFile the patch file containing the orphan vertex
+     * @param label the label of the orphan transition
+     * @param patchFile the patch file containing the orphan transition
      */
-    public OrphanVertexException(String vertexName, String patchFile) {
+    public OrphanTransitionException(String label, String patchFile) {
         super(String.format(
-            "Orphan vertex '%s' in patch '%s'. " +
-            "New vertices must be accompanied by at least one vertex that exists in the base workflow.",
-            vertexName, patchFile));
-        this.vertexName = vertexName;
+            "Orphan transition '%s' in patch '%s'. " +
+            "New transitions must be accompanied by at least one transition that exists in the base workflow.",
+            label, patchFile));
+        this.label = label;
         this.patchFile = patchFile;
     }
 
     /**
-     * Gets the name of the orphan vertex.
+     * Gets the label of the orphan transition.
      *
-     * @return the vertex name
+     * @return the transition label
      */
-    public String getVertexName() {
-        return vertexName;
+    public String getLabel() {
+        return label;
     }
 
     /**
