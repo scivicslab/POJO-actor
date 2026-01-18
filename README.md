@@ -37,7 +37,7 @@ Maven Dependency
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>2.11.0</version>
+    <version>2.12.0</version>
 </dependency>
 ```
 
