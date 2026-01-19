@@ -1,10 +1,13 @@
 # POJO-actor
 
-A lightweight, GraalVM Native Image compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead. 
+**Official Website: [scivicslab.com/docs/pojo-actor](https://scivicslab.com/docs/pojo-actor/introduction)**
+
+A lightweight, GraalVM Native Image compatible actor model library for Java that turns ordinary POJOs (Plain Old Java Objects) into actors with minimal overhead.
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Javadoc](https://img.shields.io/badge/javadoc-2.12.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Official Docs](https://img.shields.io/badge/docs-scivicslab.com-green.svg)](https://scivicslab.com/docs/pojo-actor/introduction)
 
 
 The actor model is a programming paradigm where independent entities (actors) communicate through message passing, eliminating the need for locks and avoiding the complexities of shared-state concurrency. Traditionally, using the actor model required specialized frameworks, and because these frameworks relied on real operating system threads, you could only create as many actors as you had CPU cores — typically just a handful. However, recent advancements in the JDK, particularly the introduction of virtual threads in Java 21, have changed everything: now even an ordinary laptop can handle tens of thousands of actors simultaneously.
