@@ -19,11 +19,15 @@ package com.scivicslab.pojoactor.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.scivicslab.pojoactor.workflow.IIActorRef;
+import com.scivicslab.pojoactor.workflow.IIActorSystem;
 
 /**
  * Test for dynamically loading the actor-IaC-plugins.
@@ -37,6 +41,59 @@ public class SystemInfoAggregatorTest {
 
     private static final String PLUGIN_CLASS =
         "com.scivicslab.actoriac.plugins.h2analyzer.SystemInfoAggregator";
+
+    /**
+     * Dummy outputMultiplexer actor for testing.
+     * Simply accepts all "add" calls and returns success.
+     */
+    private static class DummyOutputMultiplexer implements CallableByActionName {
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            if ("add".equals(actionName)) {
+                return new ActionResult(true, "Added to multiplexer");
+            }
+            return new ActionResult(false, "Unknown action: " + actionName);
+        }
+    }
+
+    /**
+     * IIActorRef wrapper for DummyOutputMultiplexer.
+     */
+    private static class DummyMultiplexerRef extends IIActorRef<DummyOutputMultiplexer> {
+
+        public DummyMultiplexerRef(String actorName, DummyOutputMultiplexer object, IIActorSystem system) {
+            super(actorName, object, system);
+        }
+
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return this.object.callByActionName(actionName, args);
+        }
+    }
+
+    /**
+     * Sets up IIActorSystem with outputMultiplexer for plugin testing.
+     * Also injects the system into the plugin via reflection.
+     */
+    private IIActorSystem setupActorSystem(Object pluginInstance) throws Exception {
+        IIActorSystem system = new IIActorSystem("plugin-test-system");
+
+        // Register dummy outputMultiplexer
+        DummyOutputMultiplexer multiplexer = new DummyOutputMultiplexer();
+        DummyMultiplexerRef multiplexerRef =
+            new DummyMultiplexerRef("outputMultiplexer", multiplexer, system);
+        system.addIIActor(multiplexerRef);
+
+        // Inject ActorSystem via reflection (plugin implements ActorSystemAware)
+        try {
+            Method setActorSystem = pluginInstance.getClass().getMethod("setActorSystem", IIActorSystem.class);
+            setActorSystem.invoke(pluginInstance, system);
+        } catch (NoSuchMethodException e) {
+            // Plugin doesn't implement ActorSystemAware, skip injection
+        }
+
+        return system;
+    }
 
     @Test
     @DisplayName("Should load SystemInfoAggregator from JAR")
@@ -94,6 +151,15 @@ public class SystemInfoAggregatorTest {
             "aggregator"
         );
 
+        // Setup ActorSystem with outputMultiplexer (required by plugin's reportToMultiplexer)
+        IIActorSystem system = aggregator.ask(obj -> {
+            try {
+                return setupActorSystem(obj);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }).get();
+
         // Connect to database
         ActionResult connectResult = aggregator.ask(obj -> {
             if (obj instanceof CallableByActionName callable) {
@@ -124,6 +190,7 @@ public class SystemInfoAggregatorTest {
         }).get();
 
         aggregator.close();
+        system.terminate();
     }
 
     @Test
@@ -148,6 +215,15 @@ public class SystemInfoAggregatorTest {
             PLUGIN_CLASS,
             "aggregator"
         );
+
+        // Setup ActorSystem with outputMultiplexer (required by plugin's reportToMultiplexer)
+        IIActorSystem system = aggregator.ask(obj -> {
+            try {
+                return setupActorSystem(obj);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }).get();
 
         // Connect
         aggregator.ask(obj -> {
@@ -176,5 +252,6 @@ public class SystemInfoAggregatorTest {
         }).get();
 
         aggregator.close();
+        system.terminate();
     }
 }

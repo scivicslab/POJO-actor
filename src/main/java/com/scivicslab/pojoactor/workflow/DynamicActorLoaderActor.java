@@ -240,21 +240,32 @@ public class DynamicActorLoaderActor implements CallableByActionName {
                 return new ActionResult(false, "Parent actor not found: " + parentName);
             }
 
-            // Try to load class from any loaded JAR
+            // Try to load class: first from system classpath, then from loaded JARs
             Class<?> clazz = null;
-            for (URLClassLoader loader : loadedJars.values()) {
-                try {
-                    clazz = loader.loadClass(className);
-                    break;
-                } catch (ClassNotFoundException e) {
-                    // Try next loader
+
+            // 1. Try system classpath first
+            try {
+                clazz = Class.forName(className);
+            } catch (ClassNotFoundException e) {
+                // Not on system classpath, try loaded JARs
+            }
+
+            // 2. If not found, try loaded JARs
+            if (clazz == null) {
+                for (URLClassLoader loader : loadedJars.values()) {
+                    try {
+                        clazz = loader.loadClass(className);
+                        break;
+                    } catch (ClassNotFoundException e) {
+                        // Try next loader
+                    }
                 }
             }
 
             if (clazz == null) {
                 return new ActionResult(false,
-                    "Class not found in loaded JARs: " + className +
-                    ". Make sure to call loadJar first.");
+                    "Class not found: " + className +
+                    ". Check the class name or load the JAR first.");
             }
 
             // Instantiate the class

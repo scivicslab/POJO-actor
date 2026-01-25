@@ -49,8 +49,6 @@ import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.workflow.kustomize.WorkflowKustomizer;
 
 import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.Constructor;
-import org.yaml.snakeyaml.LoaderOptions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -260,6 +258,11 @@ public class Interpreter {
                     result = actorAR.callByActionName(action, argumentString);
                 }
 
+                // Save the result for variable expansion (${result})
+                if (selfActorRef != null) {
+                    selfActorRef.setLastResult(result);
+                }
+
                 // If any action returns false, abort this step
                 if (!result.isSuccess()) {
                     logger.exiting(CLASS_NAME, "action", result);
@@ -295,23 +298,63 @@ public class Interpreter {
         }
 
         if (arguments instanceof String) {
-            // Single string argument: wrap in JSON array
+            // Single string argument: expand variables and wrap in JSON array
+            String expanded = expandVariables((String) arguments);
             JSONArray jsonArray = new JSONArray();
-            jsonArray.put((String) arguments);
+            jsonArray.put(expanded);
             return jsonArray.toString();
         } else if (arguments instanceof List) {
-            // Convert List to JSON array: ["arg1", "arg2"] or []
-            JSONArray jsonArray = new JSONArray((List<?>) arguments);
+            // Convert List to JSON array, expanding variables in string elements
+            JSONArray jsonArray = new JSONArray();
+            for (Object item : (List<?>) arguments) {
+                if (item instanceof String) {
+                    jsonArray.put(expandVariables((String) item));
+                } else {
+                    jsonArray.put(item);
+                }
+            }
             return jsonArray.toString();
         } else if (arguments instanceof Map) {
-            // Convert Map to JSON object directly (not wrapped in array)
-            JSONObject jsonObject = new JSONObject((Map<?, ?>) arguments);
+            // Convert Map to JSON object, expanding variables in string values
+            Map<?, ?> map = (Map<?, ?>) arguments;
+            JSONObject jsonObject = new JSONObject();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                Object value = entry.getValue();
+                if (value instanceof String) {
+                    jsonObject.put(entry.getKey().toString(), expandVariables((String) value));
+                } else {
+                    jsonObject.put(entry.getKey().toString(), value);
+                }
+            }
             return jsonObject.toString();
         } else {
             throw new IllegalArgumentException(
                 "Unsupported arguments type: " + arguments.getClass().getName() +
                 ". Expected String, List, or Map.");
         }
+    }
+
+    /**
+     * Expands variable references in a string.
+     *
+     * <p>Supports two types of expansion:</p>
+     * <ul>
+     *   <li>{@code this} or {@code .} - expands to the current actor's name</li>
+     *   <li>{@code ${varName}} - expands from JSON state or last result</li>
+     * </ul>
+     *
+     * @param input the string containing patterns to expand
+     * @return the expanded string
+     */
+    private String expandVariables(String input) {
+        if (selfActorRef != null) {
+            // Resolve "this" and "." to the actual actor name
+            if ("this".equals(input) || ".".equals(input)) {
+                return selfActorRef.getName();
+            }
+            return selfActorRef.expandVariables(input);
+        }
+        return input;
     }
 
     /**
@@ -335,13 +378,16 @@ public class Interpreter {
     /**
      * Reads and parses a workflow definition from a YAML input stream.
      *
+     * <p>This method uses a reflection-free approach to parse YAML,
+     * making it compatible with GraalVM Native Image.</p>
+     *
      * @param yamlInput the YAML input stream containing the workflow definition
      */
+    @SuppressWarnings("unchecked")
     public void readYaml(InputStream yamlInput) {
-
-        Yaml yaml = new Yaml(new Constructor(MatrixCode.class, new LoaderOptions()));
-        code = yaml.load(yamlInput);
-
+        Yaml yaml = new Yaml();
+        Map<String, Object> data = yaml.load(yamlInput);
+        code = mapToMatrixCode(data);
     }
 
     /**
@@ -520,6 +566,10 @@ public class Interpreter {
                         action.setActor((String) actionData.get("actor"));
                         action.setMethod((String) actionData.get("method"));
                         action.setArguments(actionData.get("arguments"));
+                        Object executionValue = actionData.get("execution");
+                        if (executionValue != null) {
+                            action.setExecution(ExecutionMode.fromString(executionValue.toString()));
+                        }
                         actions.add(action);
                     }
                     transition.setActions(actions);

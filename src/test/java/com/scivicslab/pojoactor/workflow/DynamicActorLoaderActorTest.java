@@ -135,6 +135,92 @@ public class DynamicActorLoaderActorTest {
         assertTrue(result.isSuccess(), "Workflow should execute successfully");
     }
 
+    @Test
+    @DisplayName("Should expand 'this' keyword to actual actor name in createChild arguments")
+    public void testThisKeywordExpansionInCreateChild() throws Exception {
+        // Create a parent actor that will be "this"
+        TestActor parentActor = new TestActor();
+        IIActorRef<TestActor> parentRef = new TestActorIIAR("node-192.168.5.13", parentActor, system);
+        system.addIIActor(parentRef);
+
+        // Register loader
+        system.addIIActor(new DynamicActorLoaderIIAR("loader", loader, system));
+
+        // Create interpreter with selfActorRef set (simulating running inside the parent actor)
+        Interpreter interpreter = new Interpreter.Builder()
+            .loggerName("test")
+            .team(system)
+            .build();
+        interpreter.setSelfActorRef(parentRef);
+
+        // Workflow that uses "this" as parent in createChild
+        String workflowYaml = """
+            name: test-this-expansion
+            steps:
+              - states: ["0", "end"]
+                actions:
+                  - actor: loader
+                    method: createChild
+                    arguments: ["this", "childActor", "com.scivicslab.pojoactor.workflow.DynamicActorLoaderActorTest$TestActor"]
+            """;
+
+        interpreter.readYaml(new java.io.ByteArrayInputStream(workflowYaml.getBytes()));
+        ActionResult result = interpreter.execCode();
+
+        assertTrue(result.isSuccess(), "Workflow should succeed: " + result.getResult());
+
+        // Verify the child was created under the correct parent
+        IIActorRef<?> childActor = system.getIIActor("childActor");
+        assertNotNull(childActor, "Child actor should be created");
+        assertEquals("node-192.168.5.13", childActor.getParentName(),
+            "Child's parent should be the actual actor name, not 'this'");
+
+        // Verify parent has the child in its children list
+        assertTrue(parentRef.getNamesOfChildren().contains("childActor"),
+            "Parent should have child in its children list");
+    }
+
+    @Test
+    @DisplayName("Should expand '.' keyword to actual actor name in createChild arguments")
+    public void testDotKeywordExpansionInCreateChild() throws Exception {
+        // Create a parent actor that will be "."
+        TestActor parentActor = new TestActor();
+        IIActorRef<TestActor> parentRef = new TestActorIIAR("node-192.168.5.14", parentActor, system);
+        system.addIIActor(parentRef);
+
+        // Register loader
+        system.addIIActor(new DynamicActorLoaderIIAR("loader", loader, system));
+
+        // Create interpreter with selfActorRef set
+        Interpreter interpreter = new Interpreter.Builder()
+            .loggerName("test")
+            .team(system)
+            .build();
+        interpreter.setSelfActorRef(parentRef);
+
+        // Workflow that uses "." as parent in createChild
+        String workflowYaml = """
+            name: test-dot-expansion
+            steps:
+              - states: ["0", "end"]
+                actions:
+                  - actor: loader
+                    method: createChild
+                    arguments: [".", "childActor2", "com.scivicslab.pojoactor.workflow.DynamicActorLoaderActorTest$TestActor"]
+            """;
+
+        interpreter.readYaml(new java.io.ByteArrayInputStream(workflowYaml.getBytes()));
+        ActionResult result = interpreter.execCode();
+
+        assertTrue(result.isSuccess(), "Workflow should succeed: " + result.getResult());
+
+        // Verify the child was created under the correct parent
+        IIActorRef<?> childActor = system.getIIActor("childActor2");
+        assertNotNull(childActor, "Child actor should be created");
+        assertEquals("node-192.168.5.14", childActor.getParentName(),
+            "Child's parent should be the actual actor name, not '.'");
+    }
+
     /**
      * Helper IIActorRef for DynamicActorLoaderActor.
      */
@@ -142,6 +228,30 @@ public class DynamicActorLoaderActorTest {
 
         public DynamicActorLoaderIIAR(String actorName, DynamicActorLoaderActor object,
                                       IIActorSystem system) {
+            super(actorName, object, system);
+        }
+
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return this.object.callByActionName(actionName, args);
+        }
+    }
+
+    /**
+     * Simple test actor for createChild tests.
+     */
+    public static class TestActor implements com.scivicslab.pojoactor.core.CallableByActionName {
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return new ActionResult(true, "TestActor: " + actionName);
+        }
+    }
+
+    /**
+     * IIActorRef wrapper for TestActor.
+     */
+    private static class TestActorIIAR extends IIActorRef<TestActor> {
+        public TestActorIIAR(String actorName, TestActor object, IIActorSystem system) {
             super(actorName, object, system);
         }
 

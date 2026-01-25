@@ -52,6 +52,7 @@ import java.util.stream.Collectors;
  *
  * <h2>Available Actions</h2>
  * <ul>
+ *   <li>{@code print} - Prints the argument to standard output</li>
  *   <li>{@code listChildren} - Returns names of all top-level actors</li>
  *   <li>{@code getChildCount} - Returns the number of top-level actors</li>
  *   <li>{@code printTree} - Returns ASCII tree representation of actor hierarchy</li>
@@ -81,11 +82,24 @@ public class RootIIAR extends IIActorRef<Object> {
     @Override
     public ActionResult callByActionName(String actionName, String args) {
         return switch (actionName) {
+            case "print" -> print(args);
             case "listChildren" -> listChildren();
             case "getChildCount" -> getChildCount();
             case "printTree" -> printTree();
-            default -> new ActionResult(false, "Unknown action: " + actionName);
+            default -> super.callByActionName(actionName, args);
         };
+    }
+
+    /**
+     * Prints the argument to standard output.
+     *
+     * @param args the message to print (may be JSON array format)
+     * @return ActionResult indicating success
+     */
+    private ActionResult print(String args) {
+        String message = parseFirstArgument(args);
+        System.out.println(message);
+        return new ActionResult(true, "Printed: " + message);
     }
 
     /**

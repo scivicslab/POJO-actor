@@ -97,6 +97,21 @@
         <version>3.3</version>
       </dependency>
 
+      <!-- CLI -->
+      <dependency>
+        <groupId>info.picocli</groupId>
+        <artifactId>picocli</artifactId>
+        <version>4.7.6</version>
+      </dependency>
+
+      <!-- picocli annotation processor for GraalVM Native Image -->
+      <dependency>
+        <groupId>info.picocli</groupId>
+        <artifactId>picocli-codegen</artifactId>
+        <version>4.7.6</version>
+        <scope>provided</scope>
+      </dependency>
+
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-api</artifactId>
@@ -124,6 +139,16 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>info.picocli</groupId>
+                            <artifactId>picocli-codegen</artifactId>
+                            <version>4.7.6</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
 
@@ -185,27 +210,21 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.scivicslab.pojoactor.App</mainClass>
-                        </manifest>
-                    </archive>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                    <finalName>${project.artifactId}-${project.version}-fat</finalName>
-                    <appendAssemblyId>false</appendAssemblyId>
-                </configuration>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.2</version>
                 <executions>
                     <execution>
-                        <id>make-assembly</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>single</goal>
+                            <goal>shade</goal>
                         </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.scivicslab.pojoactor.cli.WorkflowCLI</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

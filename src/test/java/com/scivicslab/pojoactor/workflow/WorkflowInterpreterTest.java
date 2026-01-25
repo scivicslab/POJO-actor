@@ -220,9 +220,12 @@ public class WorkflowInterpreterTest {
 
     /**
      * Example 6: Handle missing actor.
+     *
+     * <p>When an action references a non-existent actor, the Interpreter
+     * returns a failure result with "Actor not found" message.</p>
      */
     @Test
-    @DisplayName("Should handle missing actor gracefully")
+    @DisplayName("Should return failure when actor is not found")
     public void testHandleMissingActor() {
         // Create workflow with reference to non-existent actor
         MatrixCode code = new MatrixCode();
@@ -252,9 +255,10 @@ public class WorkflowInterpreterTest {
             fail("Failed to set code field: " + e.getMessage());
         }
 
-        // Execute should not throw exception (actor is null, so action is skipped)
+        // Execute should return failure when actor is not found
         ActionResult result = interpreter.action();
-        assertTrue(result.isSuccess(), "Should succeed even with missing actor");
+        assertFalse(result.isSuccess(), "Should fail when actor is not found");
+        assertTrue(result.getResult().contains("Actor not found"), "Should contain error message");
     }
 
     /**

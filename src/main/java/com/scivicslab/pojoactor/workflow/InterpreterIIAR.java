@@ -186,9 +186,8 @@ public class InterpreterIIAR extends IIActorRef<Interpreter> {
                 success = true;
                 message = arg;
             } else {
-                logger.log(Level.SEVERE, String.format("Unknown action: actorName = %s, action = %s, arg = %s",
-                        this.getName(), actionName, arg));
-                message = "Unknown action: " + actionName;
+                // Delegate to parent for JSON State API and other common actions
+                return super.callByActionName(actionName, arg);
             }
         }
         catch (InterruptedException e) {

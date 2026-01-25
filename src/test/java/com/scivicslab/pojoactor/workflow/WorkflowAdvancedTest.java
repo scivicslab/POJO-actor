@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.CallableByActionName;
+import com.scivicslab.pojoactor.plugin.MathPlugin;
 import com.scivicslab.pojoactor.workflow.IIActorRef;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 import com.scivicslab.pojoactor.workflow.Interpreter;
@@ -159,6 +160,21 @@ public class WorkflowAdvancedTest {
 
         public int getValue() {
             return value;
+        }
+    }
+
+    /**
+     * IIActorRef wrapper for MathPlugin used in sub-workflow tests.
+     */
+    private static class MathIIActorRef extends IIActorRef<MathPlugin> {
+
+        public MathIIActorRef(String actorName, MathPlugin object, IIActorSystem system) {
+            super(actorName, object, system);
+        }
+
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return this.object.callByActionName(actionName, args);
         }
     }
 
@@ -341,10 +357,10 @@ public class WorkflowAdvancedTest {
             new IIActorRef<>("caller", caller, system);
         system.addIIActor(callerRef);
 
-        // Setup actors for sub-workflow
-        DecisionActor processor = new DecisionActor();
-        IIActorRef<DecisionActor> processorRef = new IIActorRef<>("processor", processor, system);
-        system.addIIActor(processorRef);
+        // Setup actors for sub-workflow (simple-math.yaml requires "math" actor)
+        MathPlugin mathPlugin = new MathPlugin();
+        MathIIActorRef mathRef = new MathIIActorRef("math", mathPlugin, system);
+        system.addIIActor(mathRef);
 
         // Load main workflow (using caller with "call" action)
         Interpreter mainInterpreter = new Interpreter.Builder()
@@ -380,10 +396,10 @@ public class WorkflowAdvancedTest {
             new IIActorRef<>("caller", caller, system);
         system.addIIActor(callerRef);
 
-        // Setup actors for sub-workflow
-        DecisionActor processor = new DecisionActor();
-        IIActorRef<DecisionActor> processorRef = new IIActorRef<>("processor", processor, system);
-        system.addIIActor(processorRef);
+        // Setup actors for sub-workflow (simple-math.yaml requires "math" actor)
+        MathPlugin mathPlugin = new MathPlugin();
+        MathIIActorRef mathRef = new MathIIActorRef("math", mathPlugin, system);
+        system.addIIActor(mathRef);
 
         // Load main workflow (using caller with "call" action)
         Interpreter mainInterpreter = new Interpreter.Builder()

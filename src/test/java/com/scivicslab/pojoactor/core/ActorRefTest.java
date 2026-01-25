@@ -330,4 +330,137 @@ public class ActorRefTest {
         int finalCount = actor.askNow(AtomicInteger::get).get(1, TimeUnit.SECONDS);
         assertEquals(10, finalCount, "All tasks should be completed");
     }
+
+    /**
+     * Example 9: Variable expansion with ${json.key} pattern.
+     *
+     * Situation: Expanding variables with json. prefix in workflow arguments
+     * Expected: ${json.hostname} expands to value stored at path "hostname"
+     */
+    @DisplayName("Should expand ${json.key} by stripping json. prefix")
+    @Test
+    @Order(9)
+    public void testJsonPrefixVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Store value at path "hostname"
+        actor.putJson("hostname", "stonefly513");
+
+        // Expand ${json.hostname} - should strip "json." prefix and find "hostname"
+        String expanded = actor.expandVariables("Host: ${json.hostname}");
+        assertEquals("Host: stonefly513", expanded, "${json.hostname} should expand to value at path 'hostname'");
+
+        actor.close();
+    }
+
+    /**
+     * Example 10: Variable expansion without json. prefix.
+     *
+     * Situation: Expanding variables without json. prefix
+     * Expected: ${hostname} expands to value stored at path "hostname"
+     */
+    @DisplayName("Should expand ${key} without json. prefix")
+    @Test
+    @Order(10)
+    public void testDirectVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Store value at path "hostname"
+        actor.putJson("hostname", "stonefly514");
+
+        // Expand ${hostname} - should find "hostname" directly
+        String expanded = actor.expandVariables("Host: ${hostname}");
+        assertEquals("Host: stonefly514", expanded, "${hostname} should expand to value at path 'hostname'");
+
+        actor.close();
+    }
+
+    /**
+     * Example 11: Variable expansion with nested paths.
+     *
+     * Situation: Expanding variables with nested JSON paths
+     * Expected: ${json.server.name} expands to value stored at path "server.name"
+     */
+    @DisplayName("Should expand ${json.nested.key} for nested paths")
+    @Test
+    @Order(11)
+    public void testNestedJsonVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Store value at nested path "server.name"
+        actor.putJson("server.name", "webserver01");
+
+        // Expand ${json.server.name} - should strip "json." and find "server.name"
+        String expanded = actor.expandVariables("Server: ${json.server.name}");
+        assertEquals("Server: webserver01", expanded, "${json.server.name} should expand to value at path 'server.name'");
+
+        actor.close();
+    }
+
+    /**
+     * Example 12: Variable expansion with ${result}.
+     *
+     * Situation: Expanding ${result} to get last action result
+     * Expected: ${result} expands to the result of the last action
+     */
+    @DisplayName("Should expand ${result} to last action result")
+    @Test
+    @Order(12)
+    public void testResultVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Set last result
+        actor.setLastResult(new ActionResult(true, "command output"));
+
+        // Expand ${result}
+        String expanded = actor.expandVariables("Output: ${result}");
+        assertEquals("Output: command output", expanded, "${result} should expand to last action result");
+
+        actor.close();
+    }
+
+    /**
+     * Example 13: Variable expansion with multiple variables.
+     *
+     * Situation: Expanding multiple variables in a single string
+     * Expected: All variables are expanded correctly
+     */
+    @DisplayName("Should expand multiple variables in one string")
+    @Test
+    @Order(13)
+    public void testMultipleVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Store values
+        actor.putJson("hostname", "node1");
+        actor.putJson("port", "8080");
+        actor.setLastResult(new ActionResult(true, "OK"));
+
+        // Expand multiple variables
+        String expanded = actor.expandVariables("${json.hostname}:${json.port} - ${result}");
+        assertEquals("node1:8080 - OK", expanded, "Multiple variables should all be expanded");
+
+        actor.close();
+    }
+
+    /**
+     * Example 14: Variable expansion with unknown variable.
+     *
+     * Situation: Expanding a variable that doesn't exist
+     * Expected: Unknown variable pattern is left unchanged
+     */
+    @DisplayName("Should leave unknown variables unchanged")
+    @Test
+    @Order(14)
+    public void testUnknownVariableExpansion() {
+        ActorRef<String> actor = new ActorRef<>("testActor", "data");
+
+        // Don't store any values
+
+        // Expand unknown variable
+        String expanded = actor.expandVariables("Host: ${json.unknown}");
+        assertEquals("Host: ${json.unknown}", expanded, "Unknown variables should be left unchanged");
+
+        actor.close();
+    }
 }
