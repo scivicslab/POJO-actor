@@ -19,239 +19,134 @@ package com.scivicslab.pojoactor.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.Method;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.scivicslab.pojoactor.workflow.IIActorRef;
+import com.scivicslab.pojoactor.core.testplugin.DummyPlugin;
+import com.scivicslab.pojoactor.workflow.ActorSystemAware;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 
 /**
- * Test for dynamically loading the actor-IaC-plugins.
+ * Test for dynamically loading plugins that implement CallableByActionName.
+ *
+ * <p>This test uses DummyPlugin from the test classpath instead of
+ * external JAR files, ensuring POJO-actor has no external dependencies
+ * for its unit tests.</p>
  */
-@DisplayName("SystemInfoAggregator dynamic loading test")
+@DisplayName("DummyPlugin dynamic loading test")
 public class SystemInfoAggregatorTest {
 
-    private static final Path PLUGIN_JAR = Paths.get(
-        "../actor-IaC-plugins/target/actor-IaC-plugins-1.0.0.jar"
-    );
-
     private static final String PLUGIN_CLASS =
-        "com.scivicslab.actoriac.plugins.h2analyzer.SystemInfoAggregator";
-
-    /**
-     * Dummy outputMultiplexer actor for testing.
-     * Simply accepts all "add" calls and returns success.
-     */
-    private static class DummyOutputMultiplexer implements CallableByActionName {
-        @Override
-        public ActionResult callByActionName(String actionName, String args) {
-            if ("add".equals(actionName)) {
-                return new ActionResult(true, "Added to multiplexer");
-            }
-            return new ActionResult(false, "Unknown action: " + actionName);
-        }
-    }
-
-    /**
-     * IIActorRef wrapper for DummyOutputMultiplexer.
-     */
-    private static class DummyMultiplexerRef extends IIActorRef<DummyOutputMultiplexer> {
-
-        public DummyMultiplexerRef(String actorName, DummyOutputMultiplexer object, IIActorSystem system) {
-            super(actorName, object, system);
-        }
-
-        @Override
-        public ActionResult callByActionName(String actionName, String args) {
-            return this.object.callByActionName(actionName, args);
-        }
-    }
-
-    /**
-     * Sets up IIActorSystem with outputMultiplexer for plugin testing.
-     * Also injects the system into the plugin via reflection.
-     */
-    private IIActorSystem setupActorSystem(Object pluginInstance) throws Exception {
-        IIActorSystem system = new IIActorSystem("plugin-test-system");
-
-        // Register dummy outputMultiplexer
-        DummyOutputMultiplexer multiplexer = new DummyOutputMultiplexer();
-        DummyMultiplexerRef multiplexerRef =
-            new DummyMultiplexerRef("outputMultiplexer", multiplexer, system);
-        system.addIIActor(multiplexerRef);
-
-        // Inject ActorSystem via reflection (plugin implements ActorSystemAware)
-        try {
-            Method setActorSystem = pluginInstance.getClass().getMethod("setActorSystem", IIActorSystem.class);
-            setActorSystem.invoke(pluginInstance, system);
-        } catch (NoSuchMethodException e) {
-            // Plugin doesn't implement ActorSystemAware, skip injection
-        }
-
-        return system;
-    }
+        "com.scivicslab.pojoactor.core.testplugin.DummyPlugin";
 
     @Test
-    @DisplayName("Should load SystemInfoAggregator from JAR")
+    @DisplayName("Should load DummyPlugin from classpath")
     public void testLoadPlugin() throws Exception {
-        // Skip if JAR doesn't exist
-        if (!PLUGIN_JAR.toFile().exists()) {
-            System.out.println("Plugin JAR not found, skipping test: " + PLUGIN_JAR);
-            return;
-        }
+        // Load the plugin class from classpath
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Load the plugin
-        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
-            PLUGIN_JAR,
-            PLUGIN_CLASS,
-            "aggregator"
-        );
+        assertNotNull(instance, "Plugin instance should not be null");
+        assertTrue(instance instanceof CallableByActionName,
+            "Plugin should implement CallableByActionName");
 
-        assertNotNull(aggregator, "Plugin should be loaded");
+        // Test calling an action
+        CallableByActionName callable = (CallableByActionName) instance;
+        ActionResult result = callable.callByActionName("echo", "hello");
 
-        // Test that it implements CallableByActionName
-        ActionResult result = aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("list-sessions", "");
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
-
-        // Should fail with "Not connected" since we haven't connected to a DB
-        assertFalse(result.isSuccess());
-        assertTrue(result.getResult().contains("Not connected"));
-
-        aggregator.close();
+        assertTrue(result.isSuccess(), "Echo action should succeed");
+        assertEquals("Echo: hello", result.getResult(),
+            "Echo action should return the input");
     }
 
     @Test
-    @DisplayName("Should connect to H2 database and list sessions")
-    public void testConnectAndListSessions() throws Exception {
-        // Skip if JAR doesn't exist
-        if (!PLUGIN_JAR.toFile().exists()) {
-            System.out.println("Plugin JAR not found, skipping test: " + PLUGIN_JAR);
-            return;
-        }
+    @DisplayName("Should return error when calling list-items without connecting")
+    public void testListItemsWithoutConnect() throws Exception {
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Use testcluster-iac logs if they exist
-        Path testDb = Paths.get("/home/devteam/works/testcluster-iac/actor-iac-logs");
-        if (!testDb.toFile().exists() && !Paths.get(testDb + ".mv.db").toFile().exists()) {
-            System.out.println("Test database not found, skipping: " + testDb);
-            return;
-        }
+        CallableByActionName callable = (CallableByActionName) instance;
+        ActionResult result = callable.callByActionName("list-items", "");
 
-        // Load the plugin
-        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
-            PLUGIN_JAR,
-            PLUGIN_CLASS,
-            "aggregator"
-        );
+        assertFalse(result.isSuccess(), "list-items should fail when not connected");
+        assertTrue(result.getResult().contains("Not connected"),
+            "Error message should contain 'Not connected'");
+    }
 
-        // Setup ActorSystem with outputMultiplexer (required by plugin's reportToMultiplexer)
-        IIActorSystem system = aggregator.ask(obj -> {
-            try {
-                return setupActorSystem(obj);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).get();
+    @Test
+    @DisplayName("Should connect and list items successfully")
+    public void testConnectAndListItems() throws Exception {
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Connect to database
-        ActionResult connectResult = aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("connect", testDb.toString());
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
+        CallableByActionName callable = (CallableByActionName) instance;
 
-        assertTrue(connectResult.isSuccess(), "Should connect: " + connectResult.getResult());
+        // Connect first
+        ActionResult connectResult = callable.callByActionName("connect", "/test/path");
+        assertTrue(connectResult.isSuccess(), "Connect should succeed");
+        assertTrue(connectResult.getResult().contains("/test/path"),
+            "Connect result should contain the path");
 
-        // List sessions
-        ActionResult listResult = aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("list-sessions", "");
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
-
-        assertTrue(listResult.isSuccess(), "Should list sessions");
-        System.out.println("Sessions:\n" + listResult.getResult());
+        // Now list items should succeed
+        ActionResult listResult = callable.callByActionName("list-items", "");
+        assertTrue(listResult.isSuccess(), "list-items should succeed after connecting");
+        assertTrue(listResult.getResult().contains("item1"),
+            "list-items should return items");
 
         // Disconnect
-        aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("disconnect", "");
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
+        ActionResult disconnectResult = callable.callByActionName("disconnect", "");
+        assertTrue(disconnectResult.isSuccess(), "Disconnect should succeed");
+    }
 
-        aggregator.close();
+    @Test
+    @DisplayName("Should inject ActorSystem via ActorSystemAware")
+    public void testActorSystemInjection() throws Exception {
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+
+        assertTrue(instance instanceof ActorSystemAware,
+            "Plugin should implement ActorSystemAware");
+
+        // Create ActorSystem and inject it
+        IIActorSystem system = new IIActorSystem("test-system");
+        ((ActorSystemAware) instance).setActorSystem(system);
+
+        // Verify injection worked
+        CallableByActionName callable = (CallableByActionName) instance;
+        ActionResult result = callable.callByActionName("get-system-info", "");
+
+        assertTrue(result.isSuccess(), "get-system-info should succeed after injection");
+        assertTrue(result.getResult().contains("ActorSystem injected"),
+            "Result should indicate ActorSystem was injected");
+
         system.terminate();
     }
 
     @Test
-    @DisplayName("Should summarize disk info from logs")
-    public void testSummarizeDisks() throws Exception {
-        // Skip if JAR doesn't exist
-        if (!PLUGIN_JAR.toFile().exists()) {
-            System.out.println("Plugin JAR not found, skipping test: " + PLUGIN_JAR);
-            return;
-        }
+    @DisplayName("Should return error for unknown action")
+    public void testUnknownAction() throws Exception {
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Use testcluster-iac logs if they exist
-        Path testDb = Paths.get("/home/devteam/works/testcluster-iac/actor-iac-logs");
-        if (!testDb.toFile().exists() && !Paths.get(testDb + ".mv.db").toFile().exists()) {
-            System.out.println("Test database not found, skipping: " + testDb);
-            return;
-        }
+        CallableByActionName callable = (CallableByActionName) instance;
+        ActionResult result = callable.callByActionName("unknown-action", "");
 
-        // Load the plugin
-        ActorRef<Object> aggregator = DynamicActorLoader.loadActor(
-            PLUGIN_JAR,
-            PLUGIN_CLASS,
-            "aggregator"
-        );
+        assertFalse(result.isSuccess(), "Unknown action should fail");
+        assertTrue(result.getResult().contains("Unknown action"),
+            "Error message should contain 'Unknown action'");
+    }
 
-        // Setup ActorSystem with outputMultiplexer (required by plugin's reportToMultiplexer)
-        IIActorSystem system = aggregator.ask(obj -> {
-            try {
-                return setupActorSystem(obj);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).get();
+    @Test
+    @DisplayName("Should fail to disconnect when not connected")
+    public void testDisconnectWithoutConnect() throws Exception {
+        Class<?> clazz = Class.forName(PLUGIN_CLASS);
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Connect
-        aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("connect", testDb.toString());
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
+        CallableByActionName callable = (CallableByActionName) instance;
+        ActionResult result = callable.callByActionName("disconnect", "");
 
-        // Summarize disks for session 2
-        ActionResult diskResult = aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("summarize-disks", "2");
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
-
-        System.out.println("Disk Summary:\n" + diskResult.getResult());
-
-        // Disconnect
-        aggregator.ask(obj -> {
-            if (obj instanceof CallableByActionName callable) {
-                return callable.callByActionName("disconnect", "");
-            }
-            return new ActionResult(false, "Not CallableByActionName");
-        }).get();
-
-        aggregator.close();
-        system.terminate();
+        assertFalse(result.isSuccess(), "Disconnect should fail when not connected");
+        assertTrue(result.getResult().contains("Not connected"),
+            "Error message should contain 'Not connected'");
     }
 }
