@@ -68,10 +68,11 @@ public class ActorRef<T> implements AutoCloseable {
     private volatile JsonState jsonState;
 
     /**
-     * The result of the last action executed on this actor.
-     * Can be referenced in variable expansion using ${result}.
+     * Key used to store the last action result in JSON state.
+     * Can be referenced as ${result} in variable expansion.
+     * @since 2.14.0
      */
-    protected ActionResult lastResult;
+    private static final String LAST_RESULT_KEY = "result";
 
 
     /**
@@ -528,31 +529,46 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * Sets the last action result for this actor.
      *
+     * <p>The result is stored in the JSON state under the {@code _lastResult} key,
+     * unifying result storage with the JSON State API.</p>
+     *
      * @param result the result to store
      * @since 2.13.0
+     * @since 2.14.0 Now stores in JSON state instead of separate field
      */
     public void setLastResult(ActionResult result) {
-        this.lastResult = result;
+        if (result != null && result.getResult() != null) {
+            json().put(LAST_RESULT_KEY, result.getResult());
+        } else {
+            json().put(LAST_RESULT_KEY, null);
+        }
     }
 
     /**
      * Gets the last action result for this actor.
      *
-     * @return the last result, or null if no action has been executed
+     * <p>Retrieves the result from the JSON state where it is stored under {@code _lastResult}.</p>
+     *
+     * @return the last result wrapped in ActionResult, or null if no action has been executed
      * @since 2.13.0
+     * @since 2.14.0 Now retrieves from JSON state instead of separate field
      */
     public ActionResult getLastResult() {
-        return lastResult;
+        String resultValue = json().getString(LAST_RESULT_KEY);
+        if (resultValue != null) {
+            return new ActionResult(true, resultValue);
+        }
+        return null;
     }
 
     /**
      * Expands variable references in a string.
      *
-     * <p>Replaces {@code ${varName}} patterns with values from:</p>
+     * <p>Replaces {@code ${varName}} patterns with values from this actor's JSON state:</p>
      * <ul>
-     *   <li>{@code ${result}} - the result of the last action on this actor</li>
-     *   <li>{@code ${json.key}} or {@code ${json.nested.key}} - values from this actor's JSON state</li>
-     *   <li>{@code ${key}} or {@code ${nested.key}} - also looks up in JSON state (without prefix)</li>
+     *   <li>{@code ${result}} - the result of the last action (stored in JSON state as {@code result})</li>
+     *   <li>{@code ${key}} or {@code ${nested.key}} - values from this actor's JSON state</li>
+     *   <li>{@code ${json.key}} - also looks up in JSON state (with optional "json." prefix)</li>
      * </ul>
      *
      * <p>If a variable is not found, the pattern is left unchanged.</p>
@@ -560,51 +576,41 @@ public class ActorRef<T> implements AutoCloseable {
      * @param input the string containing ${...} patterns
      * @return the expanded string
      * @since 2.13.0
+     * @since 2.14.0 All variables (including result) stored in unified JSON state
      */
     public String expandVariables(String input) {
         if (input == null || !input.contains("${")) {
             return input;
         }
 
-        String result = input;
+        String expanded = input;
 
-        // Expand ${result} from lastResult
-        if (result.contains("${result}") && lastResult != null) {
-            String lastResultValue = lastResult.getResult();
-            if (lastResultValue != null) {
-                result = result.replace("${result}", lastResultValue);
-            }
-        }
-
-        // Expand ${key} and ${json.key} patterns from jsonState
+        // All variables are stored in jsonState
         if (jsonState != null) {
             int startIndex = 0;
             while (true) {
-                int start = result.indexOf("${", startIndex);
+                int start = expanded.indexOf("${", startIndex);
                 if (start == -1) break;
 
-                int end = result.indexOf("}", start);
+                int end = expanded.indexOf("}", start);
                 if (end == -1) break;
 
-                String varName = result.substring(start + 2, end);
-                if (!varName.equals("result")) {  // Already handled above
-                    // Strip "json." prefix if present
-                    String jsonPath = varName;
-                    if (jsonPath.startsWith("json.")) {
-                        jsonPath = jsonPath.substring(5);  // Remove "json." prefix
-                    }
-                    String value = jsonState.getString(jsonPath);
-                    if (value != null) {
-                        result = result.substring(0, start) + value + result.substring(end + 1);
-                        // Don't advance startIndex since we replaced content
-                        continue;
-                    }
+                String varName = expanded.substring(start + 2, end);
+
+                // Strip optional "json." prefix
+                String jsonPath = varName.startsWith("json.") ? varName.substring(5) : varName;
+
+                String value = jsonState.getString(jsonPath);
+                if (value != null) {
+                    expanded = expanded.substring(0, start) + value + expanded.substring(end + 1);
+                    // Don't advance startIndex since we replaced content
+                    continue;
                 }
                 startIndex = end + 1;
             }
         }
 
-        return result;
+        return expanded;
     }
 
     // ========================================================================
