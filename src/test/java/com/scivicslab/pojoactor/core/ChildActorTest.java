@@ -29,7 +29,7 @@ import com.scivicslab.pojoactor.pojo.Root;
  * This test suite demonstrates the hierarchical actor system capabilities,
  * including parent-child relationships and supervision.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Creation of child actors")

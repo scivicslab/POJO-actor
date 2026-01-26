@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package com.scivicslab.pojoactor.pojo;
  * The root actor class that serves as the top-level actor in the system hierarchy.
  * This class provides basic functionality for the root actor in an actor system.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 1.0.0
  */
 public class Root {

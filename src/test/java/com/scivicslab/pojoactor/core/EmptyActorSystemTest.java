@@ -27,7 +27,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * Test class for verifying basic ActorSystem construction and lifecycle operations.
  * This test suite ensures that empty ActorSystems can be created, managed, and terminated properly.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Construction of an ActorSystem")

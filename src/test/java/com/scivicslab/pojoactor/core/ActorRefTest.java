@@ -44,7 +44,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * This test suite covers actor creation, messaging (tell/ask),
  * message ordering, child actors, and lifecycle management.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 2.7.0
  */
 @DisplayName("ActorRef functionality tests")

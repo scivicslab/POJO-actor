@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * execution in the CallableByActionName pattern. These tests verify all aspects
  * of its behavior following the Specification by Example approach.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("ActionResult Specification by Example")

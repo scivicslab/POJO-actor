@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ package com.scivicslab.pojoactor.core.distributed;
  * System.out.println(node1.getUrl());     // "http://192.168.1.10:8081"
  * }</pre>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 3.0.0
  * @since 3.0.0
  */

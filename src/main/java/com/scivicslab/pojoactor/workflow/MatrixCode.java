@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import java.util.List;
  * <p>This class is designed to be populated from YAML or JSON workflow definitions
  * using deserialization frameworks like SnakeYAML or Jackson.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  */
 public class MatrixCode {
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  * <p>For lambda-based scheduling with ActorRef, use
  * {@link com.scivicslab.pojoactor.core.scheduler.Scheduler} instead.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.11.0
  * @see com.scivicslab.pojoactor.core.scheduler.Scheduler
  * @see IIActorRef

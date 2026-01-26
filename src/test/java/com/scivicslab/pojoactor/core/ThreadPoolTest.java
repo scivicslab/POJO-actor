@@ -28,7 +28,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * This test suite demonstrates how actors can utilize multiple thread pools
  * for CPU-intensive and parallel computing tasks.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Using the ThreadPool in an ActorSystem")

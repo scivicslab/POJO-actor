@@ -47,7 +47,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * The tellNow() method bypasses the actor's mailbox and executes messages immediately
  * on a separate thread, allowing concurrent execution with queued messages.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("TellNow method tests")

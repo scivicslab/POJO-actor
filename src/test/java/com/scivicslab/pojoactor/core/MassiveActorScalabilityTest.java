@@ -25,7 +25,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * using virtual threads while controlling CPU core usage through work-stealing pools.
  * This demonstrates the scalability advantages over traditional thread-per-actor systems.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Massive Actor Scalability Test")

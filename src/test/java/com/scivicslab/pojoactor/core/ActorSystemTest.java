@@ -41,7 +41,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * This test suite covers actor system creation, lifecycle management,
  * and actor registration/retrieval operations.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 2.7.0
  */
 @DisplayName("ActorSystem functionality tests")

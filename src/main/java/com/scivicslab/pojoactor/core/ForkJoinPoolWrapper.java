@@ -34,7 +34,7 @@ import java.util.concurrent.TimeoutException;
  *
  * Note: This implementation does NOT support job cancellation per actor.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 1.0.0
  */
 public class ForkJoinPoolWrapper implements WorkerPool {

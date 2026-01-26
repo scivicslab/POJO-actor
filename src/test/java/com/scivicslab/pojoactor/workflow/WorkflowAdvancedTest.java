@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ import com.scivicslab.pojoactor.workflow.SubWorkflowCaller;
  * Interpreter functionality, including parallel execution, conditional branching,
  * and sub-workflow patterns.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Advanced Workflow Patterns Specification by Example")

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ import com.scivicslab.pojoactor.core.ActionResult;
  *   <li>Wildcard patterns in actor names</li>
  * </ul>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 2.9.0
  */
 @DisplayName("Subworkflow Specification")

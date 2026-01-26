@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import org.yaml.snakeyaml.LoaderOptions;
 /**
  * Tests for MatrixCode class.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  */
 @DisplayName("MatrixCode Tests")
 public class MatrixCodeTest {

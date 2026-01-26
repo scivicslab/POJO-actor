@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import com.scivicslab.pojoactor.core.CallableByActionName;
  * <p>The class provides both traditional type-safe methods and string-based invocation
  * via {@link CallableByActionName}.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 2.0.0
  */
 public class MathPlugin implements CallableByActionName {

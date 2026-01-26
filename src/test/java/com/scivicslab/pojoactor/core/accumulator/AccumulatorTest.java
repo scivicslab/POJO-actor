@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
  * and provide formatted summaries. These tests verify all standard
  * implementations following the Specification by Example approach.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.8.0
  */
 @DisplayName("Accumulator Specification by Example")

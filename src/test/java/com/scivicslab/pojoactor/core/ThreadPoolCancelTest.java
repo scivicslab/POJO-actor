@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * the actual tasks from the ManagedThreadPool, or if the tasks continue to execute
  * and consume CPU resources.
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("ThreadPool cancel test")

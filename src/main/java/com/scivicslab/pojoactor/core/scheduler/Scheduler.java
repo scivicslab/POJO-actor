@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ import com.scivicslab.pojoactor.core.ActorRef;
  * <p>For workflow-based scheduling with action names, use
  * {@link com.scivicslab.pojoactor.workflow.scheduler.SchedulerIIAR} instead.</p>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.11.0 (refactored from IIActorRef-based to ActorRef-based)
  * @see ActorRef
  */

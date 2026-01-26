@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import java.time.Instant;
  * @param result the result data
  * @param timestamp when the result was added
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.8.0
  */
 public record AccumulatorResult<T>(

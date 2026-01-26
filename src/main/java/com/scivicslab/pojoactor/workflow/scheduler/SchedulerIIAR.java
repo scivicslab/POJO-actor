@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ import com.scivicslab.pojoactor.workflow.IIActorSystem;
  * schedulerRef.callByActionName("cancel", "healthcheck");
  * }</pre>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.5.0
  * @see WorkflowScheduler
  * @see IIActorRef

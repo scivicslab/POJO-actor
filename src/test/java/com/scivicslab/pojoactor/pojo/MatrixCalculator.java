@@ -6,7 +6,7 @@ package com.scivicslab.pojoactor.pojo;
  * how large matrix multiplications can be divided into smaller blocks
  * and computed in parallel by different actors.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 public class MatrixCalculator {

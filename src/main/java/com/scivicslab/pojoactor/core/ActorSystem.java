@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import com.scivicslab.pojoactor.pojo.Root;
  * A lightweight actor system implementation that manages actor lifecycles and thread pools.
  * This system provides a framework for creating and managing actors with concurrent message processing.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 1.0.0
  */
 public class ActorSystem {

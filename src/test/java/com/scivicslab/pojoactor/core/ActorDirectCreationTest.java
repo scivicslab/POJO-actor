@@ -26,7 +26,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * This test suite demonstrates that actors can be created and used directly
  * without being managed by an ActorSystem instance.
  * 
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @version 1.0.0
  */
 @DisplayName("Running actors without actorsystem")

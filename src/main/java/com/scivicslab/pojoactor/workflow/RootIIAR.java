@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
  *   <li>{@code printTree} - Returns ASCII tree representation of actor hierarchy</li>
  * </ul>
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 2.12.0
  */
 public class RootIIAR extends IIActorRef<Object> {

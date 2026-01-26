@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutorService;
  * Implementations must provide ExecutorService compatibility for use with
  * ActorRef.tell(action, pool) and ActorRef.ask(action, pool).
  *
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 1.0.0
  */
 public interface WorkerPool extends ExecutorService {

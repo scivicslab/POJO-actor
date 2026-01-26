@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 devteam@scivics-lab.com
+ * Copyright 2025 devteam@scivicslab.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ import java.util.logging.Logger;
  * between actors using tell() and ask() methods.
  *
  * @param <T> the type of the actor's underlying object
- * @author devteam@scivics-lab.com
+ * @author devteam@scivicslab.com
  * @since 1.0.0
  */
 public class ActorRef<T> implements AutoCloseable {
