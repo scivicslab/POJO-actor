@@ -17,8 +17,16 @@
 
 package com.scivicslab.pojoactor.workflow;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.json.JSONObject;
 
+import com.scivicslab.pojoactor.core.Action;
 import com.scivicslab.pojoactor.core.ActorRef;
 import com.scivicslab.pojoactor.core.CallableByActionName;
 import com.scivicslab.pojoactor.core.ActionResult;
@@ -36,6 +44,13 @@ import com.scivicslab.pojoactor.core.ActionResult;
  */
 public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByActionName {
 
+    private static final Logger logger = Logger.getLogger(IIActorRef.class.getName());
+
+    /**
+     * Map of action names to methods discovered via @Action annotation.
+     * Populated lazily on first callByActionName invocation.
+     */
+    private Map<String, Method> actionMethods = null;
 
     /**
      * Constructs a new IIActorRef with the specified actor name and object.
@@ -58,21 +73,126 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
         super(actorName, object, system);
     }
 
+    /**
+     * Discovers methods annotated with @Action on the wrapped object.
+     *
+     * <p>This method scans the wrapped object's class (including inherited methods
+     * and interface default methods) for methods annotated with {@link Action}.
+     * Valid action methods must:</p>
+     * <ul>
+     *   <li>Return {@link ActionResult}</li>
+     *   <li>Accept a single {@code String} parameter</li>
+     * </ul>
+     *
+     * <p>Discovery is performed lazily on first call and cached for subsequent calls.</p>
+     */
+    private void discoverActionMethods() {
+        if (actionMethods != null) {
+            return; // Already discovered
+        }
+
+        actionMethods = new HashMap<>();
+
+        if (object == null) {
+            return;
+        }
+
+        // Scan all public methods (includes inherited and default methods from interfaces)
+        for (Method method : object.getClass().getMethods()) {
+            Action action = method.getAnnotation(Action.class);
+            if (action == null) {
+                continue;
+            }
+
+            // Validate method signature: ActionResult methodName(String args)
+            if (method.getReturnType() != ActionResult.class) {
+                logger.warning(String.format(
+                    "@Action method %s.%s has invalid return type %s (expected ActionResult)",
+                    object.getClass().getSimpleName(), method.getName(), method.getReturnType().getSimpleName()));
+                continue;
+            }
+
+            Class<?>[] params = method.getParameterTypes();
+            if (params.length != 1 || params[0] != String.class) {
+                logger.warning(String.format(
+                    "@Action method %s.%s has invalid parameters (expected single String parameter)",
+                    object.getClass().getSimpleName(), method.getName()));
+                continue;
+            }
+
+            String actionName = action.value();
+            if (actionMethods.containsKey(actionName)) {
+                logger.warning(String.format(
+                    "Duplicate @Action(\"%s\") found on %s.%s (already defined)",
+                    actionName, object.getClass().getSimpleName(), method.getName()));
+                continue;
+            }
+
+            actionMethods.put(actionName, method);
+            logger.fine(String.format("Discovered @Action(\"%s\") -> %s.%s",
+                actionName, object.getClass().getSimpleName(), method.getName()));
+        }
+
+        logger.fine(String.format("Discovered %d @Action methods on %s",
+            actionMethods.size(), object.getClass().getSimpleName()));
+    }
+
+    /**
+     * Invokes an @Action annotated method on the wrapped object.
+     *
+     * @param actionName the action name
+     * @param args the arguments string
+     * @return ActionResult if handled, null if no matching @Action method
+     */
+    protected ActionResult invokeAnnotatedAction(String actionName, String args) {
+        discoverActionMethods();
+
+        Method method = actionMethods.get(actionName);
+        if (method == null) {
+            return null; // Not found, let caller handle fallback
+        }
+
+        try {
+            return (ActionResult) method.invoke(object, args);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            String message = cause != null ? cause.getMessage() : e.getMessage();
+            logger.log(Level.WARNING, "Error invoking @Action " + actionName, e);
+            return new ActionResult(false, "Error in " + actionName + ": " + message);
+        } catch (IllegalAccessException e) {
+            logger.log(Level.SEVERE, "Cannot access @Action method " + actionName, e);
+            return new ActionResult(false, "Cannot access " + actionName + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if an action name is registered via @Action annotation.
+     *
+     * @param actionName the action name to check
+     * @return true if the action is registered
+     */
+    protected boolean hasAnnotatedAction(String actionName) {
+        discoverActionMethods();
+        return actionMethods.containsKey(actionName);
+    }
+
 
     /**
      * Invokes an action by name on this actor.
      *
-     * <p>This default implementation handles the JSON State API actions:</p>
-     * <ul>
-     *   <li>{@code putJson} - Store a value at a path</li>
-     *   <li>{@code getJson} - Get a value from a path</li>
-     *   <li>{@code hasJson} - Check if a path exists</li>
-     *   <li>{@code clearJson} - Clear all JSON state</li>
-     *   <li>{@code printJson} - Print JSON state for debugging</li>
-     * </ul>
+     * <p>This method uses a three-stage dispatch mechanism:</p>
+     * <ol>
+     *   <li><strong>@Action annotation:</strong> Checks if the wrapped object has a method
+     *       annotated with {@link Action} matching the action name. This enables mixin-like
+     *       behavior through interface default methods.</li>
+     *   <li><strong>Built-in JSON State API:</strong> Handles putJson, getJson, hasJson,
+     *       clearJson, and printJson actions.</li>
+     *   <li><strong>Unknown action:</strong> Returns failure for unrecognized actions.</li>
+     * </ol>
      *
-     * <p>Subclasses should override this method and call {@code super.callByActionName()}
-     * for unhandled actions to get JSON State API support.</p>
+     * <p>Subclasses can override this method to add custom dispatch logic. When overriding,
+     * call {@code super.callByActionName()} for unhandled actions to get @Action annotation
+     * and JSON State API support.</p>
      *
      * @param actionName the name of the action to invoke
      * @param args the arguments as a JSON string
@@ -80,6 +200,13 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
      */
     @Override
     public ActionResult callByActionName(String actionName, String args) {
+        // Stage 1: Try @Action annotated methods on the wrapped object
+        ActionResult annotatedResult = invokeAnnotatedAction(actionName, args);
+        if (annotatedResult != null) {
+            return annotatedResult;
+        }
+
+        // Stage 2: Built-in JSON State API actions
         return switch (actionName) {
             case "putJson" -> handlePutJson(args);
             case "getJson" -> handleGetJson(args);
