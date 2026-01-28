@@ -27,37 +27,91 @@ import com.scivicslab.pojoactor.core.Action;
 import com.scivicslab.pojoactor.core.ActionResult;
 
 /**
- * Tests for @Action annotation and IIActorRef annotation discovery.
+ * Tests for @Action annotation on IIActorRef subclass.
  *
- * <p>Verifies that:
+ * <p>The @Action annotation is designed to be placed on IIActorRef subclass methods,
+ * NOT on the wrapped POJO. This keeps the POJO clean - it doesn't need to know about
+ * workflow-related concepts like {@link Action} or {@link ActionResult}.</p>
+ *
+ * <p>Design rationale:</p>
  * <ul>
- *   <li>@Action annotation is retained at runtime</li>
- *   <li>IIActorRef discovers @Action methods on wrapped objects</li>
- *   <li>@Action methods can be invoked via callByActionName</li>
- *   <li>Interface default methods with @Action work correctly (mixin pattern)</li>
+ *   <li>POJOs should remain pure domain objects without workflow dependencies</li>
+ *   <li>IIActorRef subclass acts as an adapter between POJO and workflow interpreter</li>
+ *   <li>@Action methods on IIActorRef can delegate to POJO methods with appropriate translation</li>
  * </ul>
  *
  * @author devteam@scivicslab.com
- * @since 2.15.0
+ * @since 2.14.0
  */
-@DisplayName("@Action Annotation Specification")
+@DisplayName("@Action Annotation on IIActorRef Subclass")
 public class ActionAnnotationTest {
 
     // ========================================================================
-    // Test fixtures: Sample classes with @Action annotations
+    // Test fixtures: Plain POJOs (no @Action annotations)
     // ========================================================================
 
     /**
-     * Simple POJO with @Action annotated methods.
+     * Simple POJO calculator - no workflow annotations.
+     * This is how POJOs should be: clean domain objects.
      */
-    static class SimpleCalculator {
+    static class Calculator {
+        private int lastResult = 0;
+
+        public int add(int a, int b) {
+            lastResult = a + b;
+            return lastResult;
+        }
+
+        public int multiply(int a, int b) {
+            lastResult = a * b;
+            return lastResult;
+        }
+
+        public int getLastResult() {
+            return lastResult;
+        }
+    }
+
+    /**
+     * Another simple POJO - a counter.
+     */
+    static class Counter {
+        private int count = 0;
+
+        public void increment() {
+            count++;
+        }
+
+        public void reset() {
+            count = 0;
+        }
+
+        public int getCount() {
+            return count;
+        }
+    }
+
+    // ========================================================================
+    // Test fixtures: IIActorRef subclasses with @Action annotations
+    // ========================================================================
+
+    /**
+     * IIActorRef for Calculator with @Action annotations.
+     * This is the correct pattern - @Action on IIActorRef, not on POJO.
+     */
+    static class CalculatorIIAR extends IIActorRef<Calculator> {
+
+        public CalculatorIIAR(String name, Calculator calculator) {
+            super(name, calculator);
+        }
 
         @Action("add")
         public ActionResult add(String args) {
             String[] parts = args.replace("[", "").replace("]", "").replace("\"", "").split(",");
             int a = Integer.parseInt(parts[0].trim());
             int b = Integer.parseInt(parts[1].trim());
-            return new ActionResult(true, String.valueOf(a + b));
+            int result = this.object.add(a, b);
+            return new ActionResult(true, String.valueOf(result));
         }
 
         @Action("multiply")
@@ -65,382 +119,343 @@ public class ActionAnnotationTest {
             String[] parts = args.replace("[", "").replace("]", "").replace("\"", "").split(",");
             int a = Integer.parseInt(parts[0].trim());
             int b = Integer.parseInt(parts[1].trim());
-            return new ActionResult(true, String.valueOf(a * b));
+            int result = this.object.multiply(a, b);
+            return new ActionResult(true, String.valueOf(result));
         }
 
-        @Action("greet")
-        public ActionResult greet(String args) {
-            String name = args.replace("[", "").replace("]", "").replace("\"", "").trim();
-            return new ActionResult(true, "Hello, " + name + "!");
-        }
-
-        // Method without @Action - should NOT be discoverable
-        public ActionResult notAnAction(String args) {
-            return new ActionResult(true, "This should not be called");
+        @Action("getLastResult")
+        public ActionResult getLastResult(String args) {
+            return new ActionResult(true, String.valueOf(this.object.getLastResult()));
         }
     }
 
     /**
-     * Interface with @Action default methods (mixin pattern).
+     * IIActorRef for Counter with @Action annotations.
      */
-    interface Greetable {
-        @Action("sayHello")
-        default ActionResult sayHello(String args) {
-            return new ActionResult(true, "Hello from interface default method!");
+    static class CounterIIAR extends IIActorRef<Counter> {
+
+        public CounterIIAR(String name, Counter counter) {
+            super(name, counter);
         }
 
-        @Action("sayGoodbye")
-        default ActionResult sayGoodbye(String args) {
-            String name = args.replace("[", "").replace("]", "").replace("\"", "").trim();
-            return new ActionResult(true, "Goodbye, " + name + "!");
+        @Action("increment")
+        public ActionResult increment(String args) {
+            this.object.increment();
+            return new ActionResult(true, "Count: " + this.object.getCount());
+        }
+
+        @Action("reset")
+        public ActionResult reset(String args) {
+            this.object.reset();
+            return new ActionResult(true, "Reset to 0");
+        }
+
+        @Action("getCount")
+        public ActionResult getCount(String args) {
+            return new ActionResult(true, String.valueOf(this.object.getCount()));
         }
     }
 
     /**
-     * Class implementing the mixin interface.
+     * IIActorRef with invalid @Action method signatures (for validation tests).
      */
-    static class GreetableCalculator extends SimpleCalculator implements Greetable {
-        // Inherits @Action methods from both SimpleCalculator and Greetable interface
-    }
+    static class InvalidActionsIIAR extends IIActorRef<Counter> {
 
-    /**
-     * Class with method that has wrong return type (should be skipped).
-     */
-    static class InvalidActionClass {
+        public InvalidActionsIIAR(String name, Counter counter) {
+            super(name, counter);
+        }
+
+        // Wrong return type - should be skipped
         @Action("wrongReturnType")
         public String wrongReturnType(String args) {
-            return "This has wrong return type";
+            return "wrong";
         }
 
-        @Action("validAction")
-        public ActionResult validAction(String args) {
-            return new ActionResult(true, "valid");
-        }
-    }
-
-    /**
-     * Class with method that has wrong parameter count (should be skipped).
-     */
-    static class WrongParamsClass {
+        // Wrong parameter count (no params) - should be skipped
         @Action("noParams")
         public ActionResult noParams() {
             return new ActionResult(true, "no params");
         }
 
+        // Wrong parameter count (two params) - should be skipped
         @Action("twoParams")
         public ActionResult twoParams(String a, String b) {
             return new ActionResult(true, "two params");
         }
 
-        @Action("validAction")
-        public ActionResult validAction(String args) {
+        // Valid method
+        @Action("valid")
+        public ActionResult valid(String args) {
             return new ActionResult(true, "valid");
         }
     }
 
     /**
-     * Concrete IIActorRef for testing.
+     * IIActorRef with @Action that throws exception.
      */
-    static class TestIIActorRef<T> extends IIActorRef<T> {
-        public TestIIActorRef(String name, T object) {
-            super(name, object);
+    static class ThrowingIIAR extends IIActorRef<Counter> {
+
+        public ThrowingIIAR(String name, Counter counter) {
+            super(name, counter);
+        }
+
+        @Action("throwException")
+        public ActionResult throwException(String args) {
+            throw new RuntimeException("Intentional test exception");
+        }
+
+        @Action("throwNPE")
+        public ActionResult throwNPE(String args) {
+            String s = null;
+            return new ActionResult(true, s.length() + "");
         }
     }
 
-    // ========================================================================
-    // Tests for @Action annotation
-    // ========================================================================
+    /**
+     * Plain IIActorRef without any @Action methods (for fallback tests).
+     */
+    static class PlainIIAR extends IIActorRef<Counter> {
 
-    @Nested
-    @DisplayName("@Action Annotation Basics")
-    class AnnotationBasics {
-
-        @Test
-        @DisplayName("@Action annotation should be retained at runtime")
-        void annotationShouldBeRetainedAtRuntime() throws NoSuchMethodException {
-            var method = SimpleCalculator.class.getMethod("add", String.class);
-            Action action = method.getAnnotation(Action.class);
-
-            assertNotNull(action, "@Action annotation should be present");
-            assertEquals("add", action.value(), "Action name should be 'add'");
+        public PlainIIAR(String name, Counter counter) {
+            super(name, counter);
         }
 
-        @Test
-        @DisplayName("Method without @Action should not have annotation")
-        void methodWithoutAnnotation() throws NoSuchMethodException {
-            var method = SimpleCalculator.class.getMethod("notAnAction", String.class);
-            Action action = method.getAnnotation(Action.class);
-
-            assertNull(action, "Method without @Action should not have annotation");
-        }
-
-        @Test
-        @DisplayName("Interface default methods can have @Action annotation")
-        void interfaceDefaultMethodsCanHaveAnnotation() throws NoSuchMethodException {
-            var method = Greetable.class.getMethod("sayHello", String.class);
-            Action action = method.getAnnotation(Action.class);
-
-            assertNotNull(action, "@Action annotation should be present on interface default method");
-            assertEquals("sayHello", action.value());
-        }
+        // No @Action methods - should only have built-in JSON actions
     }
 
     // ========================================================================
-    // Tests for IIActorRef annotation discovery
+    // Tests: Basic @Action discovery on IIActorRef subclass
     // ========================================================================
 
     @Nested
-    @DisplayName("IIActorRef Annotation Discovery")
-    class AnnotationDiscovery {
+    @DisplayName("Basic @Action Discovery")
+    class BasicDiscovery {
 
         @Test
-        @DisplayName("Should discover and invoke @Action method")
-        void shouldDiscoverAndInvokeActionMethod() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+        @DisplayName("Should discover @Action on IIActorRef subclass")
+        void shouldDiscoverActionOnIIActorRefSubclass() {
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
             ActionResult result = actorRef.callByActionName("add", "[5, 3]");
 
-            assertTrue(result.isSuccess(), "Action should succeed");
-            assertEquals("8", result.getResult(), "5 + 3 should equal 8");
+            assertTrue(result.isSuccess());
+            assertEquals("8", result.getResult());
         }
 
         @Test
         @DisplayName("Should discover multiple @Action methods")
         void shouldDiscoverMultipleActionMethods() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
             ActionResult addResult = actorRef.callByActionName("add", "[10, 5]");
             ActionResult multiplyResult = actorRef.callByActionName("multiply", "[4, 7]");
-            ActionResult greetResult = actorRef.callByActionName("greet", "[\"World\"]");
 
             assertTrue(addResult.isSuccess());
             assertEquals("15", addResult.getResult());
 
             assertTrue(multiplyResult.isSuccess());
             assertEquals("28", multiplyResult.getResult());
-
-            assertTrue(greetResult.isSuccess());
-            assertEquals("Hello, World!", greetResult.getResult());
         }
 
         @Test
-        @DisplayName("Should NOT discover method without @Action")
-        void shouldNotDiscoverMethodWithoutAnnotation() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+        @DisplayName("@Action method should correctly delegate to POJO")
+        void actionMethodShouldDelegateToPojo() {
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
-            ActionResult result = actorRef.callByActionName("notAnAction", "[]");
+            actorRef.callByActionName("add", "[100, 50]");
+            ActionResult lastResult = actorRef.callByActionName("getLastResult", "");
 
-            assertFalse(result.isSuccess(), "Method without @Action should not be discoverable");
-            assertTrue(result.getResult().contains("Unknown action"));
+            assertEquals("150", lastResult.getResult());
+            assertEquals(150, calc.getLastResult()); // Verify POJO was updated
         }
+
+        @Test
+        @DisplayName("Should work with different IIActorRef subclasses")
+        void shouldWorkWithDifferentSubclasses() {
+            Counter counter = new Counter();
+            CounterIIAR actorRef = new CounterIIAR("counter", counter);
+
+            actorRef.callByActionName("increment", "");
+            actorRef.callByActionName("increment", "");
+            actorRef.callByActionName("increment", "");
+
+            ActionResult result = actorRef.callByActionName("getCount", "");
+            assertEquals("3", result.getResult());
+            assertEquals(3, counter.getCount());
+        }
+    }
+
+    // ========================================================================
+    // Tests: Unknown actions
+    // ========================================================================
+
+    @Nested
+    @DisplayName("Unknown Actions")
+    class UnknownActions {
 
         @Test
         @DisplayName("Should return failure for unknown action")
         void shouldReturnFailureForUnknownAction() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
             ActionResult result = actorRef.callByActionName("unknownAction", "[]");
 
             assertFalse(result.isSuccess());
             assertTrue(result.getResult().contains("Unknown action"));
         }
-    }
-
-    // ========================================================================
-    // Tests for mixin pattern (interface default methods)
-    // ========================================================================
-
-    @Nested
-    @DisplayName("Mixin Pattern with Interface Default Methods")
-    class MixinPattern {
 
         @Test
-        @DisplayName("Should discover @Action from interface default method")
-        void shouldDiscoverActionFromInterfaceDefaultMethod() {
-            GreetableCalculator calculator = new GreetableCalculator();
-            TestIIActorRef<GreetableCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+        @DisplayName("IIActorRef without @Action methods should only have built-in actions")
+        void iiActorRefWithoutActionsShouldOnlyHaveBuiltIn() {
+            Counter counter = new Counter();
+            PlainIIAR actorRef = new PlainIIAR("counter", counter);
 
-            ActionResult result = actorRef.callByActionName("sayHello", "[]");
+            // Unknown action should fail
+            ActionResult result = actorRef.callByActionName("increment", "");
+            assertFalse(result.isSuccess());
 
-            assertTrue(result.isSuccess());
-            assertEquals("Hello from interface default method!", result.getResult());
-        }
-
-        @Test
-        @DisplayName("Should discover @Action from both class and interface")
-        void shouldDiscoverActionFromBothClassAndInterface() {
-            GreetableCalculator calculator = new GreetableCalculator();
-            TestIIActorRef<GreetableCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
-
-            // From SimpleCalculator class
-            ActionResult addResult = actorRef.callByActionName("add", "[3, 4]");
-            assertTrue(addResult.isSuccess());
-            assertEquals("7", addResult.getResult());
-
-            // From Greetable interface
-            ActionResult helloResult = actorRef.callByActionName("sayHello", "[]");
-            assertTrue(helloResult.isSuccess());
-            assertEquals("Hello from interface default method!", helloResult.getResult());
-
-            ActionResult goodbyeResult = actorRef.callByActionName("sayGoodbye", "[\"Alice\"]");
-            assertTrue(goodbyeResult.isSuccess());
-            assertEquals("Goodbye, Alice!", goodbyeResult.getResult());
-        }
-
-        @Test
-        @DisplayName("Interface default method should receive arguments correctly")
-        void interfaceDefaultMethodShouldReceiveArguments() {
-            GreetableCalculator calculator = new GreetableCalculator();
-            TestIIActorRef<GreetableCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
-
-            ActionResult result = actorRef.callByActionName("sayGoodbye", "[\"Bob\"]");
-
-            assertTrue(result.isSuccess());
-            assertEquals("Goodbye, Bob!", result.getResult());
+            // But built-in putJson should work
+            ActionResult putResult = actorRef.callByActionName("putJson",
+                "{\"path\": \"key\", \"value\": \"value\"}");
+            assertTrue(putResult.isSuccess());
         }
     }
 
     // ========================================================================
-    // Tests for validation of @Action method signature
+    // Tests: Method signature validation
     // ========================================================================
 
     @Nested
-    @DisplayName("@Action Method Signature Validation")
+    @DisplayName("Method Signature Validation")
     class SignatureValidation {
 
         @Test
-        @DisplayName("Should skip @Action method with wrong return type")
-        void shouldSkipMethodWithWrongReturnType() {
-            InvalidActionClass obj = new InvalidActionClass();
-            TestIIActorRef<InvalidActionClass> actorRef = new TestIIActorRef<>("invalid", obj);
+        @DisplayName("Should skip @Action with wrong return type")
+        void shouldSkipActionWithWrongReturnType() {
+            Counter counter = new Counter();
+            InvalidActionsIIAR actorRef = new InvalidActionsIIAR("invalid", counter);
 
-            // wrongReturnType has @Action but returns String instead of ActionResult
-            ActionResult wrongResult = actorRef.callByActionName("wrongReturnType", "[]");
-            assertFalse(wrongResult.isSuccess(), "Method with wrong return type should not be discovered");
-
-            // validAction should still work
-            ActionResult validResult = actorRef.callByActionName("validAction", "[]");
-            assertTrue(validResult.isSuccess());
-            assertEquals("valid", validResult.getResult());
+            ActionResult result = actorRef.callByActionName("wrongReturnType", "");
+            assertFalse(result.isSuccess());
+            assertTrue(result.getResult().contains("Unknown action"));
         }
 
         @Test
-        @DisplayName("Should skip @Action method with wrong parameter count")
-        void shouldSkipMethodWithWrongParameterCount() {
-            WrongParamsClass obj = new WrongParamsClass();
-            TestIIActorRef<WrongParamsClass> actorRef = new TestIIActorRef<>("wrong", obj);
+        @DisplayName("Should skip @Action with no parameters")
+        void shouldSkipActionWithNoParams() {
+            Counter counter = new Counter();
+            InvalidActionsIIAR actorRef = new InvalidActionsIIAR("invalid", counter);
 
-            // noParams has @Action but takes no parameters
-            ActionResult noParamsResult = actorRef.callByActionName("noParams", "[]");
-            assertFalse(noParamsResult.isSuccess(), "Method with no params should not be discovered");
+            ActionResult result = actorRef.callByActionName("noParams", "");
+            assertFalse(result.isSuccess());
+        }
 
-            // twoParams has @Action but takes two parameters
-            ActionResult twoParamsResult = actorRef.callByActionName("twoParams", "[]");
-            assertFalse(twoParamsResult.isSuccess(), "Method with two params should not be discovered");
+        @Test
+        @DisplayName("Should skip @Action with two parameters")
+        void shouldSkipActionWithTwoParams() {
+            Counter counter = new Counter();
+            InvalidActionsIIAR actorRef = new InvalidActionsIIAR("invalid", counter);
 
-            // validAction should still work
-            ActionResult validResult = actorRef.callByActionName("validAction", "[]");
-            assertTrue(validResult.isSuccess());
+            ActionResult result = actorRef.callByActionName("twoParams", "");
+            assertFalse(result.isSuccess());
+        }
+
+        @Test
+        @DisplayName("Valid @Action should still work when invalid ones exist")
+        void validActionShouldWorkWhenInvalidOnesExist() {
+            Counter counter = new Counter();
+            InvalidActionsIIAR actorRef = new InvalidActionsIIAR("invalid", counter);
+
+            ActionResult result = actorRef.callByActionName("valid", "");
+            assertTrue(result.isSuccess());
+            assertEquals("valid", result.getResult());
         }
     }
 
     // ========================================================================
-    // Tests for error handling
+    // Tests: Error handling
     // ========================================================================
 
     @Nested
     @DisplayName("Error Handling")
     class ErrorHandling {
 
-        /**
-         * Class with @Action that throws exception.
-         */
-        static class ThrowingClass {
-            @Action("throwException")
-            public ActionResult throwException(String args) {
-                throw new RuntimeException("Intentional exception for testing");
-            }
-
-            @Action("throwNPE")
-            public ActionResult throwNPE(String args) {
-                String s = null;
-                return new ActionResult(true, s.length() + ""); // NPE
-            }
-        }
-
         @Test
-        @DisplayName("Should catch and wrap exception from @Action method")
+        @DisplayName("Should catch exception from @Action method")
         void shouldCatchExceptionFromActionMethod() {
-            ThrowingClass obj = new ThrowingClass();
-            TestIIActorRef<ThrowingClass> actorRef = new TestIIActorRef<>("throwing", obj);
+            Counter counter = new Counter();
+            ThrowingIIAR actorRef = new ThrowingIIAR("throwing", counter);
 
-            ActionResult result = actorRef.callByActionName("throwException", "[]");
+            ActionResult result = actorRef.callByActionName("throwException", "");
 
-            assertFalse(result.isSuccess(), "Exception should result in failure");
-            assertTrue(result.getResult().contains("Intentional exception"),
-                "Error message should contain exception message");
+            assertFalse(result.isSuccess());
+            assertTrue(result.getResult().contains("Intentional test exception"));
         }
 
         @Test
-        @DisplayName("Should catch NullPointerException from @Action method")
+        @DisplayName("Should catch NPE from @Action method")
         void shouldCatchNPEFromActionMethod() {
-            ThrowingClass obj = new ThrowingClass();
-            TestIIActorRef<ThrowingClass> actorRef = new TestIIActorRef<>("throwing", obj);
+            Counter counter = new Counter();
+            ThrowingIIAR actorRef = new ThrowingIIAR("throwing", counter);
 
-            ActionResult result = actorRef.callByActionName("throwNPE", "[]");
+            ActionResult result = actorRef.callByActionName("throwNPE", "");
 
-            assertFalse(result.isSuccess(), "NPE should result in failure");
+            assertFalse(result.isSuccess());
         }
     }
 
     // ========================================================================
-    // Tests for coexistence with built-in actions
+    // Tests: Coexistence with built-in actions
     // ========================================================================
 
     @Nested
     @DisplayName("Coexistence with Built-in Actions")
-    class CoexistenceWithBuiltInActions {
+    class CoexistenceWithBuiltIn {
 
         @Test
-        @DisplayName("Built-in JSON actions should still work")
+        @DisplayName("Built-in JSON actions should work alongside @Action")
         void builtInJsonActionsShouldWork() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
-            // putJson is a built-in action in IIActorRef
+            // Custom @Action should work
+            ActionResult addResult = actorRef.callByActionName("add", "[1, 2]");
+            assertTrue(addResult.isSuccess());
+            assertEquals("3", addResult.getResult());
+
+            // Built-in putJson should also work
             ActionResult putResult = actorRef.callByActionName("putJson",
                 "{\"path\": \"testKey\", \"value\": \"testValue\"}");
-            assertTrue(putResult.isSuccess(), "Built-in putJson should work");
+            assertTrue(putResult.isSuccess());
 
-            // getJson is also built-in
+            // Built-in getJson should also work
             ActionResult getResult = actorRef.callByActionName("getJson", "[\"testKey\"]");
             assertTrue(getResult.isSuccess());
             assertEquals("testValue", getResult.getResult());
         }
 
         @Test
-        @DisplayName("@Action methods should be checked before built-in actions")
-        void annotatedActionsShouldBeCheckedFirst() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+        @DisplayName("@Action should be checked before built-in actions")
+        void actionShouldBeCheckedBeforeBuiltIn() {
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
-            // Call custom @Action method
-            ActionResult customResult = actorRef.callByActionName("add", "[1, 2]");
+            // First verify @Action works
+            ActionResult customResult = actorRef.callByActionName("add", "[5, 5]");
             assertTrue(customResult.isSuccess());
-            assertEquals("3", customResult.getResult());
 
-            // Call built-in action
-            ActionResult builtInResult = actorRef.callByActionName("clearJson", "");
-            assertTrue(builtInResult.isSuccess());
+            // Then verify built-in action works
+            ActionResult clearResult = actorRef.callByActionName("clearJson", "");
+            assertTrue(clearResult.isSuccess());
         }
     }
 
     // ========================================================================
-    // Tests for caching behavior
+    // Tests: Caching behavior
     // ========================================================================
 
     @Nested
@@ -450,25 +465,79 @@ public class ActionAnnotationTest {
         @Test
         @DisplayName("Multiple calls should use cached method lookup")
         void multipleCallsShouldUseCachedLookup() {
-            SimpleCalculator calculator = new SimpleCalculator();
-            TestIIActorRef<SimpleCalculator> actorRef = new TestIIActorRef<>("calc", calculator);
+            Calculator calc = new Calculator();
+            CalculatorIIAR actorRef = new CalculatorIIAR("calc", calc);
 
             // First call triggers discovery
             ActionResult result1 = actorRef.callByActionName("add", "[1, 1]");
             assertEquals("2", result1.getResult());
 
-            // Second call should use cached lookup
+            // Subsequent calls use cache
             ActionResult result2 = actorRef.callByActionName("add", "[2, 2]");
             assertEquals("4", result2.getResult());
 
-            // Third call with different action
             ActionResult result3 = actorRef.callByActionName("multiply", "[3, 3]");
             assertEquals("9", result3.getResult());
 
-            // All should succeed
+            ActionResult result4 = actorRef.callByActionName("add", "[100, 200]");
+            assertEquals("300", result4.getResult());
+
             assertTrue(result1.isSuccess());
             assertTrue(result2.isSuccess());
             assertTrue(result3.isSuccess());
+            assertTrue(result4.isSuccess());
+        }
+
+        @Test
+        @DisplayName("Different actor instances should have separate caches")
+        void differentActorsShouldHaveSeparateCaches() {
+            Calculator calc1 = new Calculator();
+            Calculator calc2 = new Calculator();
+            CalculatorIIAR actor1 = new CalculatorIIAR("calc1", calc1);
+            CalculatorIIAR actor2 = new CalculatorIIAR("calc2", calc2);
+
+            actor1.callByActionName("add", "[10, 20]");
+            actor2.callByActionName("add", "[100, 200]");
+
+            assertEquals(30, calc1.getLastResult());
+            assertEquals(300, calc2.getLastResult());
+        }
+    }
+
+    // ========================================================================
+    // Tests: POJO remains clean (design verification)
+    // ========================================================================
+
+    @Nested
+    @DisplayName("POJO Remains Clean")
+    class PojoRemainsClean {
+
+        @Test
+        @DisplayName("POJO should not have @Action annotations")
+        void pojoShouldNotHaveActionAnnotations() throws NoSuchMethodException {
+            // Verify Calculator.add has no @Action annotation
+            var method = Calculator.class.getMethod("add", int.class, int.class);
+            Action action = method.getAnnotation(Action.class);
+            assertNull(action, "POJO methods should not have @Action annotation");
+        }
+
+        @Test
+        @DisplayName("POJO should not depend on ActionResult")
+        void pojoShouldNotDependOnActionResult() throws NoSuchMethodException {
+            // Verify Calculator.add returns int, not ActionResult
+            var method = Calculator.class.getMethod("add", int.class, int.class);
+            assertEquals(int.class, method.getReturnType(),
+                "POJO methods should return domain types, not ActionResult");
+        }
+
+        @Test
+        @DisplayName("IIActorRef subclass should have @Action annotations")
+        void iiActorRefSubclassShouldHaveActionAnnotations() throws NoSuchMethodException {
+            // Verify CalculatorIIAR.add has @Action annotation
+            var method = CalculatorIIAR.class.getMethod("add", String.class);
+            Action action = method.getAnnotation(Action.class);
+            assertNotNull(action, "IIActorRef subclass should have @Action annotation");
+            assertEquals("add", action.value());
         }
     }
 }

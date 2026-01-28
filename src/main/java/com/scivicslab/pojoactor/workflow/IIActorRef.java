@@ -74,11 +74,13 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
     }
 
     /**
-     * Discovers methods annotated with @Action on the wrapped object.
+     * Discovers methods annotated with @Action on the IIActorRef subclass.
      *
-     * <p>This method scans the wrapped object's class (including inherited methods
-     * and interface default methods) for methods annotated with {@link Action}.
-     * Valid action methods must:</p>
+     * <p>This method scans the concrete IIActorRef implementation for methods
+     * annotated with {@link Action}. This keeps the POJO clean - the wrapped
+     * object doesn't need to know about workflow-related annotations.</p>
+     *
+     * <p>Valid action methods must:</p>
      * <ul>
      *   <li>Return {@link ActionResult}</li>
      *   <li>Accept a single {@code String} parameter</li>
@@ -93,12 +95,8 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
 
         actionMethods = new HashMap<>();
 
-        if (object == null) {
-            return;
-        }
-
-        // Scan all public methods (includes inherited and default methods from interfaces)
-        for (Method method : object.getClass().getMethods()) {
+        // Scan IIActorRef subclass methods
+        for (Method method : this.getClass().getMethods()) {
             Action action = method.getAnnotation(Action.class);
             if (action == null) {
                 continue;
@@ -108,7 +106,7 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
             if (method.getReturnType() != ActionResult.class) {
                 logger.warning(String.format(
                     "@Action method %s.%s has invalid return type %s (expected ActionResult)",
-                    object.getClass().getSimpleName(), method.getName(), method.getReturnType().getSimpleName()));
+                    this.getClass().getSimpleName(), method.getName(), method.getReturnType().getSimpleName()));
                 continue;
             }
 
@@ -116,7 +114,7 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
             if (params.length != 1 || params[0] != String.class) {
                 logger.warning(String.format(
                     "@Action method %s.%s has invalid parameters (expected single String parameter)",
-                    object.getClass().getSimpleName(), method.getName()));
+                    this.getClass().getSimpleName(), method.getName()));
                 continue;
             }
 
@@ -124,21 +122,21 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
             if (actionMethods.containsKey(actionName)) {
                 logger.warning(String.format(
                     "Duplicate @Action(\"%s\") found on %s.%s (already defined)",
-                    actionName, object.getClass().getSimpleName(), method.getName()));
+                    actionName, this.getClass().getSimpleName(), method.getName()));
                 continue;
             }
 
             actionMethods.put(actionName, method);
             logger.fine(String.format("Discovered @Action(\"%s\") -> %s.%s",
-                actionName, object.getClass().getSimpleName(), method.getName()));
+                actionName, this.getClass().getSimpleName(), method.getName()));
         }
 
         logger.fine(String.format("Discovered %d @Action methods on %s",
-            actionMethods.size(), object.getClass().getSimpleName()));
+            actionMethods.size(), this.getClass().getSimpleName()));
     }
 
     /**
-     * Invokes an @Action annotated method on the wrapped object.
+     * Invokes an @Action annotated method on this IIActorRef instance.
      *
      * @param actionName the action name
      * @param args the arguments string
@@ -153,7 +151,7 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
         }
 
         try {
-            return (ActionResult) method.invoke(object, args);
+            return (ActionResult) method.invoke(this, args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
             String message = cause != null ? cause.getMessage() : e.getMessage();
@@ -182,9 +180,9 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
      *
      * <p>This method uses a three-stage dispatch mechanism:</p>
      * <ol>
-     *   <li><strong>@Action annotation:</strong> Checks if the wrapped object has a method
-     *       annotated with {@link Action} matching the action name. This enables mixin-like
-     *       behavior through interface default methods.</li>
+     *   <li><strong>@Action annotation:</strong> Checks the IIActorRef subclass for methods
+     *       annotated with {@link Action} matching the action name. This keeps the POJO
+     *       clean - only the IIActorRef adapter needs workflow-related code.</li>
      *   <li><strong>Built-in JSON State API:</strong> Handles putJson, getJson, hasJson,
      *       clearJson, and printJson actions.</li>
      *   <li><strong>Unknown action:</strong> Returns failure for unrecognized actions.</li>
