@@ -521,6 +521,27 @@ public class JsonState {
     }
 
     /**
+     * Returns a pretty-printed JSON string for the subtree at the given path.
+     *
+     * <p>If path is null or empty, returns the entire state.
+     * If the path doesn't exist, returns "null".</p>
+     *
+     * @param path the path expression (e.g., "namespaces", "cluster.nodes")
+     * @return formatted JSON string for the subtree
+     * @since 2.15.0
+     */
+    public String toStringOfJson(String path) {
+        if (path == null || path.isEmpty()) {
+            return root.toPrettyString();
+        }
+        JsonNode node = select(path);
+        if (node.isMissingNode()) {
+            return "null";
+        }
+        return node.toPrettyString();
+    }
+
+    /**
      * Returns an iterator over the top-level field names.
      *
      * @return field name iterator
