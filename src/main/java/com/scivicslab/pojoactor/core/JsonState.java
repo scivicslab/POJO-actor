@@ -22,6 +22,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
+
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -539,6 +542,40 @@ public class JsonState {
             return "null";
         }
         return node.toPrettyString();
+    }
+
+    /**
+     * Returns a YAML string for the subtree at the given path.
+     *
+     * <p>If path is null or empty, returns the entire state as YAML.
+     * If the path doesn't exist, returns "null".</p>
+     *
+     * @param path the path expression (e.g., "namespaces", "cluster.nodes")
+     * @return YAML string for the subtree
+     * @since 2.15.0
+     */
+    public String toStringOfYaml(String path) {
+        JsonNode node;
+        if (path == null || path.isEmpty()) {
+            node = root;
+        } else {
+            node = select(path);
+            if (node.isMissingNode()) {
+                return "null";
+            }
+        }
+
+        // Convert JsonNode to Java object for YAML serialization
+        Object javaObject = mapper.convertValue(node, Object.class);
+
+        // Configure YAML output for readability
+        DumperOptions options = new DumperOptions();
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        options.setPrettyFlow(true);
+        options.setIndent(2);
+
+        Yaml yaml = new Yaml(options);
+        return yaml.dump(javaObject);
     }
 
     /**

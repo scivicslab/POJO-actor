@@ -545,6 +545,24 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
+     * Returns a YAML string for the subtree at the given path.
+     *
+     * <p>If path is null or empty, returns the entire JSON state as YAML.
+     * If the path doesn't exist, returns "null".
+     * If JSON state has not been initialized, returns "{}".</p>
+     *
+     * @param path the XPath-style path (e.g., "namespaces", "cluster.nodes")
+     * @return YAML string for the subtree
+     * @since 2.15.0
+     */
+    public String toStringOfYaml(String path) {
+        if (jsonState == null) {
+            return "{}";
+        }
+        return jsonState.toStringOfYaml(path);
+    }
+
+    /**
      * Sets the last action result for this actor.
      *
      * <p>The result is stored in the JSON state under the {@code _lastResult} key,
