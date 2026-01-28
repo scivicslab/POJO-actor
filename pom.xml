@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
-    <description>A lightweight actor model library for Java that turns any Plain Old Java Object into a concurrent actor with built-in thread safety and async messaging.</description>
+    <description>A lightweight concurrency library implementing the actor model for Java. Turns any POJO into a thread-safe concurrent actor with async messaging, virtual threads support, and work-stealing pools.</description>
     <url>https://github.com/scivicslab/POJO-actor</url>
 
     <licenses>
