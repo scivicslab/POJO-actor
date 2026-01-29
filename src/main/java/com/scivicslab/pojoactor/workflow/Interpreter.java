@@ -557,6 +557,7 @@ public class Interpreter {
                 Transition transition = new Transition();
                 transition.setStates((List<String>) stepData.get("states"));
                 transition.setLabel((String) stepData.get("label"));
+                transition.setNote((String) stepData.get("note"));
 
                 List<Map<String, Object>> actionsData = (List<Map<String, Object>>) stepData.get("actions");
                 if (actionsData != null) {
