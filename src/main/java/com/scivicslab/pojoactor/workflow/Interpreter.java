@@ -26,8 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1587,7 +1587,7 @@ public class Interpreter {
             return matched;
         }
 
-        ConcurrentSkipListSet<String> childNames = selfActorRef.getNamesOfChildren();
+        Set<String> childNames = selfActorRef.getNamesOfChildren();
 
         // Exact match (no wildcard)
         if (!pattern.contains("*")) {

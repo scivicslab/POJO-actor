@@ -16,8 +16,9 @@
  */
 package com.scivicslab.pojoactor.core;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,7 +62,8 @@ public class ActorRef<T> implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread actorThread;
 
-    ConcurrentSkipListSet<String> NamesOfChildren = new ConcurrentSkipListSet<>();
+    // CopyOnWriteArraySet preserves insertion order (unlike ConcurrentSkipListSet which sorts)
+    CopyOnWriteArraySet<String> NamesOfChildren = new CopyOnWriteArraySet<>();
     String parentName;
 
     // === JSON State (lazy-initialized) ===
@@ -122,10 +124,12 @@ public class ActorRef<T> implements AutoCloseable {
 
     /**
      * Returns the names of all child actors supervised by this actor.
-     * 
-     * @return a set containing the names of child actors
+     *
+     * <p>The returned set preserves the order in which children were added.</p>
+     *
+     * @return a set containing the names of child actors in creation order
      */
-    public ConcurrentSkipListSet<String> getNamesOfChildren() {
+    public Set<String> getNamesOfChildren() {
         return this.NamesOfChildren;
     }
 
@@ -636,7 +640,7 @@ public class ActorRef<T> implements AutoCloseable {
                 // Strip optional "json." prefix
                 String jsonPath = varName.startsWith("json.") ? varName.substring(5) : varName;
 
-                String value = jsonState.getString(jsonPath);
+                String value = getVariableValue(jsonPath);
                 if (value != null) {
                     expanded = expanded.substring(0, start) + value + expanded.substring(end + 1);
                     // Don't advance startIndex since we replaced content
@@ -647,6 +651,31 @@ public class ActorRef<T> implements AutoCloseable {
         }
 
         return expanded;
+    }
+
+    /**
+     * Gets a variable value as a string, handling objects and arrays.
+     *
+     * <p>For scalar values (string, number, boolean), returns the text representation.
+     * For objects and arrays, returns the JSON string representation.</p>
+     *
+     * @param path the path to the value
+     * @return the string representation, or null if not found
+     */
+    private String getVariableValue(String path) {
+        if (jsonState == null) {
+            return null;
+        }
+        var node = jsonState.select(path);
+        if (node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        // For objects and arrays, return JSON string representation
+        if (node.isObject() || node.isArray()) {
+            return node.toString();
+        }
+        // For scalar values, return text representation
+        return node.asText();
     }
 
     // ========================================================================

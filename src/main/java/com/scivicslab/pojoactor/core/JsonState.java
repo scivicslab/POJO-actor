@@ -376,7 +376,13 @@ public class JsonState {
         if (value == null) {
             array.setNull(index);
         } else if (value instanceof String) {
-            array.set(index, mapper.valueToTree(value));
+            String strValue = (String) value;
+            JsonNode parsed = tryParseJsonString(strValue);
+            if (parsed != null) {
+                array.set(index, parsed);
+            } else {
+                array.set(index, mapper.valueToTree(strValue));
+            }
         } else if (value instanceof Number) {
             array.set(index, mapper.valueToTree(value));
         } else if (value instanceof Boolean) {
@@ -390,12 +396,22 @@ public class JsonState {
 
     /**
      * Sets a value on an ObjectNode.
+     *
+     * <p>If the value is a String that looks like JSON (starts with '{' or '['),
+     * it will be parsed and stored as a structured object/array. If parsing fails,
+     * it will be stored as a plain string.</p>
      */
     private void setNodeValue(ObjectNode parent, String fieldName, Object value) {
         if (value == null) {
             parent.putNull(fieldName);
         } else if (value instanceof String) {
-            parent.put(fieldName, (String) value);
+            String strValue = (String) value;
+            JsonNode parsed = tryParseJsonString(strValue);
+            if (parsed != null) {
+                parent.set(fieldName, parsed);
+            } else {
+                parent.put(fieldName, strValue);
+            }
         } else if (value instanceof Integer) {
             parent.put(fieldName, (Integer) value);
         } else if (value instanceof Long) {
@@ -410,6 +426,31 @@ public class JsonState {
             parent.set(fieldName, (JsonNode) value);
         } else {
             parent.put(fieldName, value.toString());
+        }
+    }
+
+    /**
+     * Checks if a string looks like JSON and attempts to parse it.
+     *
+     * @param s the string to check
+     * @return parsed JsonNode if successful, null otherwise
+     */
+    private JsonNode tryParseJsonString(String s) {
+        if (s == null || s.isEmpty()) {
+            return null;
+        }
+        String trimmed = s.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        char first = trimmed.charAt(0);
+        if (first != '{' && first != '[') {
+            return null;
+        }
+        try {
+            return mapper.readTree(s);
+        } catch (Exception e) {
+            return null;
         }
     }
 

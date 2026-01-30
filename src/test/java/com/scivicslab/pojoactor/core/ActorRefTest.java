@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -213,7 +213,7 @@ public class ActorRefTest {
         assertEquals("parent", child2.getParentName(), "Child should have correct parent name");
 
         // Verify parent knows about children
-        ConcurrentSkipListSet<String> children = parent.getNamesOfChildren();
+        Set<String> children = parent.getNamesOfChildren();
         assertTrue(children.contains("child1"), "Parent should know about child1");
         assertTrue(children.contains("child2"), "Parent should know about child2");
 

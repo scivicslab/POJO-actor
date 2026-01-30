@@ -200,8 +200,11 @@ public class DynamicActorLoaderActor implements CallableByActionName {
      * arguments: ["parentActorName", "newActorName", "com.example.MyActorClass"]
      * }</pre>
      *
-     * <p>The class must implement {@link CallableByActionName} and have a public
-     * no-argument constructor.</p>
+     * <p>The class can be either:</p>
+     * <ul>
+     *   <li>An {@link IIActorRef} subclass with constructor (String actorName, IIActorSystem system)</li>
+     *   <li>A POJO implementing {@link CallableByActionName} (legacy, wrapped with GenericIIAR)</li>
+     * </ul>
      *
      * @param args JSON array: [parentActorName, actorName, className]
      * @return ActionResult indicating success or failure
@@ -268,22 +271,42 @@ public class DynamicActorLoaderActor implements CallableByActionName {
                     ". Check the class name or load the JAR first.");
             }
 
-            // Instantiate the class
-            Object instance = clazz.getDeclaredConstructor().newInstance();
+            IIActorRef<?> actorRef;
 
-            // Verify it implements CallableByActionName
-            if (!(instance instanceof CallableByActionName)) {
-                return new ActionResult(false,
-                    "Class must implement CallableByActionName: " + className);
+            // Check if class is an IIActorRef subclass (new pattern: POJO + IIAR)
+            if (IIActorRef.class.isAssignableFrom(clazz)) {
+                // Instantiate IIAR with (actorName, system) constructor
+                try {
+                    actorRef = (IIActorRef<?>) clazz
+                        .getDeclaredConstructor(String.class, IIActorSystem.class)
+                        .newInstance(actorName, system);
+                } catch (NoSuchMethodException e) {
+                    return new ActionResult(false,
+                        "IIActorRef subclass must have constructor (String actorName, IIActorSystem system): " + className);
+                }
+            } else {
+                // Legacy pattern: POJO implementing CallableByActionName
+                Object instance = clazz.getDeclaredConstructor().newInstance();
+
+                // Verify it implements CallableByActionName
+                if (!(instance instanceof CallableByActionName)) {
+                    return new ActionResult(false,
+                        "Class must be IIActorRef subclass or implement CallableByActionName: " + className);
+                }
+
+                // Inject ActorSystem if the plugin implements ActorSystemAware
+                if (instance instanceof ActorSystemAware) {
+                    ((ActorSystemAware) instance).setActorSystem(system);
+                }
+
+                // Wrap as IIActorRef
+                actorRef = new GenericIIAR<>(actorName, instance, system);
+
+                // Inject IIActorRef if the plugin implements IIActorRefAware
+                if (instance instanceof IIActorRefAware) {
+                    ((IIActorRefAware) instance).setIIActorRef(actorRef);
+                }
             }
-
-            // Inject ActorSystem if the plugin implements ActorSystemAware
-            if (instance instanceof ActorSystemAware) {
-                ((ActorSystemAware) instance).setActorSystem(system);
-            }
-
-            // Wrap as IIActorRef
-            GenericIIAR<?> actorRef = new GenericIIAR<>(actorName, instance, system);
 
             // Set parent-child relationship
             actorRef.setParentName(parentName);
@@ -385,6 +408,12 @@ public class DynamicActorLoaderActor implements CallableByActionName {
                 }
 
                 GenericIIAR<?> actorRef = new GenericIIAR<>(actorName, actor, system);
+
+                // Inject IIActorRef if the plugin implements IIActorRefAware
+                if (actor instanceof IIActorRefAware) {
+                    ((IIActorRefAware) actor).setIIActorRef(actorRef);
+                }
+
                 system.addIIActor(actorRef);
 
                 return new ActionResult(true,
