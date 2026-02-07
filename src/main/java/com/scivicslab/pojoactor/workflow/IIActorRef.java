@@ -188,9 +188,36 @@ public abstract class IIActorRef<T> extends ActorRef<T> implements CallableByAct
      *   <li><strong>Unknown action:</strong> Returns failure for unrecognized actions.</li>
      * </ol>
      *
-     * <p>Subclasses can override this method to add custom dispatch logic. When overriding,
-     * call {@code super.callByActionName()} for unhandled actions to get @Action annotation
-     * and JSON State API support.</p>
+     * <p><strong>DO NOT OVERRIDE THIS METHOD.</strong> Use {@link Action @Action} annotation
+     * on your methods instead. The {@code @Action} annotation provides cleaner, more
+     * maintainable code compared to overriding with switch statements.</p>
+     *
+     * <p><strong>Recommended pattern:</strong></p>
+     * <pre>{@code
+     * public class MyActor extends IIActorRef<Void> {
+     *     public MyActor(String name, IIActorSystem system) {
+     *         super(name, null, system);
+     *     }
+     *
+     *     @Action("doSomething")
+     *     public ActionResult doSomething(String args) {
+     *         // implementation
+     *         return new ActionResult(true, "done");
+     *     }
+     * }
+     * }</pre>
+     *
+     * <p><strong>Deprecated pattern (do not use):</strong></p>
+     * <pre>{@code
+     * // BAD: Don't override callByActionName with switch statement
+     * @Override
+     * public ActionResult callByActionName(String actionName, String args) {
+     *     return switch (actionName) {
+     *         case "doSomething" -> doSomething(args);
+     *         default -> super.callByActionName(actionName, args);
+     *     };
+     * }
+     * }</pre>
      *
      * @param actionName the name of the action to invoke
      * @param args the arguments as a JSON string

@@ -344,8 +344,8 @@ public class SubworkflowTest {
         }
 
         @Test
-        @DisplayName("Should fail-fast when one actor fails")
-        public void testApplyFailFast() {
+        @DisplayName("Should report partial failure when some actors fail")
+        public void testApplyPartialFailure() {
             AtomicInteger callCount = new AtomicInteger(0);
 
             for (int i = 1; i <= 3; i++) {
@@ -370,9 +370,10 @@ public class SubworkflowTest {
             ActionResult result = interpreter.apply(actionDef);
 
             assertFalse(result.isSuccess());
-            assertTrue(result.getResult().contains("Failed on node-2"));
-            // Should have stopped after node-2 failed
-            assertTrue(callCount.get() <= 3);
+            // Parallel execution calls all actors
+            assertEquals(3, callCount.get());
+            // Result reports the failure
+            assertTrue(result.getResult().contains("node-2"));
         }
 
         @Test

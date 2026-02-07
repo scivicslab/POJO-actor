@@ -28,7 +28,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -1510,19 +1512,52 @@ public class Interpreter {
                 return new ActionResult(false, "No actors matched pattern: " + actorPattern);
             }
 
-            // Execute on each matched actor sequentially
-            List<String> successNames = new ArrayList<>();
+            logger.info(String.format("Applying method '%s' to %d actors matching '%s' (parallel)",
+                methodName, matchedActors.size(), actorPattern));
+
+            // Thread-safe collections for gathering results
+            AtomicInteger successCount = new AtomicInteger(0);
+            Map<String, String> failures = new ConcurrentHashMap<>();
+
+            // Create async tasks for all actors
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            final String finalArgs = args;
+
             for (IIActorRef<?> actor : matchedActors) {
-                ActionResult result = actor.callByActionName(methodName, args);
-                if (!result.isSuccess()) {
-                    return new ActionResult(false,
-                        "Failed on " + actor.getName() + ": " + result.getResult());
-                }
-                successNames.add(actor.getName());
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    try {
+                        ActionResult result = actor.callByActionName(methodName, finalArgs);
+                        if (!result.isSuccess()) {
+                            failures.put(actor.getName(), result.getResult());
+                            logger.warning(String.format("Failed on %s: %s",
+                                actor.getName(), result.getResult()));
+                        } else {
+                            successCount.incrementAndGet();
+                            logger.fine(String.format("Applied to %s: %s",
+                                actor.getName(), result.getResult()));
+                        }
+                    } catch (Exception e) {
+                        failures.put(actor.getName(), e.getMessage());
+                        logger.log(Level.WARNING, "Exception on " + actor.getName(), e);
+                    }
+                });
+                futures.add(future);
             }
 
-            return new ActionResult(true,
-                "Applied to " + successNames.size() + " actors: " + successNames);
+            // Wait for all async tasks to complete
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            if (failures.isEmpty()) {
+                return new ActionResult(true,
+                    String.format("Applied to %d actors", successCount.get()));
+            } else {
+                List<String> failureMessages = new ArrayList<>();
+                failures.forEach((name, msg) -> failureMessages.add(name + ": " + msg));
+                return new ActionResult(false,
+                    String.format("Applied to %d/%d actors. Failures: %s",
+                        successCount.get(), matchedActors.size(),
+                        String.join("; ", failureMessages)));
+            }
 
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Apply error", e);
