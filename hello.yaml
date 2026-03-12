@@ -1,0 +1,7 @@
+name: hello-world
+steps:
+  - states: ["0", "end"]
+    actions:
+      - actor: ROOT
+        method: print
+        arguments: "Hello, World!"

@@ -7,7 +7,7 @@
 
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>2.15.0</version>
+    <version>3.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
@@ -99,17 +99,9 @@
 
       <!-- CLI -->
       <dependency>
-        <groupId>info.picocli</groupId>
-        <artifactId>picocli</artifactId>
-        <version>4.7.6</version>
-      </dependency>
-
-      <!-- picocli annotation processor for GraalVM Native Image -->
-      <dependency>
-        <groupId>info.picocli</groupId>
-        <artifactId>picocli-codegen</artifactId>
-        <version>4.7.6</version>
-        <scope>provided</scope>
+        <groupId>com.scivicslab</groupId>
+        <artifactId>pluggable-cli</artifactId>
+        <version>1.0.0</version>
       </dependency>
 
       <dependency>
@@ -139,16 +131,6 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>info.picocli</groupId>
-                            <artifactId>picocli-codegen</artifactId>
-                            <version>4.7.6</version>
-                        </path>
-                    </annotationProcessorPaths>
-                    <compilerArgs>
-                        <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
-                    </compilerArgs>
                 </configuration>
             </plugin>
 
@@ -223,6 +205,7 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.scivicslab.pojoactor.cli.WorkflowCLI</mainClass>
                                 </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                         </configuration>
                     </execution>

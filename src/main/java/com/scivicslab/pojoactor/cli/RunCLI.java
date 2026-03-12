@@ -21,17 +21,17 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Callable;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+
+import com.scivicslab.pluggablecli.CommandRepository;
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.workflow.IIActorSystem;
 import com.scivicslab.pojoactor.workflow.Interpreter;
 import com.scivicslab.pojoactor.workflow.InterpreterIIAR;
 import com.scivicslab.pojoactor.workflow.VarsActor;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
 
 /**
  * CLI subcommand for running YAML/JSON workflows.
@@ -45,55 +45,82 @@ import picocli.CommandLine.Parameters;
  * </pre>
  *
  * @author devteam@scivicslab.com
- * @since 2.13.0
+ * @since 3.0.0
  */
-@Command(
-    name = "run",
-    description = "Run a YAML/JSON workflow",
-    mixinStandardHelpOptions = true
-)
-public class RunCLI implements Callable<Integer> {
+public class RunCLI {
 
-    @Option(
-        names = {"-d", "--directory"},
-        description = "Base directory for workflow files",
-        defaultValue = "."
-    )
-    private File baseDirectory;
+    /**
+     * Registers the "run" command with the given repository.
+     *
+     * @param repo the command repository
+     */
+    public static void registerCommand(CommandRepository repo) {
+        Options opts = new Options();
+        opts.addOption(Option.builder("d")
+                .longOpt("directory")
+                .hasArg(true)
+                .argName("dir")
+                .desc("Base directory for workflow files (default: .)")
+                .build());
+        opts.addOption(Option.builder("w")
+                .longOpt("workflow")
+                .hasArg(true)
+                .argName("file")
+                .desc("Workflow file path (relative to base directory)")
+                .required(true)
+                .build());
+        opts.addOption(Option.builder("m")
+                .longOpt("max-iterations")
+                .hasArg(true)
+                .argName("n")
+                .desc("Maximum iterations (default: 10000)")
+                .build());
+        opts.addOption(Option.builder("o")
+                .longOpt("overlay")
+                .hasArg(true)
+                .argName("dir")
+                .desc("Overlay directory for kustomize")
+                .build());
+        opts.addOption(Option.builder("P")
+                .hasArg(true)
+                .argName("key=value")
+                .desc("Define a variable (e.g., -Pname=value)")
+                .build());
 
-    @Option(
-        names = {"-w", "--workflow"},
-        description = "Workflow file path (relative to base directory)",
-        required = true
-    )
-    private String workflowFile;
+        repo.addCommand("Workflow", "run", opts, "Run a YAML/JSON workflow",
+                cl -> new RunCLI().execute(cl));
+    }
 
-    @Option(
-        names = {"-m", "--max-iterations"},
-        description = "Maximum iterations (default: 10000)",
-        defaultValue = "10000"
-    )
-    private int maxIterations;
+    /**
+     * Executes the run command.
+     *
+     * @param cl the parsed command line
+     */
+    public void execute(CommandLine cl) {
+        // Parse options
+        File baseDirectory = new File(cl.getOptionValue("d", "."));
+        String workflowFile = cl.getOptionValue("w");
+        int maxIterations = Integer.parseInt(cl.getOptionValue("m", "10000"));
+        String overlayPath = cl.getOptionValue("o");
+        File overlayDirectory = overlayPath != null ? new File(overlayPath) : null;
 
-    @Option(
-        names = {"-o", "--overlay"},
-        description = "Overlay directory for kustomize"
-    )
-    private File overlayDirectory;
+        // Parse -P key=value pairs
+        Map<String, String> variables = new HashMap<>();
+        String[] pValues = cl.getOptionValues("P");
+        if (pValues != null) {
+            for (String pv : pValues) {
+                int eq = pv.indexOf('=');
+                if (eq > 0) {
+                    variables.put(pv.substring(0, eq), pv.substring(eq + 1));
+                }
+            }
+        }
 
-    @Option(
-        names = {"-P"},
-        description = "Define a variable (e.g., -Pname=value)"
-    )
-    private Map<String, String> variables = new HashMap<>();
-
-    @Override
-    public Integer call() throws Exception {
         // Resolve workflow path
         Path workflowPath = baseDirectory.toPath().resolve(workflowFile);
         if (!workflowPath.toFile().exists()) {
             System.err.println("Workflow file not found: " + workflowPath);
-            return 1;
+            System.exit(1);
         }
 
         // Create actor system
@@ -101,9 +128,9 @@ public class RunCLI implements Callable<Integer> {
 
         // Create interpreter
         Interpreter interpreter = new Interpreter.Builder()
-            .loggerName("interpreter")
-            .team(system)
-            .build();
+                .loggerName("interpreter")
+                .team(system)
+                .build();
         interpreter.setWorkflowBaseDir(baseDirectory.getAbsolutePath());
 
         // Create vars actor and register
@@ -116,10 +143,15 @@ public class RunCLI implements Callable<Integer> {
         system.addIIActor(interpreterActor);
 
         // Load workflow
-        if (overlayDirectory != null) {
-            interpreter.readYaml(workflowPath, overlayDirectory.toPath());
-        } else {
-            interpreter.readYaml(workflowPath);
+        try {
+            if (overlayDirectory != null) {
+                interpreter.readYaml(workflowPath, overlayDirectory.toPath());
+            } else {
+                interpreter.readYaml(workflowPath);
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Failed to load workflow: " + e.getMessage());
+            System.exit(1);
         }
 
         // Run workflow
@@ -128,10 +160,9 @@ public class RunCLI implements Callable<Integer> {
         // Output result
         if (result.isSuccess()) {
             System.out.println("Workflow completed successfully.");
-            return 0;
         } else {
             System.err.println("Workflow failed: " + result.getResult());
-            return 1;
+            System.exit(1);
         }
     }
 }

@@ -1,4 +1,6 @@
 target/
+dependency-reduced-pom.xml
+
 # Compiled class file
 *.class
 
@@ -23,3 +25,15 @@ target/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+svm_err_*
+
+# H2 database
+*.mv.db
+
+# Native image binary
+pojo-actor
+
+# IDE
+.idea/
+*.iml
+.vscode/

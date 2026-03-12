@@ -17,30 +17,24 @@
 
 package com.scivicslab.pojoactor.cli;
 
-import picocli.CommandLine;
-import picocli.CommandLine.Command;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.ParseException;
+
+import com.scivicslab.pluggablecli.CommandRepository;
+import com.scivicslab.pluggablecli.PluginLoader;
 
 /**
  * Main CLI entry point for POJO-actor workflow interpreter.
  *
  * <p>Usage:</p>
  * <pre>
- * java -jar pojo-actor-2.13.0.jar run -d ./ -w hello.yaml
+ * java -jar pojo-actor-3.0.0-SNAPSHOT.jar run -d ./ -w hello.yaml
  * </pre>
  *
  * @author devteam@scivicslab.com
- * @since 2.13.0
+ * @since 3.0.0
  */
-@Command(
-    name = "pojo-actor",
-    description = "POJO-actor workflow interpreter",
-    mixinStandardHelpOptions = true,
-    version = "2.13.0",
-    subcommands = {
-        RunCLI.class
-    }
-)
-public class WorkflowCLI implements Runnable {
+public class WorkflowCLI {
 
     /**
      * Main entry point.
@@ -48,13 +42,40 @@ public class WorkflowCLI implements Runnable {
      * @param args command line arguments
      */
     public static void main(String[] args) {
-        int exitCode = new CommandLine(new WorkflowCLI()).execute(args);
-        System.exit(exitCode);
+        CommandRepository cmds = new CommandRepository();
+        setupCommands(cmds);
+
+        // Load plugins via ServiceLoader
+        PluginLoader loader = new PluginLoader(cmds);
+        loader.loadPlugins();
+
+        try {
+            CommandLine cl = cmds.parse(args);
+            String command = cmds.getGivenCommand();
+
+            if (command == null) {
+                cmds.printCommandList("pojo-actor <command> [options]");
+            } else if (cmds.isHelpRequested()) {
+                cmds.printCommandHelp(command);
+            } else if (cmds.hasCommand(command)) {
+                cmds.execute(command, cl);
+            } else {
+                System.err.println("Error: Unknown command: " + command);
+                cmds.printCommandList("pojo-actor <command> [options]");
+                System.exit(1);
+            }
+        } catch (ParseException e) {
+            System.err.println("Error: " + e.getMessage());
+            System.exit(1);
+        }
     }
 
-    @Override
-    public void run() {
-        // Show help when no subcommand is specified
-        new CommandLine(this).usage(System.out);
+    /**
+     * Registers all built-in commands.
+     *
+     * @param cmds the command repository
+     */
+    private static void setupCommands(CommandRepository cmds) {
+        RunCLI.registerCommand(cmds);
     }
 }

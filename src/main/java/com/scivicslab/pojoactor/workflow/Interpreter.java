@@ -84,6 +84,8 @@ public class Interpreter {
 
     protected String currentState = "0";
 
+    protected volatile boolean stopRequested = false;
+
     protected IIActorSystem system = null;
 
     /**
@@ -718,6 +720,12 @@ public class Interpreter {
     public ActionResult execCode() {
         logger.entering(CLASS_NAME, "execCode");
 
+        if (stopRequested) {
+            ActionResult stopResult = new ActionResult(false, "Stopped by request");
+            logger.exiting(CLASS_NAME, "execCode", stopResult);
+            return stopResult;
+        }
+
         if (!hasCodeLoaded()) {
             ActionResult noCodeResult = new ActionResult(false, "No code loaded");
             logger.exiting(CLASS_NAME, "execCode", noCodeResult);
@@ -912,7 +920,7 @@ public class Interpreter {
             return new ActionResult(false, "No code loaded");
         }
 
-        for (int iteration = 0; iteration < maxIterations; iteration++) {
+        for (int iteration = 0; iteration < maxIterations && !stopRequested; iteration++) {
             // Check for end state before executing
             if ("end".equals(currentState)) {
                 return new ActionResult(true, "Workflow completed");
@@ -1253,6 +1261,37 @@ public class Interpreter {
         this.currentTransitionIndex = 0;
         this.currentState = "0";
         this.code = null;
+        this.stopRequested = false;
+    }
+
+    /**
+     * Requests the interpreter to stop execution as soon as possible.
+     * This method is thread-safe and can be called from any thread,
+     * including via {@code tellNow()} to bypass the actor message queue.
+     *
+     * @since 2.14.0
+     */
+    public void requestStop() {
+        this.stopRequested = true;
+    }
+
+    /**
+     * Clears the stop request flag, allowing execution to proceed again.
+     *
+     * @since 2.14.0
+     */
+    public void clearStop() {
+        this.stopRequested = false;
+    }
+
+    /**
+     * Returns whether a stop has been requested.
+     *
+     * @return true if stop has been requested
+     * @since 2.14.0
+     */
+    public boolean isStopRequested() {
+        return this.stopRequested;
     }
 
     /**
