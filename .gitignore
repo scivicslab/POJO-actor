@@ -29,6 +29,7 @@ svm_err_*
 
 # H2 database
 *.mv.db
+*.lock.db
 
 # Native image binary
 pojo-actor
