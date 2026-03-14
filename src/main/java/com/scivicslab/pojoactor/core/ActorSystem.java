@@ -25,7 +25,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import com.scivicslab.pojoactor.pojo.Root;
 
 
 /**
@@ -308,16 +307,6 @@ public class ActorSystem {
         actors.remove(actorName);
     }
 
-    /**
-     * Returns the root actor of the system.
-     * 
-     * @deprecated Use {@link #getActor(String)} with "ROOT" instead
-     * @return the root actor reference
-     */
-    @Deprecated
-    public ActorRef<Root> root() {
-        return this.getActor("ROOT");
-    }
 
     // =======================================================================
     // Primitive APIs

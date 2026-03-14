@@ -17,10 +17,8 @@
 
 package com.scivicslab.pojoactor.core.distributed.discovery;
 
-import com.scivicslab.pojoactor.workflow.distributed.DistributedActorSystem;
 import com.scivicslab.pojoactor.core.distributed.NodeInfo;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -129,64 +127,6 @@ public class NodeDiscoveryFactory {
         throw new IllegalStateException(
                 "No supported distributed environment detected. " +
                 "Ensure you are running in Slurm, Kubernetes, or Grid Engine.");
-    }
-
-    /**
-     * Creates a DistributedActorSystem with automatic node discovery
-     * and registration.
-     *
-     * <p>This convenience method:</p>
-     * <ol>
-     * <li>Auto-detects the environment</li>
-     * <li>Creates a DistributedActorSystem</li>
-     * <li>Registers all remote nodes automatically</li>
-     * </ol>
-     *
-     * @param port the port for actor communication
-     * @return a fully configured DistributedActorSystem
-     * @throws IOException if the HTTP server cannot be created
-     */
-    public static DistributedActorSystem createDistributedSystem(int port) throws IOException {
-        NodeDiscovery discovery = autoDetect(port);
-
-        // Create actor system for this node
-        DistributedActorSystem system = new DistributedActorSystem(
-                discovery.getMyNodeId(),
-                discovery.getMyHost(),
-                discovery.getMyPort()
-        );
-
-        // Register all remote nodes
-        String myNodeId = discovery.getMyNodeId();
-        int registeredCount = 0;
-
-        for (NodeInfo node : discovery.getAllNodes()) {
-            if (!node.getNodeId().equals(myNodeId)) {
-                system.registerRemoteNode(
-                        node.getNodeId(),
-                        node.getHost(),
-                        node.getPort()
-                );
-                registeredCount++;
-            }
-        }
-
-        logger.info(String.format(
-                "Created DistributedActorSystem '%s' with %d remote nodes registered",
-                myNodeId, registeredCount
-        ));
-
-        return system;
-    }
-
-    /**
-     * Creates a DistributedActorSystem with default port 8080.
-     *
-     * @return a fully configured DistributedActorSystem
-     * @throws IOException if the HTTP server cannot be created
-     */
-    public static DistributedActorSystem createDistributedSystem() throws IOException {
-        return createDistributedSystem(8080);
     }
 
     // Private constructor to prevent instantiation

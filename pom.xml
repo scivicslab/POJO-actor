@@ -7,7 +7,7 @@
 
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>3.0.0-SNAPSHOT</version>
+    <version>3.0.0</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
@@ -83,26 +83,6 @@
         <version>20240303</version>
       </dependency>
 
-      <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-math3 -->
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-math3</artifactId>
-        <version>3.6.1</version>
-      </dependency>
-
-      <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-jexl3 -->
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-jexl3</artifactId>
-        <version>3.3</version>
-      </dependency>
-
-      <!-- CLI -->
-      <dependency>
-        <groupId>com.scivicslab</groupId>
-        <artifactId>pluggable-cli</artifactId>
-        <version>1.0.0</version>
-      </dependency>
 
       <dependency>
         <groupId>org.junit.jupiter</groupId>
@@ -190,29 +170,7 @@
                 </configuration>
             </plugin>
 
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.2</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.scivicslab.pojoactor.cli.WorkflowCLI</mainClass>
-                                </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
+<plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.1.0</version>
                 <dependencies>

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import com.scivicslab.pojoactor.pojo.Root;
 
 /**
  * Test class for verifying child actor creation and management functionality.
@@ -49,7 +48,7 @@ public class ChildActorTest {
 
         // Create a ROOT actor.
         ActorSystem system = new ActorSystem("system1");
-        ActorRef<Root> root = system.actorOf("ROOT", new Root());
+        ActorRef<Object> root = system.actorOf("ROOT", new Object());
 
         // Add child actors to the ROOT actor.
         root.createChild("child01", new ArrayList<Integer>());
@@ -113,7 +112,7 @@ public class ChildActorTest {
     public void should_be_able_to_list_actors() {
 
         ActorSystem system = new ActorSystem("system1");
-        ActorRef<Root> root = system.actorOf("ROOT", new Root());
+        ActorRef<Object> root = system.actorOf("ROOT", new Object());
         ActorRef<ArrayList<Integer>> child01 = root.createChild("child01", new ArrayList<Integer>());
         root.createChild("child02", new ArrayList<String>());
         root.createChild("child03", new ArrayList<Double>());
@@ -145,7 +144,7 @@ public class ChildActorTest {
     public void should_be_able_to_get_actor_by_name() {
 
         ActorSystem system = new ActorSystem("system1");
-        ActorRef<Root> root = system.actorOf("ROOT", new Root());
+        ActorRef<Object> root = system.actorOf("ROOT", new Object());
         ActorRef<ArrayList<Integer>> child01 = root.createChild("child01", new ArrayList<Integer>());
         root.createChild("child02", new ArrayList<String>());
         root.createChild("child03", new ArrayList<Double>());

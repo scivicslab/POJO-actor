@@ -28,42 +28,23 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
+import java.util.HashSet;
+import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * Compile-time annotation processor for @Action annotation and IIActorRef patterns.
+ * Compile-time annotation processor for @Action annotation.
  *
- * <p>This processor performs two validations:</p>
- * <ol>
- *   <li><strong>@Action on non-IIActorRef:</strong> Emits ERROR when @Action is used
- *       on a class that doesn't extend IIActorRef.</li>
- *   <li><strong>callByActionName override:</strong> Emits WARNING when an IIActorRef
- *       subclass overrides callByActionName instead of using @Action.</li>
- * </ol>
+ * <p>This processor validates that {@code @Action} is only used on:</p>
+ * <ul>
+ *   <li>Subclasses of base classes registered via {@link ActionBaseClassProvider} SPI</li>
+ *   <li>Interface default methods (mixin pattern)</li>
+ * </ul>
  *
- * <h2>Why These Validations?</h2>
- *
- * <p>The @Action annotation mechanism relies on IIActorRef's callByActionName()
- * implementation to discover and invoke annotated methods via reflection.
- * If @Action is placed on a POJO that doesn't extend IIActorRef, the annotation
- * will be silently ignored at runtime.</p>
- *
- * <p>Overriding callByActionName with switch statements is a deprecated pattern.
- * Using @Action annotation is cleaner and more maintainable.</p>
- *
- * <h2>Correct Usage</h2>
- * <pre>{@code
- * public class MyActor extends IIActorRef<Void> {
- *     public MyActor(String name, IIActorSystem system) {
- *         super(name, null, system);
- *     }
- *
- *     @Action("doSomething")
- *     public ActionResult doSomething(String args) {
- *         return new ActionResult(true, "done");
- *     }
- * }
- * }</pre>
+ * <p>Base classes are discovered at compile time via {@link ServiceLoader}.
+ * Libraries that define action-compatible base classes (e.g., Turing-workflow's IIActorRef)
+ * register themselves by implementing {@link ActionBaseClassProvider} and listing it in
+ * {@code META-INF/services/com.scivicslab.pojoactor.core.ActionBaseClassProvider}.</p>
  *
  * @author devteam@scivicslab.com
  * @since 2.15.0
@@ -72,11 +53,28 @@ import java.util.Set;
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public class ActionAnnotationProcessor extends AbstractProcessor {
 
-    private static final String IIACTORREF_CLASS = "com.scivicslab.pojoactor.workflow.IIActorRef";
+    private Set<String> baseClassNames;
+
+    private Set<String> loadBaseClassNames() {
+        Set<String> names = new HashSet<>();
+        for (ActionBaseClassProvider provider : ServiceLoader.load(ActionBaseClassProvider.class)) {
+            names.add(provider.getBaseClassName());
+        }
+        return names;
+    }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        // Check 1: @Action on non-IIActorRef classes (allow interface default methods for mixin pattern)
+        if (baseClassNames == null) {
+            baseClassNames = loadBaseClassNames();
+        }
+
+        if (baseClassNames.isEmpty()) {
+            // No base classes registered — skip validation
+            return false;
+        }
+
+        // Check 1: @Action on non-base-class subclasses (allow interface default methods for mixin pattern)
         for (Element element : roundEnv.getElementsAnnotatedWith(Action.class)) {
             Element enclosingElement = element.getEnclosingElement();
             if (!(enclosingElement instanceof TypeElement)) {
@@ -85,42 +83,37 @@ public class ActionAnnotationProcessor extends AbstractProcessor {
 
             TypeElement enclosingClass = (TypeElement) enclosingElement;
 
-            // Allow @Action on:
-            // 1. IIActorRef subclasses
-            // 2. Interface default methods (mixin pattern)
             boolean isInterface = enclosingClass.getKind() == ElementKind.INTERFACE;
-            boolean isIIActorRefSubclass = extendsIIActorRef(enclosingClass);
+            boolean isBaseClassSubclass = extendsBaseClass(enclosingClass);
 
-            if (!isInterface && !isIIActorRefSubclass) {
+            if (!isInterface && !isBaseClassSubclass) {
                 processingEnv.getMessager().printMessage(
                     Diagnostic.Kind.ERROR,
                     String.format(
-                        "@Action annotation can only be used on methods in IIActorRef subclasses " +
+                        "@Action annotation can only be used on methods in registered base class subclasses " +
                         "or interface default methods (mixin pattern). " +
-                        "Class '%s' does not extend IIActorRef. " +
-                        "Either extend IIActorRef<T> or use CallableByActionName with switch statement.",
-                        enclosingClass.getQualifiedName()
+                        "Class '%s' does not extend any registered base class. " +
+                        "Registered base classes: %s",
+                        enclosingClass.getQualifiedName(),
+                        baseClassNames
                     ),
                     element
                 );
             }
         }
 
-        // Check 2: callByActionName override in IIActorRef subclasses
+        // Check 2: callByActionName override in base class subclasses
         for (Element element : roundEnv.getRootElements()) {
             if (element instanceof TypeElement typeElement) {
-                if (extendsIIActorRef(typeElement) && !isIIActorRefItself(typeElement)) {
+                if (extendsBaseClass(typeElement) && !isBaseClassItself(typeElement)) {
                     checkForCallByActionNameOverride(typeElement);
                 }
             }
         }
 
-        return false; // Allow other processors to run
+        return false;
     }
 
-    /**
-     * Checks if a class overrides callByActionName and emits a warning.
-     */
     private void checkForCallByActionNameOverride(TypeElement typeElement) {
         for (Element member : typeElement.getEnclosedElements()) {
             if (member.getKind() == ElementKind.METHOD) {
@@ -128,11 +121,8 @@ public class ActionAnnotationProcessor extends AbstractProcessor {
                 if (isCallByActionNameMethod(method)) {
                     processingEnv.getMessager().printMessage(
                         Diagnostic.Kind.WARNING,
-                        String.format(
-                            "Overriding callByActionName() is deprecated. " +
-                            "Use @Action annotation on methods instead. " +
-                            "See IIActorRef javadoc for the recommended pattern."
-                        ),
+                        "Overriding callByActionName() is deprecated. " +
+                        "Use @Action annotation on methods instead.",
                         method
                     );
                 }
@@ -140,43 +130,32 @@ public class ActionAnnotationProcessor extends AbstractProcessor {
         }
     }
 
-    /**
-     * Checks if a method is callByActionName(String, String).
-     */
     private boolean isCallByActionNameMethod(ExecutableElement method) {
         if (!method.getSimpleName().toString().equals("callByActionName")) {
             return false;
         }
-
         var params = method.getParameters();
         if (params.size() != 2) {
             return false;
         }
-
-        // Check both parameters are String
         return params.get(0).asType().toString().equals("java.lang.String")
             && params.get(1).asType().toString().equals("java.lang.String");
     }
 
-    /**
-     * Checks if a class extends IIActorRef (directly or indirectly).
-     */
-    private boolean extendsIIActorRef(TypeElement typeElement) {
+    private boolean extendsBaseClass(TypeElement typeElement) {
         TypeMirror superClass = typeElement.getSuperclass();
 
         while (superClass != null && !superClass.toString().equals("java.lang.Object")) {
             String superClassName = superClass.toString();
 
-            // Handle generic types: IIActorRef<Void> -> IIActorRef
             if (superClassName.contains("<")) {
                 superClassName = superClassName.substring(0, superClassName.indexOf('<'));
             }
 
-            if (superClassName.equals(IIACTORREF_CLASS)) {
+            if (baseClassNames.contains(superClassName)) {
                 return true;
             }
 
-            // Get the TypeElement for the superclass to continue traversal
             Element superElement = processingEnv.getTypeUtils().asElement(superClass);
             if (superElement instanceof TypeElement) {
                 superClass = ((TypeElement) superElement).getSuperclass();
@@ -188,10 +167,7 @@ public class ActionAnnotationProcessor extends AbstractProcessor {
         return false;
     }
 
-    /**
-     * Checks if the type is IIActorRef itself (to avoid checking the base class).
-     */
-    private boolean isIIActorRefItself(TypeElement typeElement) {
-        return typeElement.getQualifiedName().toString().equals(IIACTORREF_CLASS);
+    private boolean isBaseClassItself(TypeElement typeElement) {
+        return baseClassNames.contains(typeElement.getQualifiedName().toString());
     }
 }
