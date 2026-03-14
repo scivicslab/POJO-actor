@@ -6,7 +6,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-2.12.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-3.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 [![Official Docs](https://img.shields.io/badge/docs-scivicslab.com-green.svg)](https://scivicslab.com/docs/pojo-actor/introduction)
 
 
@@ -169,168 +169,11 @@ actor.ask(a -> a.performMatrixMultiplication(), system.getManagedThreadPool());
 ```
 
 
-## Workflow Engine: From Actor to Agent
+## Workflow Engine: Turing-workflow
 
-In the traditional actor model, actors are passive entities—they wait for messages and react to them. While this simplifies concurrent programming by eliminating locks, actors themselves don't decide what to do next; they only respond to external stimuli.
+POJO-actor provides the actor model foundation. For workflow execution — YAML-based state machines that turn actors into autonomous agents — see [Turing-workflow](https://github.com/scivicslab/Turing-workflow).
 
-POJO-actor's workflow engine changes this. By attaching a workflow to an actor, you give it complex behavioral patterns: conditional branching, loops, and state-driven decisions. The actor becomes an agent—an autonomous entity that observes its environment and acts according to its own logic.
-
-With Virtual Threads since JDK 21, you can create tens of thousands of such autonomous agents. This combination—complex behavior per actor, massive scale—was impractical before and opens up new applications: large-scale agent-based simulations, infrastructure platforms that monitor and self-repair, and more.
-
-> An agent is anything that can be viewed as perceiving its environment through sensors and acting upon that environment through actuators.
-> — Russell & Norvig, "Artificial Intelligence: A Modern Approach"
-
-### Workflow Format
-
-Because the workflow is essentially a Turing machine, conditional branching and loops are expressed as state transitions. And because this is POJO-actor, each step is simply "send this message to this actor"—just three elements: `actor`, `method`, and `arguments`:
-
-```yaml
-- states: ["start", "processed"]
-  actions:
-    - actor: dataProcessor    # actor name
-      method: process         # method name
-      arguments: "data.csv"   # arguments
-```
-
-This follows the same mental model as `tell()`/`ask()` in Java code. The combination allows complex logic that traditional YAML-based workflow languages struggle with—without introducing custom syntax.
-
-### Workflow Example: Turing Machine
-
-The following is a Turing machine that outputs an irrational number. It outputs 001011011101111011111...
-
-![](Turing87.jpg)
-
-> — Charles Petzold, "The Annotated Turing", Wiley Publishing, Inc. (2008) page 87.
-
-Using POJO-actor's workflow format:
-
-```yaml
-name: turing87
-steps:
-- states: ["0", "100"]
-  actions:
-  - {actor: turing, method: initMachine}
-- states: ["100", "1"]
-  actions:
-  - {actor: turing, method: printTape}
-- states: ["1", "2"]
-  actions:
-  - {actor: turing, method: put, arguments: "e"}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: put, arguments: "e"}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: put, arguments: "0"}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: put, arguments: "0"}
-  - {actor: turing, method: move, arguments: "L"}
-  - {actor: turing, method: move, arguments: "L"}
-- states: ["101", "2"]
-  actions:
-  - {actor: turing, method: printTape}
-- states: ["2", "2"]
-  actions:
-  - {actor: turing, method: matchCurrentValue, arguments: "1"}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: put, arguments: "x"}
-  - {actor: turing, method: move, arguments: "L"}
-  - {actor: turing, method: move, arguments: "L"}
-  - {actor: turing, method: move, arguments: "L"}
-- states: ["2", "3"]
-  actions:
-  - {actor: turing, method: matchCurrentValue, arguments: "0"}
-- states: ["3", "3"]
-  actions:
-  - {actor: turing, method: isAny}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: move, arguments: "R"}
-- states: ["3", "4"]
-  actions:
-  - {actor: turing, method: isNone}
-  - {actor: turing, method: put, arguments: "1"}
-  - {actor: turing, method: move, arguments: "L"}
-- states: ["4", "3"]
-  actions:
-  - {actor: turing, method: matchCurrentValue, arguments: "x"}
-  - {actor: turing, method: put, arguments: " "}
-  - {actor: turing, method: move, arguments: "R"}
-- states: ["4", "5"]
-  actions:
-  - {actor: turing, method: matchCurrentValue, arguments: "e"}
-  - {actor: turing, method: move, arguments: "R"}
-- states: ["4", "4"]
-  actions:
-  - {actor: turing, method: isNone}
-  - {actor: turing, method: move, arguments: "L"}
-  - {actor: turing, method: move, arguments: "L"}
-- states: ["5", "5"]
-  actions:
-  - {actor: turing, method: isAny}
-  - {actor: turing, method: move, arguments: "R"}
-  - {actor: turing, method: move, arguments: "R"}
-- states: ["5", "101"]
-  actions:
-  - {actor: turing, method: isNone}
-  - {actor: turing, method: put, arguments: "0"}
-  - {actor: turing, method: move, arguments: "L"}
-  - {actor: turing, method: move, arguments: "L"}
-```
-
-This example includes conditional branching using multiple transitions with the same from-state:
-
-```yaml
-# From state 2: if current value is "1", stay in state 2
-- states: ["2", "2"]
-  actions:
-    - actor: turing
-      method: matchCurrentValue
-      arguments: "1"
-    # ... subsequent actions
-
-# From state 2: if current value is "0", go to state 3
-- states: ["2", "3"]
-  actions:
-    - actor: turing
-      method: matchCurrentValue
-      arguments: "0"
-```
-
-- If `matchCurrentValue("1")` returns true → Execute first transition, remain in state 2
-- If `matchCurrentValue("1")` returns false → Abort this transition, try next transition
-- If `matchCurrentValue("0")` returns true → Transition to state 3
-
-**Running the Example:**
-
-```bash
-git clone https://github.com/scivicslab/POJO-actor
-cd POJO-actor
-git checkout v2.12.1
-mvn install
-
-git clone https://github.com/scivicslab/actor-WF-examples
-cd actor-WF-examples
-git checkout v2.12.1
-mvn compile
-mvn exec:java -Dexec.mainClass="com.scivicslab.turing.TuringWorkflowApp" -Dexec.args="turing87"
-```
-
-**Output:**
-
-```
-Loading workflow from: /code/turing87.yaml
-Workflow loaded successfully
-Executing workflow...
-
-TAPE    0    value
-TAPE    0    value    ee0 0 1 0
-TAPE    0    value    ee0 0 1 0 1 1 0
-TAPE    0    value    ee0 0 1 0 1 1 0 1 1 1 0
-TAPE    0    value    ee0 0 1 0 1 1 0 1 1 1 0 1 1 1 1 0
-
-Workflow finished: Maximum iterations (200) exceeded
-```
-
-POJO-actor's workflow engine is based on the same design philosophy as Turing machines. Any complexity of processing can be expressed through combinations of state transitions and actions.
+[![Turing-workflow](https://img.shields.io/maven-central/v/com.scivicslab/turing-workflow.svg?label=turing-workflow)](https://central.sonatype.com/artifact/com.scivicslab/turing-workflow)
 
 
 
