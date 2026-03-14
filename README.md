@@ -36,26 +36,21 @@ Requirements
 
 Maven Dependency
 
-```
+```xml
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>2.12.0</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
-### Installing Development Version (v2.12.1)
-
-To use the latest development version:
+### Building from Source
 
 ```bash
 git clone https://github.com/scivicslab/POJO-actor
 cd POJO-actor
-git checkout v2.12.1
 mvn install
 ```
-
-**Note:** Do not use `mvn clean install`. Use `mvn install` only. The `clean` target may cause issues due to the Maven repository configuration in pom.xml.
 
 ### Building from Source
 
