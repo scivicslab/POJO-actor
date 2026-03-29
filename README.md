@@ -1,3 +1,5 @@
+[![Sponsor](https://img.shields.io/github/sponsors/scivicslab)](https://github.com/sponsors/scivicslab)
+
 # POJO-actor
 
 **Official Website: [scivicslab.com/docs/pojo-actor](https://scivicslab.com/docs/pojo-actor/introduction)**
