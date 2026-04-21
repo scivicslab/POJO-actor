@@ -83,6 +83,14 @@
         <version>20240303</version>
       </dependency>
 
+      <!-- Kafka transport (optional: only needed for KafkaTransport) -->
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>3.7.0</version>
+        <optional>true</optional>
+      </dependency>
+
 
       <dependency>
         <groupId>org.junit.jupiter</groupId>
