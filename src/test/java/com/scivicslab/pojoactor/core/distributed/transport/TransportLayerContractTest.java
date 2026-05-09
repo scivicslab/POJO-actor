@@ -6,6 +6,7 @@ import com.scivicslab.pojoactor.core.distributed.NodeInfo;
 
 import java.time.Duration;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Contract tests for TransportLayer implementations using a stub transport.
  * Verifies the interface semantics without requiring real network connections.
  */
+@Tag("S3.02")
 public class TransportLayerContractTest {
 
     private final NodeInfo nodeA = new NodeInfo("node-a", "localhost", 8081);

@@ -23,6 +23,7 @@ import java.io.PrintStream;
 import org.json.JSONObject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Test;
  * @author devteam@scivicslab.com
  * @since 2.8.0
  */
+@Tag("S2")
 @DisplayName("Accumulator Specification by Example")
 public class AccumulatorTest {
 

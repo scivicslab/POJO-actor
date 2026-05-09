@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -73,6 +74,7 @@ public class ActorRefTest {
      * Situation: Creating an actor without using ActorSystem
      * Expected: Actor is created and can be used independently
      */
+    @Tag("S0.01")
     @DisplayName("Should create actors directly without ActorSystem")
     @Test
     @Order(1)
@@ -97,6 +99,7 @@ public class ActorRefTest {
      * Situation: Sending messages asynchronously (Fire-and-Forget)
      * Expected: Messages are processed and CompletableFuture completes
      */
+    @Tag("S0.01")
     @DisplayName("Should send messages asynchronously with tell()")
     @Test
     @Order(2)
@@ -126,6 +129,7 @@ public class ActorRefTest {
      * Situation: Requesting a response from an actor
      * Expected: Actor processes request and returns result
      */
+    @Tag("S0.01")
     @DisplayName("Should support request-response with ask()")
     @Test
     @Order(3)
@@ -157,6 +161,7 @@ public class ActorRefTest {
      * Situation: Sending multiple messages with varying processing times
      * Expected: Messages are processed in FIFO order
      */
+    @Tag("S0.01")
     @DisplayName("Should process messages in FIFO order")
     @Test
     @Order(4)
@@ -193,6 +198,7 @@ public class ActorRefTest {
      * Situation: Creating child actors from a parent actor
      * Expected: Child actors are created with proper parent-child relationships
      */
+    @Tag("S1")
     @DisplayName("Should create child actors with proper relationships")
     @Test
     @Order(5)
@@ -228,6 +234,7 @@ public class ActorRefTest {
      * Situation: Closing an actor that is no longer needed
      * Expected: Actor is closed and removed from system
      */
+    @Tag("S1")
     @DisplayName("Should close actor and cleanup resources")
     @Test
     @Order(6)
@@ -257,6 +264,7 @@ public class ActorRefTest {
      * Situation: Exception occurs during message processing
      * Expected: CompletableFuture completes exceptionally, but actor survives
      */
+    @Tag("S0.01")
     @DisplayName("Should handle exceptions in tell() properly")
     @Test
     @Order(7)
@@ -302,6 +310,7 @@ public class ActorRefTest {
      * Situation: Running CPU-intensive tasks in parallel
      * Expected: Tasks are executed in parallel on the WorkStealingPool
      */
+    @Tag("S1.04")
     @DisplayName("Should execute CPU-intensive tasks with WorkStealingPool")
     @Test
     @Order(8)
@@ -337,6 +346,7 @@ public class ActorRefTest {
      * Situation: Expanding variables with json. prefix in workflow arguments
      * Expected: ${json.hostname} expands to value stored at path "hostname"
      */
+    @Tag("S2.01")
     @DisplayName("Should expand ${json.key} by stripping json. prefix")
     @Test
     @Order(9)
@@ -359,6 +369,7 @@ public class ActorRefTest {
      * Situation: Expanding variables without json. prefix
      * Expected: ${hostname} expands to value stored at path "hostname"
      */
+    @Tag("S2.01")
     @DisplayName("Should expand ${key} without json. prefix")
     @Test
     @Order(10)
@@ -381,6 +392,7 @@ public class ActorRefTest {
      * Situation: Expanding variables with nested JSON paths
      * Expected: ${json.server.name} expands to value stored at path "server.name"
      */
+    @Tag("S2.01")
     @DisplayName("Should expand ${json.nested.key} for nested paths")
     @Test
     @Order(11)
@@ -403,6 +415,7 @@ public class ActorRefTest {
      * Situation: Expanding ${result} to get last action result
      * Expected: ${result} expands to the result of the last action
      */
+    @Tag("S2.01")
     @DisplayName("Should expand ${result} to last action result")
     @Test
     @Order(12)
@@ -425,6 +438,7 @@ public class ActorRefTest {
      * Situation: Expanding multiple variables in a single string
      * Expected: All variables are expanded correctly
      */
+    @Tag("S2.01")
     @DisplayName("Should expand multiple variables in one string")
     @Test
     @Order(13)
@@ -449,6 +463,7 @@ public class ActorRefTest {
      * Situation: Expanding a variable that doesn't exist
      * Expected: Unknown variable pattern is left unchanged
      */
+    @Tag("S2.01")
     @DisplayName("Should leave unknown variables unchanged")
     @Test
     @Order(14)

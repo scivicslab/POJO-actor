@@ -17,6 +17,7 @@
 
 package com.scivicslab.pojoactor.core;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for ActorRef JSON state integration.
  */
+@Tag("S2.01")
 class ActorRefJsonStateTest {
 
     private ActorSystem system;

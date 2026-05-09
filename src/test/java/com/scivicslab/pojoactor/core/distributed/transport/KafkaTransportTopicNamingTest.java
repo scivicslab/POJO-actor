@@ -1,5 +1,6 @@
 package com.scivicslab.pojoactor.core.distributed.transport;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -8,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for KafkaTransport topic naming conventions.
  * No Kafka broker required.
  */
+@Tag("S3.04")
 class KafkaTransportTopicNamingTest {
 
     @Test

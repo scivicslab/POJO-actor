@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
+@Tag("S2.01")
 @DisplayName("ActionResult Specification by Example")
 public class ActionResultTest {
 

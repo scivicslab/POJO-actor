@@ -4,6 +4,7 @@ import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.ActorSystem;
 import com.scivicslab.pojoactor.core.distributed.discovery.NodeDiscovery;
 import com.scivicslab.pojoactor.core.distributed.transport.StubTransport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for DistributedActorSystem builder and RemoteActorRef wiring.
  * Uses stub transport and discovery — no Kafka or network required.
  */
+@Tag("S3.03")
 class DistributedActorSystemTest {
 
     /** Stub NodeDiscovery that returns two fixed nodes. */

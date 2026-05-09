@@ -202,6 +202,23 @@ A comprehensive list of features provided by POJO-actor.
 - **GraalVM Native Image** — Full support for native image compilation
 
 
+## Claude Code SKILL
+
+POJO-actor ships a Claude Code skill (`SKILL.md`) that gives Claude contextual knowledge of the library's API without any extra prompting.
+
+### Installation
+
+```bash
+mkdir -p ~/.claude/skills/pojo-actor
+cp SKILL.md ~/.claude/skills/pojo-actor/
+cp -r reference ~/.claude/skills/pojo-actor/
+```
+
+After installation, Claude Code automatically loads the skill from `~/.claude/skills/pojo-actor/SKILL.md` at session start.
+The `reference/` subdirectory contains detail pages (scheduler, accumulator, plugin, distributed) that the skill links to.
+
+---
+
 ## References
 
 - **Official Documentation**: For detailed manuals and API references, visit the [POJO-actor documentation](https://scivicslab.com/docs/pojo-actor/introduction) on our homepage.

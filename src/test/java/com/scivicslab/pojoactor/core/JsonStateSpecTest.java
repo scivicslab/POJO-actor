@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - 104_JsonStateOutput_260129_oo01
  * - 105_JsonStateUtility_260129_oo01
  */
+@Tag("S2.01")
 class JsonStateSpecTest {
 
     // ========================================================================

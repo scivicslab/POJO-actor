@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -32,6 +33,7 @@ import java.util.logging.Logger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -44,7 +46,8 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 2.7.0
  */
-@DisplayName("ActorSystem functionality tests")
+@Tag("S1")
+@DisplayName("ActorSystem — actor lifecycle management (S1)")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class ActorSystemTest {
@@ -232,6 +235,84 @@ public class ActorSystemTest {
         assertTrue(actorNames.contains("actor1"), "Should contain actor1");
         assertTrue(actorNames.contains("actor2"), "Should contain actor2");
         assertTrue(actorNames.contains("actor3"), "Should contain actor3");
+
+        system.terminate();
+    }
+
+    /**
+     * Example 7: Any POJO can become an actor without modification.
+     *
+     * Situation: Turning standard library objects (ArrayList, HashMap) into actors
+     * Expected: Standard library classes work as actors with full message ordering
+     */
+    @DisplayName("Should turn any POJO into an actor without modification")
+    @Test
+    @Order(7)
+    public void testAnyPojoCanBecomeActor() throws InterruptedException, ExecutionException, TimeoutException {
+        ActorSystem system = new ActorSystem("listSystem");
+
+        // Standard ArrayList becomes an actor — no subclassing, no annotations
+        ActorRef<ArrayList<String>> listActor = system.actorOf("myList", new ArrayList<String>());
+
+        listActor.tell(list -> list.add("Hello"));
+        listActor.tell(list -> list.add("World"));
+        listActor.tell(list -> list.add("from"));
+        listActor.tell(list -> list.add("POJO-actor"));
+
+        int size = listActor.ask(list -> list.size()).get(3, TimeUnit.SECONDS);
+        assertEquals(4, size, "ArrayList actor should contain 4 elements");
+
+        String first = listActor.ask(list -> list.get(0)).get(3, TimeUnit.SECONDS);
+        assertEquals("Hello", first, "First element should be Hello");
+
+        String joined = listActor.ask(list -> String.join(" ", list)).get(3, TimeUnit.SECONDS);
+        assertEquals("Hello World from POJO-actor", joined);
+
+        // Standard HashMap becomes an actor — same pattern
+        ActorRef<HashMap<String, Integer>> mapActor = system.actorOf("myMap", new HashMap<>());
+        mapActor.tell(map -> map.put("a", 1));
+        mapActor.tell(map -> map.put("b", 2));
+
+        int val = mapActor.ask(map -> map.get("a")).get(3, TimeUnit.SECONDS);
+        assertEquals(1, val, "HashMap actor should return stored value");
+
+        system.terminate();
+    }
+
+    /**
+     * Example 8: Massive actor scalability with virtual threads.
+     *
+     * Situation: Creating a large number of actors simultaneously
+     * Expected: Thousands of actors can be created and process messages without exhausting threads
+     */
+    @DisplayName("Should handle massive actor scalability with virtual threads")
+    @Test
+    @Order(8)
+    public void testMassiveActorScalability() throws InterruptedException, ExecutionException, TimeoutException {
+        final int actorCount = 1000;
+        ActorSystem system = new ActorSystem("massiveSystem", 4);
+        List<ActorRef<int[]>> actors = new ArrayList<>();
+
+        // Create 1,000 actors — virtual threads make this lightweight
+        for (int i = 0; i < actorCount; i++) {
+            actors.add(system.actorOf("counter" + i, new int[]{0}));
+        }
+
+        assertEquals(actorCount, system.listActorNames().size(), "All actors should be registered");
+
+        // Send one message to each actor concurrently
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (ActorRef<int[]> actor : actors) {
+            futures.add(actor.tell(c -> c[0]++));
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(10, TimeUnit.SECONDS);
+
+        // Verify all actors processed their message
+        for (ActorRef<int[]> actor : actors) {
+            int value = actor.ask(c -> c[0]).get(3, TimeUnit.SECONDS);
+            assertEquals(1, value, "Each actor should have processed exactly one message");
+        }
 
         system.terminate();
     }

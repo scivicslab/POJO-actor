@@ -1,5 +1,7 @@
 target/
 dependency-reduced-pom.xml
+search-index/
+static-html/
 
 # Compiled class file
 *.class

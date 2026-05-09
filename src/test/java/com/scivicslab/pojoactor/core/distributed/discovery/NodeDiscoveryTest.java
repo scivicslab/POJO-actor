@@ -23,6 +23,7 @@ import com.scivicslab.pojoactor.core.distributed.discovery.K8sNodeDiscovery;
 import com.scivicslab.pojoactor.core.distributed.discovery.NodeDiscovery;
 import com.scivicslab.pojoactor.core.distributed.discovery.NodeDiscoveryFactory;
 import com.scivicslab.pojoactor.core.distributed.discovery.SlurmNodeDiscovery;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>Note: These tests verify the interface contracts and basic logic.
  * Full integration tests require actual Slurm/Kubernetes/GridEngine environments.</p>
  */
+@Tag("S4")
 class NodeDiscoveryTest {
 
     @Test

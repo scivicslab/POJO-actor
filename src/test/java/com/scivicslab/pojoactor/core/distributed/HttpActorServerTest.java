@@ -3,6 +3,7 @@ package com.scivicslab.pojoactor.core.distributed;
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.ActorRef;
 import com.scivicslab.pojoactor.core.ActorSystem;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -16,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for HttpActorServer.
  * Path parsing tests run without a network. E2E test uses loopback.
  */
+@Tag("S3.02")
 class HttpActorServerTest {
 
     // ---- Path extraction tests (no server needed) ----

@@ -18,6 +18,7 @@
 package com.scivicslab.pojoactor.core;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * NOTE: These tests will FAIL with the current implementation.
  * They document the expected behavior that needs to be implemented.
  */
+@Tag("S2.01")
 class JsonStatePutJsonExpectedBehaviorTest {
 
     // ========================================================================
