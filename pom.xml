@@ -7,7 +7,7 @@
 
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>3.0.1</version>
+    <version>3.5.0</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
@@ -81,6 +81,14 @@
         <groupId>org.json</groupId>
         <artifactId>json</artifactId>
         <version>20240303</version>
+      </dependency>
+
+      <!-- Kafka transport (optional: only needed for KafkaTransport) -->
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>3.7.0</version>
+        <optional>true</optional>
       </dependency>
 
 

@@ -16,8 +16,10 @@
  */
 package com.scivicslab.pojoactor.core;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -68,6 +70,9 @@ public class ActorRef<T> implements AutoCloseable {
 
     // === JSON State (lazy-initialized) ===
     private volatile JsonState jsonState;
+
+    // === AttributeKey store (lazy-initialized) ===
+    private volatile Map<AttributeKey<?>, Object> attributes;
 
     /**
      * Key used to store the last action result in JSON state.
@@ -361,14 +366,23 @@ public class ActorRef<T> implements AutoCloseable {
     public CompletableFuture<Void> tell(Consumer<T> action, ExecutorService ws) {
         T target = this.object;
 
-        CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
-        return CompletableFuture.runAsync(() -> {
-            try {
-                task.get();
-            } catch (InterruptedException | ExecutionException e) {
-                logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
-            }
-        }, Executors.newVirtualThreadPerTaskExecutor());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        if (ws instanceof ManagedThreadPool pool) {
+            pool.submitForActor(actorName, () -> {
+                try { action.accept(target); future.complete(null); }
+                catch (Exception e) { future.completeExceptionally(e); }
+            });
+        } else {
+            CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
+            CompletableFuture.runAsync(() -> {
+                try { task.get(); future.complete(null); }
+                catch (InterruptedException | ExecutionException e) {
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
+                    future.completeExceptionally(e);
+                }
+            }, Executors.newVirtualThreadPerTaskExecutor());
+        }
+        return future;
     }
 
     /**
@@ -384,19 +398,24 @@ public class ActorRef<T> implements AutoCloseable {
     public <R> CompletableFuture<R> ask(Function<T, R> action, ExecutorService ws) {
         T target = this.object;
 
-        CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> {
-            return action.apply(target);
-        }, ws);
-
-        return CompletableFuture.supplyAsync(() -> {
-            R result = null;
-            try {
-                result = task.get();
-            } catch (InterruptedException | ExecutionException e) {
-                logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
-            }
-            return result;
-        }, Executors.newVirtualThreadPerTaskExecutor());
+        CompletableFuture<R> future = new CompletableFuture<>();
+        if (ws instanceof ManagedThreadPool pool) {
+            pool.submitForActor(actorName, () -> {
+                try { future.complete(action.apply(target)); }
+                catch (Exception e) { future.completeExceptionally(e); }
+            });
+        } else {
+            CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> action.apply(target), ws);
+            CompletableFuture.supplyAsync(() -> {
+                try { future.complete(task.get()); }
+                catch (InterruptedException | ExecutionException e) {
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
+                    future.completeExceptionally(e);
+                }
+                return null;
+            }, Executors.newVirtualThreadPerTaskExecutor());
+        }
+        return future;
     }
     
 
@@ -679,6 +698,64 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     // ========================================================================
+    // AttributeKey API
+    // ========================================================================
+
+    /**
+     * Stores a typed attribute value. The map is lazy-initialized on first use.
+     *
+     * @throws IllegalArgumentException if value is not an instance of key's declared type
+     */
+    public <V> void putAttribute(AttributeKey<V> key, V value) {
+        if (!key.type().isInstance(value)) {
+            throw new IllegalArgumentException(
+                "Invalid value for key '" + key.name() + "': expected "
+                + key.type().getName() + " but got " + value.getClass().getName());
+        }
+        if (attributes == null) {
+            synchronized (this) {
+                if (attributes == null) {
+                    attributes = new ConcurrentHashMap<>();
+                }
+            }
+        }
+        attributes.put(key, value);
+    }
+
+    /**
+     * Returns the attribute value for the given key, or null if not set.
+     */
+    @SuppressWarnings("unchecked")
+    public <V> V getAttribute(AttributeKey<V> key) {
+        if (attributes == null) return null;
+        return (V) attributes.get(key);
+    }
+
+    /**
+     * Returns the attribute value for the given key, or defaultValue if not set.
+     */
+    public <V> V getAttribute(AttributeKey<V> key, V defaultValue) {
+        V value = getAttribute(key);
+        return value != null ? value : defaultValue;
+    }
+
+    /**
+     * Returns true if an attribute has been set for the given key.
+     */
+    public boolean hasAttribute(AttributeKey<?> key) {
+        return attributes != null && attributes.containsKey(key);
+    }
+
+    /**
+     * Removes and returns the attribute value for the given key, or null if not set.
+     */
+    @SuppressWarnings("unchecked")
+    public <V> V removeAttribute(AttributeKey<V> key) {
+        if (attributes == null) return null;
+        return (V) attributes.remove(key);
+    }
+
+    // ========================================================================
     // Lifecycle Management
     // ========================================================================
 
@@ -775,8 +852,16 @@ public class ActorRef<T> implements AutoCloseable {
         int clearedFromQueue = messageQueue.size();
         messageQueue.clear();
 
-        logger.log(Level.INFO, "Cleared " + clearedFromQueue + " pending messages from actor: " + actorName);
-        return clearedFromQueue;
+        int clearedFromPool = 0;
+        if (actorSystem != null) {
+            ExecutorService pool = actorSystem.getManagedThreadPool();
+            if (pool instanceof ManagedThreadPool mtp) {
+                clearedFromPool = mtp.cancelJobsForActor(actorName);
+            }
+        }
+
+        logger.log(Level.INFO, "Cleared " + clearedFromQueue + " messages and " + clearedFromPool + " pool jobs from actor: " + actorName);
+        return clearedFromQueue + clearedFromPool;
     }
 
 }

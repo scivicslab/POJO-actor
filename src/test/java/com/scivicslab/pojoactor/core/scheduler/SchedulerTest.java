@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.scivicslab.pojoactor.core.ActorRef;
@@ -40,7 +41,8 @@ import com.scivicslab.pojoactor.core.ActorSystem;
  * @author devteam@scivicslab.com
  * @since 2.11.0
  */
-@DisplayName("Scheduler (ActorRef-based) Specification by Example")
+@Tag("S_base.07")
+@DisplayName("Scheduler — periodic actor messaging (S1.07)")
 public class SchedulerTest {
 
     private ActorSystem system;

@@ -1,36 +1,36 @@
-# 分散アクター — DistributedActorSystem
+# Distributed actors — DistributedActorSystem
 
-HPC クラスタや K8s で複数ノードにまたがるアクターシステムを構築する。
-
----
-
-## 前提
-
-ノード間通信にトランスポートを選ぶ。
-
-| トランスポート | 向いている環境 | 依存 |
-|-------------|-------------|------|
-| `HttpTransport` | Slurm / Grid Engine など HPC クラスタ | 標準（追加不要） |
-| `KafkaTransport` | Kubernetes | `kafka-clients:3.7.0`（optional） |
+Build an actor system that spans multiple nodes in an HPC cluster or on Kubernetes.
 
 ---
 
-## ノード検出
+## Prerequisites
+
+Choose a transport for inter-node communication.
+
+| Transport | Suitable environment | Dependency |
+|-----------|---------------------|------------|
+| `HttpTransport` | HPC clusters (Slurm, Grid Engine, etc.) | Standard (no extra dependency) |
+| `KafkaTransport` | Kubernetes | `kafka-clients:3.7.0` (optional) |
+
+---
+
+## Node discovery
 
 ```java
-// 実行環境を自動判定（Slurm / K8s / GridEngine）
+// Auto-detect the runtime environment (Slurm / K8s / GridEngine)
 NodeDiscovery discovery = NodeDiscoveryFactory.autoDetect();
 ```
 
-| 実装クラス | 検出方法 |
-|-----------|---------|
-| `SlurmNodeDiscovery` | 環境変数 `SLURM_JOB_NODELIST` |
+| Implementation class | Detection method |
+|----------------------|-----------------|
+| `SlurmNodeDiscovery` | Environment variable `SLURM_JOB_NODELIST` |
 | `K8sNodeDiscovery` | `POD_NAME` + `KUBERNETES_SERVICE_HOST` |
 | `GridEngineNodeDiscovery` | `PE_HOSTFILE` |
 
 ---
 
-## HTTP トランスポート（HPC クラスタ向け）
+## HTTP transport (for HPC clusters)
 
 ```java
 NodeDiscovery discovery = NodeDiscoveryFactory.autoDetect();
@@ -43,7 +43,7 @@ DistributedActorSystem dist = DistributedActorSystem.builder()
 
 dist.startHttpServer(8080);
 
-// リモートアクターを呼ぶ
+// Call a remote actor
 RemoteActorRef remote = dist.remoteActorOf(dist.getNodes().get(1), "my-actor");
 ActionResult result = remote.callByActionName("process", payload);
 
@@ -52,7 +52,7 @@ dist.close();
 
 ---
 
-## Kafka トランスポート（K8s 向け）
+## Kafka transport (for Kubernetes)
 
 ```java
 NodeDiscovery discovery = NodeDiscoveryFactory.autoDetect();
@@ -78,10 +78,10 @@ dist.close();
 
 ---
 
-## CallableByActionName — リモート呼び出しを受け付けるアクター
+## CallableByActionName — actors that accept remote calls
 
-`RemoteActorRef.callByActionName()` で呼ばれる側のアクターに必要。
-ローカルの `ActorRef.tell/ask` だけ使う場合は実装不要。
+Required on the receiving side of `RemoteActorRef.callByActionName()`.
+Not needed if you only use local `ActorRef.tell/ask`.
 
 ```java
 public class MyActor implements CallableByActionName {
@@ -95,20 +95,20 @@ public class MyActor implements CallableByActionName {
 }
 ```
 
-`ActionResult` は `(boolean success, String result)` のペア。
+`ActionResult` is a pair of `(boolean success, String result)`.
 
 ---
 
-## 主要クラス一覧
+## Key classes
 
-| クラス | パッケージ | 役割 |
-|--------|----------|------|
-| `DistributedActorSystem` | `core.distributed` | ローカル ActorSystem に分散機能を追加 |
-| `RemoteActorRef` | `core.distributed` | リモートノードのアクターへの参照 |
-| `ActorMessage` | `core.distributed` | 分散メッセージのデータクラス |
-| `NodeInfo` | `core.distributed` | ノード情報（nodeId, host, port） |
-| `HttpActorServer` | `core.distributed` | HTTP メッセージ受信サーバ |
-| `KafkaActorServer` | `core.distributed` | Kafka メッセージ受信サーバ |
-| `NodeDiscoveryFactory` | `core.distributed.discovery` | 環境自動判定ファクトリ |
-| `HttpTransport` | `core.distributed.transport` | HTTP トランスポート実装 |
-| `KafkaTransport` | `core.distributed.transport` | Kafka トランスポート実装 |
+| Class | Package | Role |
+|-------|---------|------|
+| `DistributedActorSystem` | `core.distributed` | Adds distributed capability to a local ActorSystem |
+| `RemoteActorRef` | `core.distributed` | Reference to an actor on a remote node |
+| `ActorMessage` | `core.distributed` | Data class for distributed messages |
+| `NodeInfo` | `core.distributed` | Node information (nodeId, host, port) |
+| `HttpActorServer` | `core.distributed` | HTTP message receiver server |
+| `KafkaActorServer` | `core.distributed` | Kafka message receiver server |
+| `NodeDiscoveryFactory` | `core.distributed.discovery` | Factory for auto-detecting the environment |
+| `HttpTransport` | `core.distributed.transport` | HTTP transport implementation |
+| `KafkaTransport` | `core.distributed.transport` | Kafka transport implementation |

@@ -27,6 +27,7 @@ import java.util.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -39,7 +40,8 @@ import org.junit.jupiter.api.Test;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@DisplayName("ThreadPool cancel test")
+@Tag("S_base.02")
+@DisplayName("ThreadPool cancel — CompletableFuture.cancel() baseline (S1.02)")
 public class ThreadPoolCancelTest {
 
     private static final Logger logger = Logger.getLogger(ThreadPoolCancelTest.class.getName());

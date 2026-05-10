@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -50,7 +51,8 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@DisplayName("TellNow method tests")
+@Tag("S_base.04")
+@DisplayName("tellNow / askNow — mailbox bypass (S1.04)")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class TellNowTest {

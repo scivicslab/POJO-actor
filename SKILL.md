@@ -1,11 +1,11 @@
 # POJO-actor SKILL
 
-任意の Java POJO をアクターとして動作させる軽量ライブラリ。
-Java 21 仮想スレッド・ゼロリフレクション・FIFO メッセージ順序保証が設計の柱。
+A lightweight library that runs any Java POJO as an actor.
+Designed around Java 21 virtual threads, zero reflection, and FIFO message ordering guarantees.
 
 ---
 
-## Maven 依存
+## Maven dependency
 
 ```xml
 <dependency>
@@ -15,21 +15,21 @@ Java 21 仮想スレッド・ゼロリフレクション・FIFO メッセージ�
 </dependency>
 ```
 
-Java 21 以上が必須。
+Java 21 or later is required.
 
 ---
 
-## 基本パターン
+## Basic patterns
 
-### ActorSystem とアクターの生成
+### Creating an ActorSystem and actors
 
 ```java
-// ActorSystem はアプリケーションで 1 つ作る
-ActorSystem system = new ActorSystem("my-system");          // スレッド数 = CPU コア数
-ActorSystem system = new ActorSystem("my-system", 4);       // スレッド数を指定
+// Create one ActorSystem per application
+ActorSystem system = new ActorSystem("my-system");          // thread count = CPU cores
+ActorSystem system = new ActorSystem("my-system", 4);       // specify thread count
 ActorSystem system = new ActorSystem.Builder("my-system").threadNum(8).build();
 
-// 任意の POJO をそのままアクターにする（継承・実装は不要）
+// Wrap any POJO as an actor — no inheritance or interface required
 ActorRef<Counter>          ref = system.actorOf("counter", new Counter());
 ActorRef<ArrayList<String>> ref = system.actorOf("list",    new ArrayList<>());
 ```
@@ -39,136 +39,136 @@ ActorRef<ArrayList<String>> ref = system.actorOf("list",    new ArrayList<>());
 ```java
 // tell — Fire and Forget
 ref.tell(c -> c.increment());
-ref.tell(c -> c.increment()).join();  // 完了を待つ場合
+ref.tell(c -> c.increment()).join();  // wait for completion
 
 // ask — Request/Response
 CompletableFuture<Integer> f = ref.ask(c -> c.getValue());
 int value = f.join();
 ```
 
-| メソッド | キュー | スレッドセーフ | 戻り値 | 用途 |
-|---------|-------|-------------|--------|------|
-| `tell(action)` | ✓ | 自動 | `CompletableFuture<Void>` | 通常の状態変更 |
-| `ask(action)` | ✓ | 自動 | `CompletableFuture<R>` | 通常のデータ取得 |
-| `tell(action, pool)` | ✗ | 利用者責任 | `CompletableFuture<Void>` | CPU ヘビーな処理 |
-| `ask(action, pool)` | ✗ | 利用者責任 | `CompletableFuture<R>` | CPU ヘビーな処理＋結果取得 |
-| `tellNow(action)` | ✗ バイパス | 利用者責任 | `CompletableFuture<Void>` | 緊急停止・優先処理 |
-| `askNow(action)` | ✗ バイパス | 利用者責任 | `CompletableFuture<R>` | 監視・デバッグ |
+| Method | Queue | Thread-safe | Return type | Use case |
+|--------|-------|-------------|-------------|----------|
+| `tell(action)` | ✓ | automatic | `CompletableFuture<Void>` | Normal state mutation |
+| `ask(action)` | ✓ | automatic | `CompletableFuture<R>` | Normal data retrieval |
+| `tell(action, pool)` | ✗ | caller's responsibility | `CompletableFuture<Void>` | CPU-heavy processing |
+| `ask(action, pool)` | ✗ | caller's responsibility | `CompletableFuture<R>` | CPU-heavy processing + result |
+| `tellNow(action)` | ✗ bypass | caller's responsibility | `CompletableFuture<Void>` | Emergency stop / priority processing |
+| `askNow(action)` | ✗ bypass | caller's responsibility | `CompletableFuture<R>` | Monitoring / debugging |
 
-キュー経由のメソッドはアクターの内部スレッドで FIFO 処理されるため、呼び出し側でのロックは不要。
+Queue-based methods are processed FIFO on the actor's internal thread, so no locking is needed on the caller side.
 
-### ライフサイクル
+### Lifecycle
 
 ```java
-// 状態確認
-system.isAlive();              // システム全体
-system.isAlive("counter");     // 特定のアクター
+// Check status
+system.isAlive();              // entire system
+system.isAlive("counter");     // specific actor
 ref.isAlive();
 
-// 停止
-ref.close();                   // アクター単体
-system.terminate();            // システム全体（最大 60 秒待って強制終了）
+// Stop
+ref.close();                   // single actor
+system.terminate();            // entire system (waits up to 60 s then forces shutdown)
 
-// try-with-resources でスコープ管理
+// Scope management with try-with-resources
 try (ActorRef<MyActor> actor = new ActorRef<>("temp", new MyActor())) {
     actor.tell(a -> a.doWork()).join();
 }
 
-// キューだけクリア（アクターは生かしたまま）
+// Clear the queue only (keep the actor alive)
 int cleared = ref.clearPendingMessages();
 ```
 
 ---
 
-## CPU ヘビーな処理
+## CPU-heavy processing
 
-アクターのメッセージループ（仮想スレッド）は軽量処理向け。
-CPU バウンドな処理はマネージドスレッドプールに委譲する。
+The actor's message loop (virtual thread) is designed for lightweight work.
+Delegate CPU-bound processing to a managed thread pool.
 
 ```java
 ExecutorService pool = system.getManagedThreadPool();
 ref.tell(c -> c.heavyCompute(), pool);
 double result = ref.ask(c -> c.calculate(), pool).join();
 
-// 複数のプールを使い分けたい場合
-system.addManagedThreadPool(8);   // インデックス 1
-system.addManagedThreadPool(2);   // インデックス 2
+// Using multiple pools
+system.addManagedThreadPool(8);   // index 1
+system.addManagedThreadPool(2);   // index 2
 ExecutorService pool1 = system.getManagedThreadPool(1);
 ```
 
 ---
 
-## JsonState — アクター内の動的状態ストア（v2.10.0〜）
+## JsonState — dynamic state store inside an actor (since v2.10.0)
 
-各アクターが独立した JSON ストアを持つ。XPath 風のパスで読み書きする。
+Each actor has its own independent JSON store. Read and write using XPath-style paths.
 
 ```java
-// 書き込み
+// Write
 ref.tell(a -> a.putJson("workflow.retry", 3));
 ref.tell(a -> a.putJson("hosts[0]", "server1.example.com"));
 
-// 読み込み
+// Read
 int    retry = ref.ask(a -> a.getJsonInt("workflow.retry", 0)).join();
 String host  = ref.ask(a -> a.getJsonString("hosts[0]")).join();
 bool   found = ref.ask(a -> a.hasJson("workflow.retry")).join();
 
-// ワークフロー内での変数展開
-// ${result}      → 直前のアクション結果
-// ${json.key}    → JsonState の値
+// Variable expansion inside workflows
+// ${result}      → result of the previous action
+// ${json.key}    → value from JsonState
 String expanded = actor.expandVariables("Host is ${json.hostname}");
 
-// クリア
+// Clear
 ref.tell(a -> a.clearJsonState());
 ```
 
 ---
 
-## Scheduler — 定期実行
+## Scheduler — periodic execution
 
-アクターへのメッセージを定期的に投入する。内部で `ask()` を使うため通常のメッセージと FIFO で直列化される。
-詳細は `reference/scheduler.md` を参照。
-
----
-
-## Accumulator — 結果集約
-
-複数アクターの結果を集めるユーティリティ。`ActorRef` でラップしてスレッドセーフに使う。
-詳細は `reference/accumulator.md` を参照。
+Enqueues messages to an actor on a recurring schedule. Uses `ask()` internally, so scheduled messages are serialised FIFO with regular messages.
+See `reference/scheduler.md` for details.
 
 ---
 
-## 子アクター
+## Accumulator — result aggregation
 
-親アクターが子アクターを管理する構造。処理を分担しつつ、親が子の結果を集約するパターンでよく使う。
+A utility for collecting results from multiple actors. Wrap with `ActorRef` for thread-safe access.
+See `reference/accumulator.md` for details.
+
+---
+
+## Child actors
+
+A structure where a parent actor manages child actors. Commonly used to split work across children and have the parent aggregate the results.
 
 ```java
 ActorRef<Parent> parent = system.actorOf("parent", new Parent());
 
-// 子アクターの生成（ActorSystem に自動登録される）
+// Create child actors (automatically registered in the ActorSystem)
 ActorRef<Child> child1 = parent.createChild("child-1", new Child());
 ActorRef<Child> child2 = parent.createChild("child-2", new Child());
 
-// 親子関係の確認
+// Inspect relationships
 child1.getParentName();          // "parent"
 parent.getNamesOfChildren();     // {"child-1", "child-2"}
 ```
 
-### 典型的な使い方：親が子に仕事を投げて結果を集める
+### Typical pattern: parent dispatches work to children and aggregates results
 
 ```java
-// 子アクターに並列で仕事を投げる
+// Dispatch work to children in parallel
 List<CompletableFuture<String>> futures = parent.getNamesOfChildren().stream()
     .map(name -> system.getActor(name, Child.class))
     .map(child -> child.ask(c -> c.process()))
     .toList();
 
-// 全子アクターの完了を待って親が集約
+// Wait for all children to complete, then aggregate
 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 List<String> results = futures.stream().map(CompletableFuture::join).toList();
 parent.tell(p -> p.aggregate(results));
 ```
 
-### Accumulator と組み合わせるパターン
+### Combined with Accumulator
 
 ```java
 ActorRef<Accumulator> acc = system.actorOf("results", new TableAccumulator());
@@ -178,41 +178,41 @@ parent.getNamesOfChildren().stream()
     .forEach(child -> child.ask(c -> c.process())
         .thenAccept(result -> acc.tell(a -> a.add(child.getName(), "output", result))));
 
-// 全子アクターの結果が揃うのを待つ
-// （全 tell が完了したことを確認してから getSummary する）
+// Wait until all child results are collected
+// (confirm all tells have completed before calling getSummary)
 String summary = acc.ask(Accumulator::getSummary).join();
 ```
 
 ---
 
-## プラグイン登録（ActorProvider）
+## Plugin registration (ActorProvider)
 
-外部 JAR からアクターをサービスローダーで自動登録する。実行時ロード（`DynamicActorLoader`）も含め詳細は `reference/plugin.md` を参照。
-
----
-
-## 分散アクター（DistributedActorSystem）
-
-HPC クラスタや K8s で複数ノードにまたがるアクターシステム。
-HTTP（Slurm 等）と Kafka（K8s）の 2 つのトランスポートに対応する。
-
-詳細は `reference/distributed.md` を参照。
+Auto-register actors from an external JAR via the service loader. Runtime loading (`DynamicActorLoader`) is also supported — see `reference/plugin.md` for details.
 
 ---
 
-## よくある間違い
+## Distributed actors (DistributedActorSystem)
 
-**tell/ask にキャプチャした変数を渡すとき** — ラムダは Serializable でないため、アクター外の変数を直接変更してはいけない。
+An actor system that spans multiple nodes in an HPC cluster or on Kubernetes.
+Supports two transports: HTTP (for Slurm, etc.) and Kafka (for Kubernetes).
+
+See `reference/distributed.md` for details.
+
+---
+
+## Common mistakes
+
+**Passing captured variables to tell/ask** — lambdas are not Serializable, so never mutate variables outside the actor directly.
 
 ```java
-// NG: 外部変数への副作用
+// Wrong: side-effect on an external variable
 int[] count = {0};
-ref.tell(a -> count[0] = a.getValue());  // スレッドセーフでない
+ref.tell(a -> count[0] = a.getValue());  // not thread-safe
 
-// OK: ask で値を受け取る
+// Correct: retrieve the value with ask
 int value = ref.ask(a -> a.getValue()).join();
 ```
 
-**CPU ヘビーな処理をキューに流す** — 仮想スレッドを長時間ブロックすると他のアクターのメッセージ処理が遅延する。`tell(action, pool)` で委譲すること。
+**Sending CPU-heavy work through the queue** — blocking a virtual thread for a long time delays message processing for other actors. Delegate with `tell(action, pool)`.
 
-**terminate() を呼び忘れる** — `ActorSystem` はスレッドプールを保持する。JVM が終了しない場合は必ず `system.terminate()` を呼ぶ。
+**Forgetting to call terminate()** — `ActorSystem` holds a thread pool. If the JVM does not exit on its own, always call `system.terminate()`.

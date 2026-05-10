@@ -17,168 +17,96 @@
 
 package com.scivicslab.pojoactor.core.distributed;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.CallableByActionName;
+import com.scivicslab.pojoactor.core.distributed.transport.HttpTransport;
+import com.scivicslab.pojoactor.core.distributed.transport.TransportLayer;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * Reference to an actor hosted on a remote node.
  *
- * <p>This class acts as a proxy for remote actor invocation. It implements
- * {@link CallableByActionName} and translates method calls into HTTP requests
- * to the remote node.</p>
+ * <p>Implements {@link CallableByActionName} and translates method calls into
+ * messages delivered via the configured {@link TransportLayer}.</p>
  *
- * <h2>Usage Example</h2>
+ * <h2>Usage Example (HTTP transport)</h2>
  * <pre>{@code
- * // Register remote node
- * system.registerRemoteNode("node1", "192.168.1.10", 8081);
- *
- * // Get remote actor reference
- * RemoteActorRef remoteMath = system.getRemoteActor("node1", "math");
- *
- * // Call remote actor (synchronous)
+ * RemoteActorRef remoteMath = new RemoteActorRef("math", nodeInfo);
  * ActionResult result = remoteMath.callByActionName("add", "5,3");
- * System.out.println("Result: " + result.getResult());
  * }</pre>
  *
- * <h2>Network Protocol</h2>
- * <p>Sends HTTP POST request to:</p>
+ * <h2>Usage Example (Kafka transport)</h2>
  * <pre>{@code
- * POST http://node1:8081/actor/math/invoke
- * Content-Type: application/json
- *
- * {
- *   "actionName": "add",
- *   "args": "5,3",
- *   "messageId": "uuid-xxx"
- * }
+ * KafkaTransport transport = new KafkaTransport(myNode, "kafka-broker:9092");
+ * RemoteActorRef remoteMath = new RemoteActorRef("math", nodeInfo, transport);
+ * ActionResult result = remoteMath.callByActionName("add", "5,3");
  * }</pre>
  *
- * @author devteam@scivicslab.com
- * @since 3.0.0
  * @since 3.0.0
  */
 public class RemoteActorRef implements CallableByActionName {
 
     private static final Logger logger = Logger.getLogger(RemoteActorRef.class.getName());
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
     private final String actorName;
     private final NodeInfo nodeInfo;
-    private final HttpClient httpClient;
+    private final TransportLayer transport;
 
     /**
-     * Constructs a new RemoteActorRef.
+     * Constructs a RemoteActorRef using the default HTTP transport.
      *
      * @param actorName the name of the remote actor
-     * @param nodeInfo information about the node hosting the actor
+     * @param nodeInfo  information about the node hosting the actor
      */
     public RemoteActorRef(String actorName, NodeInfo nodeInfo) {
-        this.actorName = actorName;
-        this.nodeInfo = nodeInfo;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+        this(actorName, nodeInfo, new HttpTransport());
     }
 
     /**
-     * Invokes an action on the remote actor.
+     * Constructs a RemoteActorRef with an explicit transport layer.
      *
-     * <p>This method sends an HTTP POST request to the remote node
-     * and waits for the response synchronously.</p>
+     * @param actorName the name of the remote actor
+     * @param nodeInfo  information about the node hosting the actor
+     * @param transport the transport to use for message delivery
+     */
+    public RemoteActorRef(String actorName, NodeInfo nodeInfo, TransportLayer transport) {
+        this.actorName = actorName;
+        this.nodeInfo = nodeInfo;
+        this.transport = transport;
+    }
+
+    /**
+     * Invokes an action on the remote actor and waits for the result.
      *
      * @param actionName the name of the action to invoke
-     * @param args the arguments for the action
+     * @param args       the arguments for the action
      * @return the result of the action execution
      */
     @Override
     public ActionResult callByActionName(String actionName, String args) {
-        try {
-            // Create message
-            ActorMessage message = new ActorMessage(this.actorName, actionName, args);
-
-            // Build HTTP request
-            String url = String.format("%s/actor/%s/invoke",
-                    nodeInfo.getUrl(), this.actorName);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(30))
-                    .POST(HttpRequest.BodyPublishers.ofString(message.toJson()))
-                    .build();
-
-            logger.fine(String.format("Sending request to %s: %s(%s)",
-                    url, actionName, args));
-
-            // Send request
-            HttpResponse<String> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString()
-            );
-
-            // Parse response
-            return parseResponse(response);
-
-        } catch (IOException | InterruptedException e) {
-            logger.log(Level.SEVERE, "Error invoking remote actor", e);
-            return new ActionResult(false,
-                    "Network error: " + e.getMessage());
-        }
+        ActorMessage message = new ActorMessage(actorName, actionName, args);
+        logger.fine(String.format("RemoteActorRef.callByActionName → node=%s actor=%s action=%s",
+                nodeInfo.getAddress(), actorName, actionName));
+        return transport.sendAndWait(nodeInfo, message, DEFAULT_TIMEOUT);
     }
 
-    /**
-     * Parses the HTTP response into an ActionResult.
-     *
-     * @param response the HTTP response
-     * @return the parsed ActionResult
-     */
-    private ActionResult parseResponse(HttpResponse<String> response) {
-        try {
-            JsonNode json = objectMapper.readTree(response.body());
-            boolean success = json.get("success").asBoolean();
-            String result = json.get("result").asText();
-            return new ActionResult(success, result);
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error parsing response", e);
-            return new ActionResult(false,
-                    "Failed to parse response: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Returns the name of the remote actor.
-     *
-     * @return the actor name
-     */
     public String getActorName() {
         return actorName;
     }
 
-    /**
-     * Returns information about the node hosting this actor.
-     *
-     * @return the node information
-     */
     public NodeInfo getNodeInfo() {
         return nodeInfo;
     }
 
+    public TransportLayer getTransport() {
+        return transport;
+    }
+
     @Override
     public String toString() {
-        return "RemoteActorRef{" +
-                "actorName='" + actorName + '\'' +
-                ", nodeInfo=" + nodeInfo +
-                '}';
+        return "RemoteActorRef{actorName='" + actorName + "', node=" + nodeInfo.getAddress() + '}';
     }
 }

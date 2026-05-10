@@ -18,6 +18,7 @@
 package com.scivicslab.pojoactor.core.distributed;
 
 import com.scivicslab.pojoactor.core.distributed.ActorMessage;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for ActorMessage JSON serialization.
  */
+@Tag("S_load.01")
 class ActorMessageTest {
 
     @Test

@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -24,10 +25,11 @@ import org.junit.jupiter.api.TestMethodOrder;
  * Test class for verifying POJO-actor's ability to handle thousands of actors
  * using virtual threads while controlling CPU core usage through work-stealing pools.
  * This demonstrates the scalability advantages over traditional thread-per-actor systems.
- * 
+ *
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
+@Tag("S_base")
 @DisplayName("Massive Actor Scalability Test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

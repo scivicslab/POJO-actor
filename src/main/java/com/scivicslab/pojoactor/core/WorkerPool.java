@@ -18,43 +18,61 @@ package com.scivicslab.pojoactor.core;
 import java.util.concurrent.ExecutorService;
 
 /**
- * Interface for worker pools that execute CPU-bound jobs for actors.
+ * Extension of ExecutorService that adds per-actor job management.
  *
- * Implementations must provide ExecutorService compatibility for use with
- * ActorRef.tell(action, pool) and ActorRef.ask(action, pool).
+ * <p>This interface exists primarily for backward compatibility with ForkJoinPool-based
+ * implementations. ForkJoinPool uses work-stealing with internally distributed queues
+ * that offer no API for external queue manipulation, making per-actor job cancellation
+ * impossible. Replacing it with {@link ManagedThreadPool} (ThreadPoolExecutor +
+ * LinkedBlockingDeque) enables direct queue access via {@code queue.remove()}, but
+ * would break callers that reference {@code ExecutorService} directly.
+ *
+ * <p>By introducing this interface with no-op default methods, existing ForkJoinPool
+ * wrappers continue to work unchanged. Only {@link ManagedThreadPool} overrides the
+ * defaults and returns {@code supportsCancellation() == true}.
+ *
+ * <p>Callers should check {@link #supportsCancellation()} before relying on
+ * {@link #cancelJobsForActor(String)}.
  *
  * @author devteam@scivicslab.com
- * @since 1.0.0
+ * @since 2.0.0
+ * @see ManagedThreadPool
  */
 public interface WorkerPool extends ExecutorService {
 
     /**
-     * Cancels all pending jobs for a specific actor.
-     * Jobs that are already running will continue to completion.
+     * Cancels all pending (not yet started) jobs submitted for the given actor.
+     * Jobs already running are not interrupted and will run to completion.
      *
-     * @param actorName the name of the actor whose jobs should be cancelled
-     * @return the number of jobs that were cancelled
+     * <p>The default implementation is a no-op for ForkJoinPool-based implementations,
+     * which cannot access their internal queues.
+     *
+     * @param actorName the name of the actor whose pending jobs should be cancelled
+     * @return the number of jobs removed from the queue; 0 if unsupported
      */
     default int cancelJobsForActor(String actorName) {
-        // Default implementation: does nothing (for ForkJoinPool-based implementation)
         return 0;
     }
 
     /**
-     * Gets the number of pending jobs for a specific actor.
+     * Returns the number of pending (not yet started) jobs for the given actor.
+     *
+     * <p>The default implementation returns 0 for ForkJoinPool-based implementations.
      *
      * @param actorName the name of the actor
-     * @return the number of pending jobs
+     * @return the number of pending jobs; 0 if unsupported
      */
     default int getPendingJobCountForActor(String actorName) {
-        // Default implementation: returns 0 (for ForkJoinPool-based implementation)
         return 0;
     }
 
     /**
-     * Checks if this worker pool supports job cancellation per actor.
+     * Returns whether this implementation supports per-actor job cancellation.
      *
-     * @return true if cancelJobsForActor() is supported
+     * <p>Returns {@code false} for ForkJoinPool-based implementations.
+     * Returns {@code true} for {@link ManagedThreadPool}.
+     *
+     * @return true if {@link #cancelJobsForActor(String)} actually removes jobs
      */
     default boolean supportsCancellation() {
         return false;

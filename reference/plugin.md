@@ -1,10 +1,10 @@
-# プラグイン登録 — ActorProvider
+# Plugin registration — ActorProvider
 
-外部 JAR からアクターをサービスローダーで自動登録する仕組み。
+A mechanism for auto-registering actors from an external JAR via the service loader.
 
 ---
 
-## 実装
+## Implementation
 
 ```java
 public class MyProvider implements ActorProvider {
@@ -20,21 +20,21 @@ public class MyProvider implements ActorProvider {
 com.example.MyProvider
 ```
 
-JAR をクラスパスに追加するだけで `ActorSystem` 起動時に自動的に `registerActors()` が呼ばれる。
+Simply add the JAR to the classpath and `registerActors()` is called automatically when `ActorSystem` starts.
 
 ---
 
-## DynamicActorLoader — 実行時ロード
+## DynamicActorLoader — Runtime loading
 
-起動後に外部 JAR を動的にロードしてアクターを追加する。
-Turing Workflow の `loader.loadJar` / `loader.createChild` はこの仕組みを使っている。
+Dynamically loads an external JAR after startup to add actors at runtime.
+The `loader.loadJar` / `loader.createChild` commands in Turing Workflow use this mechanism.
 
 ```java
 DynamicActorLoader loader = new DynamicActorLoader(system);
 
-// Maven ローカルリポジトリから JAR をロード
+// Load a JAR from the Maven local repository
 loader.loadJar("com.example:my-plugin:1.0.0");
 
-// ロードした JAR のクラスからアクターを生成
+// Create an actor from a class in the loaded JAR
 ActorRef<?> actor = loader.createActor("myActor", "com.example.MyActor");
 ```

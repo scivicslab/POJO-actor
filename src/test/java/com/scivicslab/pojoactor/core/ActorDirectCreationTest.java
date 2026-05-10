@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -25,10 +26,11 @@ import org.junit.jupiter.api.TestMethodOrder;
  * Test class for verifying actor creation and operation without an ActorSystem.
  * This test suite demonstrates that actors can be created and used directly
  * without being managed by an ActorSystem instance.
- * 
+ *
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
+@Tag("S_init.01")
 @DisplayName("Running actors without actorsystem")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

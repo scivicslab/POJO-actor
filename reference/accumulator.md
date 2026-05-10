@@ -1,32 +1,32 @@
-# Accumulator — 結果集約
+# Accumulator — Result aggregation
 
-複数のアクターやノードから届く結果を集めるユーティリティ。
-`ActorRef` でラップしてスレッドセーフに使うのが基本パターン。
-
----
-
-## 実装の選択
-
-| クラス | 出力形式 |
-|--------|---------|
-| `StreamingAccumulator` | 届いたそばからリアルタイム出力 |
-| `BufferedAccumulator` | 全収集後にソース別出力 |
-| `TableAccumulator` | ソース=行・タイプ=列のテーブル出力 |
-| `JsonAccumulator` | JSON 形式出力 |
+A utility for collecting results from multiple actors or nodes.
+The basic pattern is to wrap it with `ActorRef` for thread-safe access.
 
 ---
 
-## 基本的な使い方
+## Choosing an implementation
+
+| Class | Output format |
+|-------|--------------|
+| `StreamingAccumulator` | Real-time output as results arrive |
+| `BufferedAccumulator` | Output per source after all results are collected |
+| `TableAccumulator` | Table output with source = row, type = column |
+| `JsonAccumulator` | JSON format output |
+
+---
+
+## Basic usage
 
 ```java
 ActorRef<Accumulator> results = system.actorOf("results", new TableAccumulator());
 
-// 結果を投入（スレッドセーフ）
+// Add results (thread-safe)
 results.tell(a -> a.add("worker-1", "cpu",    "Intel Xeon"));
 results.tell(a -> a.add("worker-1", "memory", "64GB"));
 results.tell(a -> a.add("worker-2", "cpu",    "AMD EPYC"));
 
-// 集約結果を取得
+// Retrieve aggregated output
 String summary = results.ask(Accumulator::getSummary).join();
 int    count   = results.ask(Accumulator::getCount).join();
 
@@ -35,7 +35,7 @@ results.tell(Accumulator::clear);
 
 ---
 
-## 子アクターと組み合わせるパターン
+## Combined with child actors
 
 ```java
 ActorRef<Accumulator> acc = system.actorOf("results", new TableAccumulator());
@@ -47,15 +47,15 @@ parent.getNamesOfChildren().stream()
              .thenAccept(result -> acc.tell(a -> a.add(child.getName(), "output", result)))
     );
 
-// 全子アクターの結果が揃うまで待つには CompletableFuture.allOf を使う
+// Use CompletableFuture.allOf to wait until all child results are collected
 String summary = acc.ask(Accumulator::getSummary).join();
 ```
 
 ---
 
-## TableAccumulator の列幅指定
+## TableAccumulator column width
 
 ```java
-new TableAccumulator()     // デフォルト列幅
-new TableAccumulator(40)   // 列幅 40 文字
+new TableAccumulator()     // default column width
+new TableAccumulator(40)   // column width of 40 characters
 ```

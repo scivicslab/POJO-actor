@@ -20,6 +20,7 @@ package com.scivicslab.pojoactor.core;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Based on specification: 106_VariableExpansion_260129_oo01
  */
+@Tag("S_svc.01")
 class VariableExpansionSpecTest {
 
     private ActorRef<Object> actor;

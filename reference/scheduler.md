@@ -1,26 +1,26 @@
-# Scheduler — 定期実行
+# Scheduler — Periodic execution
 
-アクターへのメッセージを定期的に投入するスケジューラ。
-内部で `ask()` を使うため、通常のメッセージと FIFO で直列化される。
+A scheduler that enqueues messages to an actor on a recurring basis.
+Uses `ask()` internally, so scheduled messages are serialised FIFO with regular messages.
 
 ---
 
-## 基本
+## Basics
 
 ```java
-Scheduler scheduler = new Scheduler();     // デフォルト 2 スレッド
-Scheduler scheduler = new Scheduler(4);    // スレッド数指定
+Scheduler scheduler = new Scheduler();     // default 2 threads
+Scheduler scheduler = new Scheduler(4);    // specify thread count
 
-// 固定間隔（前回開始 → 次回開始）
+// Fixed rate (start-to-start interval)
 scheduler.scheduleAtFixedRate("health", ref, a -> a.check(), 0, 10, TimeUnit.SECONDS);
 
-// 固定遅延（前回終了 → 次回開始）
+// Fixed delay (end-to-start interval)
 scheduler.scheduleWithFixedDelay("cleanup", ref, a -> a.cleanup(), 60, 300, TimeUnit.SECONDS);
 
-// 1 回のみ
+// One-shot
 scheduler.scheduleOnce("init", ref, a -> a.init(), 5, TimeUnit.SECONDS);
 
-// 管理
+// Management
 scheduler.cancelTask("health");
 boolean active = scheduler.isScheduled("health");
 int count      = scheduler.getScheduledTaskCount();
@@ -32,9 +32,9 @@ scheduler.close();  // AutoCloseable
 
 ## scheduleAtFixedRate vs scheduleWithFixedDelay
 
-| メソッド | 次回起動タイミング | 処理が period を超えた場合 |
-|---------|----------------|------------------------|
-| `scheduleAtFixedRate` | 前回**開始**から period 後 | 遅延なく即座に次回を起動 |
-| `scheduleWithFixedDelay` | 前回**終了**から delay 後 | delay 分待ってから次回を起動 |
+| Method | Next execution timing | If execution exceeds the period |
+|--------|-----------------------|--------------------------------|
+| `scheduleAtFixedRate` | `period` after the previous **start** | Fires the next run immediately without delay |
+| `scheduleWithFixedDelay` | `delay` after the previous **end** | Waits the full delay before the next run |
 
-処理時間が不安定な場合は `scheduleWithFixedDelay` の方が詰まりにくい。
+`scheduleWithFixedDelay` is less prone to piling up when execution time is variable.

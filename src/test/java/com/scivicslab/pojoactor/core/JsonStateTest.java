@@ -18,6 +18,7 @@
 package com.scivicslab.pojoactor.core;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for JsonState XPath-style accessor.
  */
+@Tag("S_init.02")
 class JsonStateTest {
 
     private JsonState state;
