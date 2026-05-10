@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  *
  * Pattern: light init via tell() → heavy compute via ask(pool)
  */
-@Tag("S1.03")
+@Tag("S_base.03")
 @DisplayName("MatrixCalculation — parallel compute via ManagedThreadPool (S1.03)")
 public class MatrixCalculationTest {
 

@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * NOTE: These tests will FAIL with the current implementation.
  * They document the expected behavior that needs to be implemented.
  */
-@Tag("S2.01")
+@Tag("S_init.02")
 class JsonStatePutJsonExpectedBehaviorTest {
 
     // ========================================================================

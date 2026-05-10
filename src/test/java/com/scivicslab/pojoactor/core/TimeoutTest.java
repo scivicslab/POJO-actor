@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Verifies state S1.06: CompletableFuture timeout patterns work with both tell() and ask().
  */
-@Tag("S1.06")
+@Tag("S_base.06")
 @DisplayName("Timeout — CompletableFuture timeout patterns (S1.06)")
 public class TimeoutTest {
 

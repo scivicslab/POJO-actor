@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>Note: These tests verify the interface contracts and basic logic.
  * Full integration tests require actual Slurm/Kubernetes/GridEngine environments.</p>
  */
-@Tag("S4")
+@Tag("S_dist")
 class NodeDiscoveryTest {
 
     @Test

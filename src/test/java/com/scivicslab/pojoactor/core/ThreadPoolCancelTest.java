@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@Tag("S1.02")
+@Tag("S_base.02")
 @DisplayName("ThreadPool cancel — CompletableFuture.cancel() baseline (S1.02)")
 public class ThreadPoolCancelTest {
 

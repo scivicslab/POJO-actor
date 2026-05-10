@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  *   - TestMathPluginProvider (implements ActorProvider)
  *   - META-INF/services/com.scivicslab.pojoactor.core.ActorProvider
  */
-@Tag("S3")
+@Tag("S_load")
 @DisplayName("ActorProvider SPI — ServiceLoader auto-discovery (S3)")
 public class ActorProviderSPITest {
 

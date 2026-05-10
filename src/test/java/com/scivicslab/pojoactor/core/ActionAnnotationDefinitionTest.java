@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Verifies state S2.03: @Action annotation is defined with correct retention and target.
  */
-@Tag("S2.03")
+@Tag("S_svc.03")
 @DisplayName("@Action annotation definition (S2.03)")
 public class ActionAnnotationDefinitionTest {
 

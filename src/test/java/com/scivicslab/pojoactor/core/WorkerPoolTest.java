@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test;
  * that callers who check {@link WorkerPool#supportsCancellation()} first will behave
  * correctly regardless of the underlying implementation.
  */
-@Tag("S1.01")
+@Tag("S_base.01")
 @DisplayName("WorkerPool — interface defaults (S1.01)")
 public class WorkerPoolTest {
 

@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for KafkaTransport topic naming conventions.
  * No Kafka broker required.
  */
-@Tag("S3.04")
+@Tag("S_load.04")
 class KafkaTransportTopicNamingTest {
 
     @Test

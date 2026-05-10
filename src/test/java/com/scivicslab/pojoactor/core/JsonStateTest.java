@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for JsonState XPath-style accessor.
  */
-@Tag("S2.01")
+@Tag("S_init.02")
 class JsonStateTest {
 
     private JsonState state;

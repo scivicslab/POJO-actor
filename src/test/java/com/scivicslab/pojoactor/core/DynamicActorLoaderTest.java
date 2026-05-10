@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  * The plugin class (TestMathPlugin) is in package com.example.testplugin — a package not on
  * the host classpath — so URLClassLoader actually reads it from the JAR.
  */
-@Tag("S2.05")
+@Tag("S_svc.05")
 @DisplayName("DynamicActorLoader — URLClassLoader-based plugin loading (S2.05)")
 public class DynamicActorLoaderTest {
 

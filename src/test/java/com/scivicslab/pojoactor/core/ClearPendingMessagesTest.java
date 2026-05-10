@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 
-@Tag("S1.05")
+@Tag("S_base.05")
 @DisplayName("clearPendingMessages — message queue cleanup (S1.05)")
 public class ClearPendingMessagesTest {
 

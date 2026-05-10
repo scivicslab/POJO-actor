@@ -46,7 +46,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 2.7.0
  */
-@Tag("S1")
+@Tag("S_base")
 @DisplayName("ActorSystem — actor lifecycle management (S1)")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

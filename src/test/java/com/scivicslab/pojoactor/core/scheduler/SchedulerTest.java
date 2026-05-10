@@ -41,7 +41,7 @@ import com.scivicslab.pojoactor.core.ActorSystem;
  * @author devteam@scivicslab.com
  * @since 2.11.0
  */
-@Tag("S1.07")
+@Tag("S_base.07")
 @DisplayName("Scheduler — periodic actor messaging (S1.07)")
 public class SchedulerTest {
 

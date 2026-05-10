@@ -30,7 +30,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@Tag("S0.01")
+@Tag("S_init.01")
 @DisplayName("Running actors without actorsystem")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

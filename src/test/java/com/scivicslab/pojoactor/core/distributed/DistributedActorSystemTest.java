@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for DistributedActorSystem builder and RemoteActorRef wiring.
  * Uses stub transport and discovery — no Kafka or network required.
  */
-@Tag("S3.03")
+@Tag("S_load.03")
 class DistributedActorSystemTest {
 
     /** Stub NodeDiscovery that returns two fixed nodes. */

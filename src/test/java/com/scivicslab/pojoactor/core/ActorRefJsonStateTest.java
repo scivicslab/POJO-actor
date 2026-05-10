@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for ActorRef JSON state integration.
  */
-@Tag("S2.01")
+@Tag("S_init.02")
 class ActorRefJsonStateTest {
 
     private ActorSystem system;

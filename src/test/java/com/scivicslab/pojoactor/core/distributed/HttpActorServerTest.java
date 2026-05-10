@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for HttpActorServer.
  * Path parsing tests run without a network. E2E test uses loopback.
  */
-@Tag("S3.02")
+@Tag("S_load.02")
 class HttpActorServerTest {
 
     // ---- Path extraction tests (no server needed) ----

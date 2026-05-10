@@ -51,7 +51,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@Tag("S1.04")
+@Tag("S_base.04")
 @DisplayName("tellNow / askNow — mailbox bypass (S1.04)")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

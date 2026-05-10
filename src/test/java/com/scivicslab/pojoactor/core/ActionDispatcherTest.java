@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Verifies state S2.03: ActionDispatcher and AbstractCallableByActionName.
  */
-@Tag("S2.04")
+@Tag("S_svc.04")
 @DisplayName("ActionDispatcher — @Action annotation dispatch (S2.04)")
 public class ActionDispatcherTest {
 

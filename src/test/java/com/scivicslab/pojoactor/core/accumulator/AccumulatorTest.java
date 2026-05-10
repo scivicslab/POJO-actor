@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * @author devteam@scivicslab.com
  * @since 2.8.0
  */
-@Tag("S2")
+@Tag("S_svc")
 @DisplayName("Accumulator Specification by Example")
 public class AccumulatorTest {
 

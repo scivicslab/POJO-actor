@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for ActorMessage JSON serialization.
  */
-@Tag("S3.01")
+@Tag("S_load.01")
 class ActorMessageTest {
 
     @Test

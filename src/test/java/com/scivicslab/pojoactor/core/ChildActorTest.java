@@ -31,7 +31,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  * @author devteam@scivicslab.com
  * @version 1.0.0
  */
-@Tag("S1")
+@Tag("S_base")
 @DisplayName("Creation of child actors")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

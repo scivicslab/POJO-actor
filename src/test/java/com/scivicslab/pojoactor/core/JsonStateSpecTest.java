@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - 104_JsonStateOutput_260129_oo01
  * - 105_JsonStateUtility_260129_oo01
  */
-@Tag("S2.01")
+@Tag("S_init.02")
 class JsonStateSpecTest {
 
     // ========================================================================

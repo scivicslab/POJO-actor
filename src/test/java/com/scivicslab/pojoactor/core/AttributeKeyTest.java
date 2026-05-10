@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for AttributeKey typed attribute storage on ActorRef.
  * No ActorSystem required — attributes are stored on the ActorRef directly.
  */
-@Tag("S1.08")
+@Tag("S_base.08")
 class AttributeKeyTest {
 
     static final AttributeKey<Long>    START_TIME  = AttributeKey.of("startTime",  Long.class);

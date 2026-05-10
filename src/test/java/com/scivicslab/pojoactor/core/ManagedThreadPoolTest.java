@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Verifies state S1.02: ManagedThreadPool tracks jobs per actor and supports cancellation.
  */
-@Tag("S1.02")
+@Tag("S_base.02")
 @DisplayName("ManagedThreadPool — per-actor job tracking (S1.02)")
 public class ManagedThreadPoolTest {
 

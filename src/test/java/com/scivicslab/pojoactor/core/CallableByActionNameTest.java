@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
  * Tests the interface itself — not implementation patterns (switch/annotation).
  * Those are covered in SwitchDispatchTest (S2.02) and ActionDispatcherTest (S2.04).
  */
-@Tag("S2.01")
+@Tag("S_svc.01")
 @DisplayName("CallableByActionName interface contract (S2.01)")
 public class CallableByActionNameTest {
 

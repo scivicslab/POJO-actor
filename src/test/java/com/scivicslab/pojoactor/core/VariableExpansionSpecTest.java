@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Based on specification: 106_VariableExpansion_260129_oo01
  */
-@Tag("S2.01")
+@Tag("S_svc.01")
 class VariableExpansionSpecTest {
 
     private ActorRef<Object> actor;

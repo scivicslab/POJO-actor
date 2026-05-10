@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Verifies state S2.02: switch-based CallableByActionName dispatch pattern.
  */
-@Tag("S2.02")
+@Tag("S_svc.02")
 @DisplayName("SwitchDispatch — switch-based CallableByActionName dispatch (S2.02)")
 public class SwitchDispatchTest {
 

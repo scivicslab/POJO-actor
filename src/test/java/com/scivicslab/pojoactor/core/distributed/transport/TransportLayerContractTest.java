@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Contract tests for TransportLayer implementations using a stub transport.
  * Verifies the interface semantics without requiring real network connections.
  */
-@Tag("S3.02")
+@Tag("S_load.02")
 public class TransportLayerContractTest {
 
     private final NodeInfo nodeA = new NodeInfo("node-a", "localhost", 8081);

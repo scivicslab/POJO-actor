@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
  * Verifies state S1.03: ActorRef routes tell() and ask() through ManagedThreadPool.submitForActor(),
  * and clearPendingMessages() cancels both the message queue and pool jobs.
  */
-@Tag("S1.03")
+@Tag("S_base.03")
 @DisplayName("ActorRefIntegration — ManagedThreadPool integration (S1.03)")
 public class ActorRefIntegrationTest {
 
