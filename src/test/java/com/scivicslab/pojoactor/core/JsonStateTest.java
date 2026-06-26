@@ -49,6 +49,28 @@ class JsonStateTest {
         assertEquals("test", state.getString("name"));
     }
 
+    // ========================================================================
+    // Bracket parsing: non-array-index brackets must not crash (e.g. shell ${arr[@]} in text)
+    // ========================================================================
+
+    @Test
+    void select_shellArrayExpansion_atSign_returnsMissingNotCrash() {
+        // A document containing the shell array expansion ${arr[@]} reaches select() as path "arr[@]".
+        // "@" is not an array index — this must resolve to a missing node, not throw.
+        JsonNode n = state.select("arr[@]");
+        assertTrue(n.isMissingNode());
+    }
+
+    @Test
+    void select_unclosedBracket_returnsMissing() {
+        assertTrue(state.select("arr[").isMissingNode());
+    }
+
+    @Test
+    void select_nonNumericBracketIndex_returnsMissing() {
+        assertTrue(state.select("arr[foo]").isMissingNode());
+    }
+
     @Test
     void put_withDollarPrefix_setsValue() {
         state.put("$.name", "test");

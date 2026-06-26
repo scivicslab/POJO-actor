@@ -132,9 +132,20 @@ public class JsonState {
                     current = current.path(fieldName);
                 }
 
-                // Extract index
-                String indexStr = part.substring(bracketStart + 1, bracketEnd);
-                int index = Integer.parseInt(indexStr);
+                // A bracket without a closing ']' or with a non-integer index is not an array index
+                // (e.g. a shell array expansion like ${arr[@]} that appears in document text, not an
+                // actual variable reference). Treat the path as unresolved rather than crashing, so
+                // the caller leaves the original ${...} text untouched.
+                if (bracketEnd <= bracketStart) {
+                    return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+                }
+                String indexStr = part.substring(bracketStart + 1, bracketEnd).trim();
+                int index;
+                try {
+                    index = Integer.parseInt(indexStr);
+                } catch (NumberFormatException e) {
+                    return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+                }
                 current = current.path(index);
             } else {
                 // Simple field access
