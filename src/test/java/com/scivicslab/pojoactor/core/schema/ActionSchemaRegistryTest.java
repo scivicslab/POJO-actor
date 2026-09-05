@@ -53,6 +53,31 @@ class ActionSchemaRegistryTest {
         }
 
         @Test
+        @DisplayName("actionNames groups the actions under their actor class, names only")
+        void actionNames_groupsByClassWithoutSchemaBodies(@TempDir Path root) throws IOException {
+            Path schemasDir = root.resolve("action-schemas");
+            Files.createDirectories(schemasDir);
+            Files.writeString(schemasDir.resolve("com.example.NodeActor.configure.schema.json"), SAMPLE_SCHEMA);
+            Files.writeString(schemasDir.resolve("com.example.NodeActor.restart.schema.json"), SAMPLE_SCHEMA);
+            Files.writeString(schemasDir.resolve("com.example.DiskActor.mount.schema.json"), SAMPLE_SCHEMA);
+
+            var byClass = new ActionSchemaRegistry(loaderFor(root), "action-schemas").actionNames();
+
+            assertEquals(java.util.List.of("com.example.DiskActor", "com.example.NodeActor"),
+                    java.util.List.copyOf(byClass.keySet()));
+            assertEquals(java.util.List.of("configure", "restart"),
+                    java.util.List.copyOf(byClass.get("com.example.NodeActor")));
+            assertEquals(java.util.List.of("mount"),
+                    java.util.List.copyOf(byClass.get("com.example.DiskActor")));
+        }
+
+        @Test
+        @DisplayName("actionNames is empty when nothing was loaded")
+        void actionNames_empty_whenNothingLoaded(@TempDir Path root) throws IOException {
+            assertTrue(new ActionSchemaRegistry(loaderFor(root), "action-schemas").actionNames().isEmpty());
+        }
+
+        @Test
         @DisplayName("finds a schema written directly under the resource root")
         void load_findsSchemaUnderResourceRoot(@TempDir Path root) throws IOException {
             Path schemasDir = root.resolve("action-schemas");

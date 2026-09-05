@@ -29,6 +29,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -99,6 +103,30 @@ public class ActionSchemaRegistry {
     /** Same as {@link #schemaFor(Class, String)}, keyed by the actor class's fully-qualified name. */
     public JsonNode schemaFor(String className, String actionName) {
         return schemas.get(className + "." + actionName);
+    }
+
+    /**
+     * The actor classes that have at least one schema, and for each the action names that do.
+     *
+     * <p>Names only — no schema bodies. Someone writing a workflow step wants "what can this
+     * actor do, and what do I put in the arguments", which is two questions: this answers the
+     * first, and {@link #schemaFor(String, String)} answers the second for the one action
+     * chosen. Returning every schema at once would answer a question nobody asked, and put all
+     * of them into whatever context the answer is carried in.
+     *
+     * @return class name to its action names, both sorted; empty when nothing was loaded
+     */
+    public SortedMap<String, SortedSet<String>> actionNames() {
+        SortedMap<String, SortedSet<String>> byClass = new TreeMap<>();
+        for (String key : schemas.keySet()) {
+            int lastDot = key.lastIndexOf('.');
+            if (lastDot <= 0 || lastDot == key.length() - 1) {
+                continue;   // not "<class>.<action>"; nothing generated this, so nothing reads it
+            }
+            byClass.computeIfAbsent(key.substring(0, lastDot), c -> new TreeSet<>())
+                   .add(key.substring(lastDot + 1));
+        }
+        return byClass;
     }
 
     /** The number of schemas currently loaded. */
