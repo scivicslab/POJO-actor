@@ -662,10 +662,13 @@ public class ActorRef<T> implements AutoCloseable {
                 String value = getVariableValue(jsonPath);
                 if (value != null) {
                     expanded = expanded.substring(0, start) + value + expanded.substring(end + 1);
-                    // Don't advance startIndex since we replaced content
-                    continue;
+                    // Advance past the substituted value to avoid re-scanning it.
+                    // Re-scanning would cause an infinite loop when the substituted text
+                    // itself contains "${...}" patterns (e.g. LaTeX math in OCR output).
+                    startIndex = start + value.length();
+                } else {
+                    startIndex = end + 1;
                 }
-                startIndex = end + 1;
             }
         }
 
