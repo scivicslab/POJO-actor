@@ -115,4 +115,30 @@ public @interface Action {
      * @return the action name
      */
     String value();
+
+    /**
+     * The Java type the method's single argument is deserialized into, or
+     * {@code Void.class} (the default) to keep the current raw-{@code String} behavior.
+     *
+     * <p>When set to a Java {@code record} type, {@link ActionDispatcher} deserializes
+     * the incoming JSON {@code args} string into an instance of this type (via Jackson)
+     * before invoking the method, and the annotated method must declare that type as
+     * its single parameter instead of {@code String}:</p>
+     *
+     * <pre>{@code
+     * public record ConfigureArgs(String hostname, int port, boolean ssl) {}
+     *
+     * @Action(value = "configure", argsType = ConfigureArgs.class)
+     * public ActionResult configure(ConfigureArgs args) { ... }
+     * }</pre>
+     *
+     * <p>This is purely opt-in: methods that omit {@code argsType} (the default,
+     * {@code Void.class}) are discovered and invoked exactly as before — unchanged
+     * {@code ActionResult method(String args)} signature, no deserialization.</p>
+     *
+     * @return the argument type to deserialize into, or {@code Void.class} for the
+     *         default raw-{@code String} behavior
+     * @since 3.5.0
+     */
+    Class<?> argsType() default Void.class;
 }

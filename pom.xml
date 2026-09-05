@@ -91,6 +91,24 @@
         <optional>true</optional>
       </dependency>
 
+      <!-- ActionSchemaGenerator (optional: only needed by projects that run the build-time
+           JSON Schema generation step for @Action(argsType=...) methods) -->
+      <dependency>
+        <groupId>com.github.victools</groupId>
+        <artifactId>jsonschema-generator</artifactId>
+        <version>4.38.0</version>
+        <optional>true</optional>
+      </dependency>
+
+      <!-- ActionSchemaRegistry / runtime dispatch validation (optional: only needed by projects
+           that validate @Action(argsType=...) arguments against the generated JSON Schema) -->
+      <dependency>
+        <groupId>com.networknt</groupId>
+        <artifactId>json-schema-validator</artifactId>
+        <version>1.5.5</version>
+        <optional>true</optional>
+      </dependency>
+
 
       <dependency>
         <groupId>org.junit.jupiter</groupId>
