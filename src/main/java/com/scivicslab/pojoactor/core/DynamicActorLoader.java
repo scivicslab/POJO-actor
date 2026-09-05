@@ -53,7 +53,12 @@ import java.util.logging.Logger;
  *   <li>Load any POJO from external JAR as an actor</li>
  *   <li>No OSGi or JPMS required - uses standard URLClassLoader</li>
  *   <li>Supports hot-reload by closing classloader and reloading</li>
- *   <li>Compatible with GraalVM Native Image (with configuration)</li>
+ *   <li><strong>Not compatible with GraalVM Native Image.</strong> This class loads
+ *       classes from a JAR file that is unknown at native-image build time via
+ *       {@link URLClassLoader}. Native Image requires a closed-world assumption
+ *       (all reachable classes known at build time); no {@code reflect-config.json}
+ *       registration can make it load bytecode that was never compiled into the
+ *       binary. JVM mode only.</li>
  * </ul>
  *
  * <h2>Requirements</h2>
