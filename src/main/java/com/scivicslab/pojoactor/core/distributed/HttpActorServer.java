@@ -69,31 +69,57 @@ public class HttpActorServer implements AutoCloseable {
     private static final String CONTEXT_SUFFIX = "/invoke";
 
     private final ActorSystem actorSystem;
+    private final String bindAddress;
     private final int port;
     private HttpServer httpServer;
 
     /**
-     * Creates an HttpActorServer that listens on the given port.
+     * Creates an HttpActorServer that listens on every interface.
+     *
+     * <p>Every actor in {@code actorSystem} becomes callable by anything that can reach this
+     * port. Use {@link #HttpActorServer(ActorSystem, String, int)} with {@code "127.0.0.1"}
+     * when the caller is on the same machine, and only choose this one when the callers are
+     * genuinely other hosts — a cluster of nodes that must reach each other.
      *
      * @param actorSystem the local actor system to dispatch messages to
      * @param port        the port to listen on
      */
     public HttpActorServer(ActorSystem actorSystem, int port) {
+        this(actorSystem, null, port);
+    }
+
+    /**
+     * Creates an HttpActorServer that listens on one address.
+     *
+     * @param actorSystem the local actor system to dispatch messages to
+     * @param bindAddress the address to listen on, e.g. {@code "127.0.0.1"} to accept only
+     *                    callers on this machine; {@code null} listens on every interface
+     * @param port        the port to listen on
+     */
+    public HttpActorServer(ActorSystem actorSystem, String bindAddress, int port) {
         this.actorSystem = actorSystem;
+        this.bindAddress = bindAddress;
         this.port = port;
     }
 
     /**
      * Starts the HTTP server. Registers a wildcard handler for {@code /actor/}.
      *
-     * @throws IOException if the server cannot bind to the port
+     * <p>Logs the address it bound to, not only the port: whether this server accepts callers
+     * from other hosts is the single most consequential thing about it, and reading it back
+     * should not require inspecting the process from outside.
+     *
+     * @throws IOException if the server cannot bind to the address and port
      */
     public synchronized void start() throws IOException {
-        httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+        InetSocketAddress address = (bindAddress == null)
+                ? new InetSocketAddress(port)                 // every interface
+                : new InetSocketAddress(bindAddress, port);
+        httpServer = HttpServer.create(address, 0);
         httpServer.createContext(CONTEXT_PREFIX, this::handleRequest);
         httpServer.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         httpServer.start();
-        logger.info("HttpActorServer started on port " + port);
+        logger.info("HttpActorServer started on " + address.getAddress().getHostAddress() + ":" + port);
     }
 
     @Override

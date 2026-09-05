@@ -102,7 +102,23 @@ public class DistributedActorSystem implements AutoCloseable {
      * @throws java.io.IOException if the port cannot be bound
      */
     public void startHttpServer(int port) throws java.io.IOException {
-        httpServer = new HttpActorServer(localActorSystem, port);
+        startHttpServer(null, port);
+    }
+
+    /**
+     * Starts the embedded HTTP server on one address.
+     *
+     * <p>Every actor in the local system becomes callable by anything that can reach the
+     * address and port, with whatever those actors can do. Pass {@code "127.0.0.1"} when the
+     * callers are on this machine, and leave it open only when they are genuinely other hosts.
+     *
+     * @param bindAddress the address to listen on, e.g. {@code "127.0.0.1"}; {@code null}
+     *                    listens on every interface
+     * @param port        the port to listen on (should match {@code myNode.getPort()})
+     * @throws java.io.IOException if the address and port cannot be bound
+     */
+    public void startHttpServer(String bindAddress, int port) throws java.io.IOException {
+        httpServer = new HttpActorServer(localActorSystem, bindAddress, port);
         httpServer.start();
     }
 
