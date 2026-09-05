@@ -169,6 +169,13 @@ public class HttpActorServer implements AutoCloseable {
             if (ref == null) {
                 return new ActionResult(false, "Actor not found: " + actorName);
             }
+            // The reference itself may be what knows the action names — Turing-workflow's
+            // IIActorRef is an ActorRef that dispatches by name, and every actor a workflow can
+            // call is one. The object it holds is a plain POJO that knows nothing of them, so
+            // unwrapping first would report every such actor as uncallable.
+            if (ref instanceof CallableByActionName callableRef) {
+                return callableRef.callByActionName(message.getActionName(), message.getArgs());
+            }
             Object obj = ref.ask(a -> a).join();
             if (obj instanceof CallableByActionName callable) {
                 return callable.callByActionName(message.getActionName(), message.getArgs());
@@ -194,16 +201,16 @@ public class HttpActorServer implements AutoCloseable {
         }
     }
 
-    // Path: /actor/{actorName}/invoke → actorName
+    // Path: /actor/{actorName}/invoke → actorName, where actorName may itself contain slashes
     static String extractActorName(String path) {
         if (path == null) return null;
         if (!path.startsWith(CONTEXT_PREFIX)) return null;
         String after = path.substring(CONTEXT_PREFIX.length());
-        int slashIdx = after.indexOf('/');
-        if (slashIdx <= 0) return null;
-        String name = after.substring(0, slashIdx);
-        String rest = after.substring(slashIdx);
-        if (!CONTEXT_SUFFIX.equals(rest)) return null;
+        // The name runs to the end of the path, not to the first slash: actor names are
+        // hierarchical (project1/chat-01), so a slash inside one is part of the name.
+        if (!after.endsWith(CONTEXT_SUFFIX)) return null;
+        String name = after.substring(0, after.length() - CONTEXT_SUFFIX.length());
+        if (name.isEmpty()) return null;
         return name;
     }
 

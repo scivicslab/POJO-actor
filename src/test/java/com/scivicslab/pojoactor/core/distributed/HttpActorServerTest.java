@@ -3,6 +3,7 @@ package com.scivicslab.pojoactor.core.distributed;
 import com.scivicslab.pojoactor.core.ActionResult;
 import com.scivicslab.pojoactor.core.ActorRef;
 import com.scivicslab.pojoactor.core.ActorSystem;
+import com.scivicslab.pojoactor.core.CallableByActionName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,18 @@ class HttpActorServerTest {
     @Test
     void extractActorName_hyphenatedName() {
         assertEquals("order-saga", HttpActorServer.extractActorName("/actor/order-saga/invoke"));
+    }
+
+    /**
+     * Actor names are hierarchical: a conversation in chat-ui-with-audit-trail is
+     * {@code project1/chat-01}. The name occupies every path segment between the prefix and
+     * {@code /invoke}, so the slashes inside it must not be mistaken for the boundary — otherwise
+     * no actor below the root can be called from another process at all.
+     */
+    @Test
+    void extractActorName_nameWithSlashes() {
+        assertEquals("project1/chat-01",
+                HttpActorServer.extractActorName("/actor/project1/chat-01/invoke"));
     }
 
     @Test
@@ -94,6 +107,52 @@ class HttpActorServerTest {
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"success\":true"));
             assertTrue(response.body().contains("\"result\":\"42\""));
+        } finally {
+            server.close();
+            system.terminate();
+        }
+    }
+
+    /**
+     * An {@code ActorRef} subclass can itself know how to dispatch by action name — that is what
+     * {@code IIActorRef} in Turing-workflow is, and every actor a workflow can call is one. The
+     * POJO it holds knows nothing of action names, so unwrapping to it and asking there finds
+     * nothing: the ref has to be asked first.
+     */
+    static class DispatchingRef extends ActorRef<Object> implements CallableByActionName {
+        DispatchingRef(String name, ActorSystem system) {
+            super(name, new Object(), system);
+        }
+
+        @Override
+        public ActionResult callByActionName(String actionName, String args) {
+            return new ActionResult(true, "ref handled " + actionName);
+        }
+    }
+
+    @Test
+    void e2e_refThatDispatchesByActionNameIsAskedItself() throws Exception {
+        int port = 18183;
+        ActorSystem system = new ActorSystem("test");
+        system.addActor(new DispatchingRef("workflowCallable", system));
+
+        HttpActorServer server = new HttpActorServer(system, "127.0.0.1", port);
+        server.start();
+
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            ActorMessage msg = new ActorMessage("workflowCallable", "step", "");
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://127.0.0.1:" + port + "/actor/workflowCallable/invoke"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(msg.toJson()))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"success\":true"), response.body());
+            assertTrue(response.body().contains("ref handled step"), response.body());
         } finally {
             server.close();
             system.terminate();
