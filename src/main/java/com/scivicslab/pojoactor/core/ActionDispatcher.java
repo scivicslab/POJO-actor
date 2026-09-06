@@ -250,6 +250,20 @@ public class ActionDispatcher {
      * Returns {@code true} if an {@link Action @Action}-annotated method is registered
      * for the given name.
      */
+    /**
+     * The names of every {@link Action @Action} this dispatcher can invoke.
+     *
+     * <p>What a caller in another process needs first: which actions exist on an actor, before
+     * asking what one of them takes ({@code ActionArgumentSchema_260807_oo01} step 3). Sorted so
+     * the same actor always reports them in the same order.
+     *
+     * @return the action names, in name order
+     */
+    public java.util.SortedSet<String> actionNames() {
+        discover();
+        return new java.util.TreeSet<>(actionMethods.keySet());
+    }
+
     public boolean has(String actionName) {
         discover();
         return actionMethods.containsKey(actionName);
