@@ -42,7 +42,7 @@ Maven Dependency
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>3.0.0</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 
@@ -166,9 +166,17 @@ actor.ask(a -> a.performMatrixMultiplication(), system.getManagedThreadPool());
 ```
 
 
-## Workflow Engine: Turing-workflow
+## Companion libraries
 
-POJO-actor provides the actor model foundation. For workflow execution — YAML-based state machines that turn actors into autonomous agents — see [Turing-workflow](https://github.com/scivicslab/Turing-workflow).
+POJO-actor provides the actor model foundation and nothing else: an actor sends a lambda to
+another actor and optionally waits for the answer. Two separate libraries build on it.
+
+[Turing-workflow](https://github.com/scivicslab/Turing-workflow) runs YAML state machines over
+actors and dispatches methods by name, so a workflow step can name the action it wants.
+
+[pojo-actor-distributed](https://github.com/scivicslab/pojo-actor-distributed) carries messages
+between actor systems in different processes over HTTP, and finds the peer nodes on Slurm,
+Kubernetes and Grid Engine.
 
 [![Turing-workflow](https://img.shields.io/maven-central/v/com.scivicslab/turing-workflow.svg?label=turing-workflow)](https://central.sonatype.com/artifact/com.scivicslab/turing-workflow)
 
@@ -186,15 +194,14 @@ A comprehensive list of features provided by POJO-actor.
 - **Immediate Execution** — Bypass message queues with tellNow/askNow
 - **Actor Hierarchies** — Parent-child relationships for actor supervision
 
-### Distributed
-- **Distributed Actor System** — Inter-node communication via HTTP
-- **Remote Actor Reference** — Transparent access to actors on remote nodes
-- **Node Discovery** — Auto-detection for Slurm/Kubernetes/Grid Engine environments
+### Actor state
+- **JSON State** — Key-value state attached to an actor, readable as JSON or YAML
+- **Variable Expansion** — Substitute `${key}` in a string from the actor's JSON state
+- **Attribute Keys** — Typed attributes that avoid casting on the way out
 
-### Workflow Engine
-- **YAML Workflow** — Define workflows in YAML format
-- **Subworkflows** — Split and reuse workflow definitions
-- **YAML Overlay** — Environment-specific configuration (dev/staging/prod)
+### Collecting results
+- **Accumulators** — Gather results arriving from many actors, as JSON, as a table, or as a stream
+- **Scheduler** — Send a message into an actor once, at a fixed rate, or with a fixed delay
 
 ### Extensibility
 - **Dynamic Actor Loading** — Load actors from external JARs at runtime
@@ -215,7 +222,7 @@ cp -r reference ~/.claude/skills/pojo-actor/
 ```
 
 After installation, Claude Code automatically loads the skill from `~/.claude/skills/pojo-actor/SKILL.md` at session start.
-The `reference/` subdirectory contains detail pages (scheduler, accumulator, plugin, distributed) that the skill links to.
+The `reference/` subdirectory contains detail pages (scheduler, accumulator, plugin) that the skill links to.
 
 ---
 

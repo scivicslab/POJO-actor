@@ -7,7 +7,7 @@
 
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>4.0.0-SNAPSHOT</version>
+    <version>4.0.0</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
@@ -57,38 +57,25 @@
 
     <dependencies>
 
-      <!-- Workflow engine dependencies -->
+      <!-- JsonState: YAML rendering of the actor state -->
       <dependency>
         <groupId>org.yaml</groupId>
         <artifactId>snakeyaml</artifactId>
         <version>2.5</version>
       </dependency>
 
-      <dependency>
-        <groupId>com.fasterxml.jackson.dataformat</groupId>
-        <artifactId>jackson-dataformat-yaml</artifactId>
-        <version>2.20.0</version>
-      </dependency>
-
+      <!-- JsonState: JSON tree manipulation -->
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
         <version>2.20.0</version>
       </dependency>
 
-      <!-- JSON processing -->
       <dependency>
         <groupId>org.json</groupId>
         <artifactId>json</artifactId>
         <version>20240303</version>
       </dependency>
-
-      <!-- ActionSchemaGenerator (optional: only needed by projects that run the build-time
-           JSON Schema generation step for @Action(argsType=...) methods) -->
-
-      <!-- ActionSchemaRegistry / runtime dispatch validation (optional: only needed by projects
-           that validate @Action(argsType=...) arguments against the generated JSON Schema) -->
-
 
       <dependency>
         <groupId>org.junit.jupiter</groupId>

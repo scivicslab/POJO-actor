@@ -11,7 +11,7 @@ Designed around Java 21 virtual threads, zero reflection, and FIFO message order
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>3.0.1</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 
@@ -191,12 +191,11 @@ Auto-register actors from an external JAR via the service loader. Runtime loadin
 
 ---
 
-## Distributed actors (DistributedActorSystem)
+## Distributed actors — a separate library
 
-An actor system that spans multiple nodes in an HPC cluster or on Kubernetes.
-Supports two transports: HTTP (for Slurm, etc.) and Kafka (for Kubernetes).
-
-See `reference/distributed.md` for details.
+`DistributedActorSystem` is not part of POJO-actor. It lives in
+[pojo-actor-distributed](https://github.com/scivicslab/pojo-actor-distributed), which depends on
+POJO-actor and carries messages between actor systems in different processes.
 
 ---
 
