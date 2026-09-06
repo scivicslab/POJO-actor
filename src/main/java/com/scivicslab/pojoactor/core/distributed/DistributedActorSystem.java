@@ -160,6 +160,40 @@ public class DistributedActorSystem implements AutoCloseable {
         localActorSystem.terminate();
     }
 
+    /**
+     * How far above an application's own HTTP port its actors are published.
+     *
+     * <p>1000 puts the publication ports in a band of their own: an application on 28030 publishes
+     * on 29030, and no application's publication port can collide with another's HTTP port as long
+     * as the HTTP ports stay within a thousand of each other.
+     */
+    public static final int PUBLICATION_PORT_OFFSET = 1000;
+
+    /**
+     * The port an application publishes its actors on, given the port it serves HTTP on.
+     *
+     * <p>This is the one definition of that number. The application that publishes and the process
+     * that calls in both use it, so neither has to be configured with the other's port: they agree
+     * on the one port a person can already see, and derive the rest.
+     *
+     * <p>Deriving rather than configuring matters when something else assigns the HTTP port — a
+     * launcher that hands out ports from a range gives a different one on each start, and a
+     * configured publication port would have to be corrected every time.
+     *
+     * @param httpPort the port the application serves HTTP on
+     * @return the port to publish actors on
+     * @throws IllegalArgumentException if the result would not be a usable port
+     */
+    public static int publicationPortFor(int httpPort) {
+        int port = httpPort + PUBLICATION_PORT_OFFSET;
+        if (httpPort <= 0 || port > 65535) {
+            throw new IllegalArgumentException(
+                    "Cannot publish actors for an application on HTTP port " + httpPort
+                    + ": " + httpPort + " + " + PUBLICATION_PORT_OFFSET + " is not a usable port");
+        }
+        return port;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
