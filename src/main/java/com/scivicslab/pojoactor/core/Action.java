@@ -120,10 +120,10 @@ public @interface Action {
      * The Java type the method's single argument is deserialized into, or
      * {@code Void.class} (the default) to keep the current raw-{@code String} behavior.
      *
-     * <p>When set to a Java {@code record} type, {@link ActionDispatcher} deserializes
-     * the incoming JSON {@code args} string into an instance of this type (via Jackson)
-     * before invoking the method, and the annotated method must declare that type as
-     * its single parameter instead of {@code String}:</p>
+     * <p>When set, {@link ActionDispatcher} deserializes the incoming JSON {@code args}
+     * string into an instance of this type (via Jackson) before invoking the method, and the
+     * annotated method must declare that type as its single parameter instead of
+     * {@code String}. Declare a {@code record} — see below:</p>
      *
      * <pre>{@code
      * public record ConfigureArgs(String hostname, int port, boolean ssl) {}
@@ -135,6 +135,21 @@ public @interface Action {
      * <p>This is purely opt-in: methods that omit {@code argsType} (the default,
      * {@code Void.class}) are discovered and invoked exactly as before — unchanged
      * {@code ActionResult method(String args)} signature, no deserialization.</p>
+     *
+     * <h2>Declare a record, not an array</h2>
+     *
+     * <p>Any type Jackson can deserialize works here, including {@code String[]} and
+     * {@code int[]}, which produce a JSON Schema of {@code "type": "array"} and accept a
+     * workflow's {@code arguments: ["a", "b"]}. <strong>Do not use them.</strong> Declare a
+     * record, so that every argument arrives under a name.</p>
+     *
+     * <p>An array carries meaning in the order of its elements, and nothing checks that order.
+     * Swapping two arguments of the same type passes deserialization, passes schema validation,
+     * and calls the method with the values exchanged. Under a record, the same mistake is a key
+     * that does not match a component.</p>
+     *
+     * <p>Cost of the rule: a one-argument call is written {@code arguments: {name: "World"}}
+     * rather than {@code arguments: "World"}. See {@code ActionArgumentSchema_260807_oo01}.</p>
      *
      * @return the argument type to deserialize into, or {@code Void.class} for the
      *         default raw-{@code String} behavior
