@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies state S2.05: DynamicActorLoader loads CallableByActionName actors from external JARs.
+ * Verifies state S2.05: DynamicActorLoader loads TestCalculator actors from external JARs.
  *
  * The plugin JAR is compiled at test time from source strings using javax.tools.JavaCompiler.
  * The plugin class (TestMathPlugin) is in package com.example.testplugin — a package not on
@@ -64,29 +64,15 @@ public class DynamicActorLoaderTest {
         }
 
         @Test
-        @DisplayName("loaded actor implements CallableByActionName and dispatches correctly")
-        void callByActionNameDispatches() throws Exception {
+        @DisplayName("loaded actor implements the plugin interface and answers")
+        void loadedActorDispatches() throws Exception {
             ActorRef<?> actor = DynamicActorLoader.loadActor(
                 pluginJar, TestPluginJarBuilder.MATH_PLUGIN_CLASS, "math");
 
-            ActionResult r = actor.ask(a -> ((CallableByActionName) a).callByActionName("add", "5,3"))
+            String r = actor.ask(a -> ((TestCalculator) a).add("5,3"))
                                   .get(3, TimeUnit.SECONDS);
 
-            assertTrue(r.isSuccess());
-            assertEquals("8", r.getResult());
-            actor.close();
-        }
-
-        @Test
-        @DisplayName("unknown action returns success=false without throwing")
-        void unknownActionReturnsFalse() throws Exception {
-            ActorRef<?> actor = DynamicActorLoader.loadActor(
-                pluginJar, TestPluginJarBuilder.MATH_PLUGIN_CLASS, "math");
-
-            ActionResult r = actor.ask(a -> ((CallableByActionName) a).callByActionName("divide", "10,2"))
-                                  .get(3, TimeUnit.SECONDS);
-
-            assertFalse(r.isSuccess());
+                        assertEquals("8", r);
             actor.close();
         }
 
@@ -133,16 +119,15 @@ public class DynamicActorLoaderTest {
         }
 
         @Test
-        @DisplayName("loaded actor responds to callByActionName through system")
-        void callByActionNameViaSystem() throws Exception {
+        @DisplayName("loaded actor answers through the system")
+        void loadedActorDispatchesViaSystem() throws Exception {
             ActorRef<?> actor = DynamicActorLoader.loadActorIntoSystem(
                 system, pluginJar, TestPluginJarBuilder.MATH_PLUGIN_CLASS, "math");
 
-            ActionResult r = actor.ask(a -> ((CallableByActionName) a).callByActionName("add", "5,3"))
+            String r = actor.ask(a -> ((TestCalculator) a).add("5,3"))
                                   .get(3, TimeUnit.SECONDS);
 
-            assertTrue(r.isSuccess());
-            assertEquals("8", r.getResult());
+                        assertEquals("8", r);
         }
 
         @Test
@@ -154,10 +139,9 @@ public class DynamicActorLoaderTest {
             ActorRef<?> retrieved = system.getActor("math");
             assertNotNull(retrieved);
 
-            ActionResult r = retrieved.ask(a -> ((CallableByActionName) a).callByActionName("add", "3,4"))
+            String r = retrieved.ask(a -> ((TestCalculator) a).add("3,4"))
                                       .get(3, TimeUnit.SECONDS);
-            assertTrue(r.isSuccess());
-            assertEquals("7", r.getResult());
+                        assertEquals("7", r);
         }
 
         @Test
@@ -166,13 +150,12 @@ public class DynamicActorLoaderTest {
             ActorRef<?> actor = DynamicActorLoader.loadActorIntoSystem(
                 system, pluginJar, TestPluginJarBuilder.MATH_PLUGIN_CLASS, "math");
 
-            actor.tell(a -> ((CallableByActionName) a).callByActionName("add", "10,5"));
+            actor.tell(a -> ((TestCalculator) a).add("10,5"));
 
-            ActionResult r = actor.ask(a -> ((CallableByActionName) a).callByActionName("getLastResult", ""))
+            String r = actor.ask(a -> ((TestCalculator) a).lastResult())
                                   .get(3, TimeUnit.SECONDS);
 
-            assertTrue(r.isSuccess());
-            assertEquals("15", r.getResult());
+            assertEquals("15", r);
         }
     }
 }

@@ -588,19 +588,16 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * Sets the last action result for this actor.
      *
-     * <p>The result is stored in the JSON state under the {@code _lastResult} key,
-     * unifying result storage with the JSON State API.</p>
+     * <p>Stored in the JSON state under the {@code _lastResult} key, which is what
+     * {@code expandVariables} reads for {@code ${result}}. The value is a plain string:
+     * what an action returned is Turing-workflow's vocabulary, not this class's.</p>
      *
-     * @param result the result to store
+     * @param value the value to store, or null to clear it
      * @since 2.13.0
      * @since 2.14.0 Now stores in JSON state instead of separate field
      */
-    public void setLastResult(ActionResult result) {
-        if (result != null && result.getResult() != null) {
-            json().put(LAST_RESULT_KEY, result.getResult());
-        } else {
-            json().put(LAST_RESULT_KEY, null);
-        }
+    public void setLastResultValue(String value) {
+        json().put(LAST_RESULT_KEY, value);
     }
 
     /**
@@ -608,16 +605,12 @@ public class ActorRef<T> implements AutoCloseable {
      *
      * <p>Retrieves the result from the JSON state where it is stored under {@code _lastResult}.</p>
      *
-     * @return the last result wrapped in ActionResult, or null if no action has been executed
+     * @return the stored value, or null if nothing has been stored
      * @since 2.13.0
      * @since 2.14.0 Now retrieves from JSON state instead of separate field
      */
-    public ActionResult getLastResult() {
-        String resultValue = json().getString(LAST_RESULT_KEY);
-        if (resultValue != null) {
-            return new ActionResult(true, resultValue);
-        }
-        return null;
+    public String getLastResultValue() {
+        return json().getString(LAST_RESULT_KEY);
     }
 
     /**

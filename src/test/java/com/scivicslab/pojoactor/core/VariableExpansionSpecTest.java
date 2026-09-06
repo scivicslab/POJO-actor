@@ -112,7 +112,7 @@ class VariableExpansionSpecTest {
         @Test
         @DisplayName("例4: プレーンテキスト結果の展開")
         void expand_plainTextResult() {
-            actor.setLastResult(new ActionResult(true, "hello world"));
+            actor.setLastResultValue("hello world");
 
             String result = actor.expandVariables("Output: ${result}");
 
@@ -123,7 +123,7 @@ class VariableExpansionSpecTest {
         @DisplayName("例5: JSONオブジェクト結果の展開【核心】")
         void expand_jsonObjectResult_returnsJsonString() {
             String jsonOutput = "{\"cluster\":\"https://k8s.example.com\",\"nodes\":2}";
-            actor.setLastResult(new ActionResult(true, jsonOutput));
+            actor.setLastResultValue(jsonOutput);
 
             String result = actor.expandVariables("${result}");
 
@@ -139,7 +139,7 @@ class VariableExpansionSpecTest {
         @DisplayName("例6: JSON配列結果の展開")
         void expand_jsonArrayResult_returnsJsonString() {
             String jsonArray = "[{\"name\":\"ns1\"},{\"name\":\"ns2\"}]";
-            actor.setLastResult(new ActionResult(true, jsonArray));
+            actor.setLastResultValue(jsonArray);
 
             String result = actor.expandVariables("${result}");
 
@@ -151,7 +151,7 @@ class VariableExpansionSpecTest {
         @Test
         @DisplayName("例7: ${result}を含む複合文字列")
         void expand_resultInComplexString() {
-            actor.setLastResult(new ActionResult(true, "{\"key\":\"value\"}"));
+            actor.setLastResultValue("{\"key\":\"value\"}");
 
             String result = actor.expandVariables("Data: ${result} (end)");
 
@@ -164,7 +164,7 @@ class VariableExpansionSpecTest {
         @Test
         @DisplayName("例16: null結果は展開されない")
         void expand_nullResult_unchanged() {
-            actor.setLastResult(new ActionResult(true, null));
+            actor.setLastResultValue(null);
 
             String result = actor.expandVariables("${result}");
 
@@ -270,7 +270,7 @@ class VariableExpansionSpecTest {
         @Test
         @DisplayName("例15: 空のJSONオブジェクト")
         void expand_emptyJsonObject() {
-            actor.setLastResult(new ActionResult(true, "{}"));
+            actor.setLastResultValue("{}");
 
             String result = actor.expandVariables("${result}");
 
@@ -280,7 +280,7 @@ class VariableExpansionSpecTest {
         @Test
         @DisplayName("空のJSON配列")
         void expand_emptyJsonArray() {
-            actor.setLastResult(new ActionResult(true, "[]"));
+            actor.setLastResultValue("[]");
 
             String result = actor.expandVariables("${result}");
 
@@ -301,7 +301,7 @@ class VariableExpansionSpecTest {
         void workflow_executeCommandToPutJson() {
             // 1. executeCommandがJSONを出力したことをシミュレート
             String commandOutput = "{\"total\":2}";
-            actor.setLastResult(new ActionResult(true, commandOutput));
+            actor.setLastResultValue(commandOutput);
 
             // 2. ${result}を展開
             String expandedValue = actor.expandVariables("${result}");
@@ -317,11 +317,11 @@ class VariableExpansionSpecTest {
         @DisplayName("例14: 複数回のputJsonパターン")
         void workflow_multiplePutJson() {
             // 1回目のコマンド実行
-            actor.setLastResult(new ActionResult(true, "{\"name\":\"cluster1\"}"));
+            actor.setLastResultValue("{\"name\":\"cluster1\"}");
             actor.putJson("cluster", actor.expandVariables("${result}"));
 
             // 2回目のコマンド実行
-            actor.setLastResult(new ActionResult(true, "[{\"ns\":\"default\"}]"));
+            actor.setLastResultValue("[{\"ns\":\"default\"}]");
             actor.putJson("namespaces", actor.expandVariables("${result}"));
 
             // 検証
@@ -334,7 +334,7 @@ class VariableExpansionSpecTest {
         void workflow_kubectlOutputSimulation() {
             // kubectlの出力をシミュレート
             String kubectlOutput = "{\"cluster\":\"https://192.168.5.23:16443\",\"hostname\":\"stonefly514\",\"total\":2,\"byStatus\":{\"NotReady\":1,\"Ready\":1},\"names\":[\"stonefly522\",\"stonefly523\"]}";
-            actor.setLastResult(new ActionResult(true, kubectlOutput));
+            actor.setLastResultValue(kubectlOutput);
 
             // ${result}を展開してputJson
             String expanded = actor.expandVariables("${result}");
@@ -457,7 +457,7 @@ class VariableExpansionSpecTest {
         void issue_jsonObjectResultExpansion() {
             // この動作が正しく実装されていることを確認
             String jsonOutput = "{\"key\":\"value\"}";
-            actor.setLastResult(new ActionResult(true, jsonOutput));
+            actor.setLastResultValue(jsonOutput);
 
             String result = actor.expandVariables("${result}");
 

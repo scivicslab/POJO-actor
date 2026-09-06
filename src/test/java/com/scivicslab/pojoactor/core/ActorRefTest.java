@@ -423,7 +423,7 @@ public class ActorRefTest {
         ActorRef<String> actor = new ActorRef<>("testActor", "data");
 
         // Set last result
-        actor.setLastResult(new ActionResult(true, "command output"));
+        actor.setLastResultValue("command output");
 
         // Expand ${result}
         String expanded = actor.expandVariables("Output: ${result}");
@@ -448,7 +448,7 @@ public class ActorRefTest {
         // Store values
         actor.putJson("hostname", "node1");
         actor.putJson("port", "8080");
-        actor.setLastResult(new ActionResult(true, "OK"));
+        actor.setLastResultValue("OK");
 
         // Expand multiple variables
         String expanded = actor.expandVariables("${json.hostname}:${json.port} - ${result}");

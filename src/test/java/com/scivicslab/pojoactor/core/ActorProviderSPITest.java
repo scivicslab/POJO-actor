@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * Verifies state S3: ActorProvider SPI + ServiceLoader auto-discovery.
  *
  * The plugin JAR is compiled at test time and includes:
- *   - TestMathPlugin (implements CallableByActionName)
+ *   - TestMathPlugin (implements TestCalculator)
  *   - TestMathPluginProvider (implements ActorProvider)
  *   - META-INF/services/com.scivicslab.pojoactor.core.ActorProvider
  */
@@ -91,7 +91,7 @@ public class ActorProviderSPITest {
     }
 
     @Test
-    @DisplayName("registered actor responds to callByActionName")
+    @DisplayName("registered actor answers")
     void registeredActorIsCallable() throws Exception {
         ServiceLoader<ActorProvider> loader = loadProviders();
         for (ActorProvider provider : loader) {
@@ -101,11 +101,10 @@ public class ActorProviderSPITest {
         ActorRef<?> math = system.getActor("math");
         assertNotNull(math);
 
-        ActionResult r = math.ask(a -> ((CallableByActionName) a).callByActionName("add", "5,3"))
+        String r = math.ask(a -> ((TestCalculator) a).add("5,3"))
                              .get(3, TimeUnit.SECONDS);
 
-        assertTrue(r.isSuccess());
-        assertEquals("8", r.getResult());
+                assertEquals("8", r);
     }
 
     @Test
