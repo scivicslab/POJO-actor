@@ -112,11 +112,6 @@ int    retry = ref.ask(a -> a.getJsonInt("workflow.retry", 0)).join();
 String host  = ref.ask(a -> a.getJsonString("hosts[0]")).join();
 bool   found = ref.ask(a -> a.hasJson("workflow.retry")).join();
 
-// Variable expansion inside workflows
-// ${result}      → result of the previous action
-// ${json.key}    → value from JsonState
-String expanded = actor.expandVariables("Host is ${json.hostname}");
-
 // Clear
 ref.tell(a -> a.clearJsonState());
 ```

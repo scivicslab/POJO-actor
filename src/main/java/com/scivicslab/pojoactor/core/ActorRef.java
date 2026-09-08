@@ -588,9 +588,9 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * Sets the last action result for this actor.
      *
-     * <p>Stored in the JSON state under the {@code _lastResult} key, which is what
-     * {@code expandVariables} reads for {@code ${result}}. The value is a plain string:
-     * what an action returned is Turing-workflow's vocabulary, not this class's.</p>
+     * <p>Stored in the JSON state under the {@code _lastResult} key. Turing Workflow's
+     * JEXL context exposes it as {@code result}. The value is a plain string: what an
+     * action returned is Turing-workflow's vocabulary, not this class's.</p>
      *
      * @param value the value to store, or null to clear it
      * @since 2.13.0
@@ -613,85 +613,6 @@ public class ActorRef<T> implements AutoCloseable {
         return json().getString(LAST_RESULT_KEY);
     }
 
-    /**
-     * Expands variable references in a string.
-     *
-     * <p>Replaces {@code ${varName}} patterns with values from this actor's JSON state:</p>
-     * <ul>
-     *   <li>{@code ${result}} - the result of the last action (stored in JSON state as {@code result})</li>
-     *   <li>{@code ${key}} or {@code ${nested.key}} - values from this actor's JSON state</li>
-     *   <li>{@code ${json.key}} - also looks up in JSON state (with optional "json." prefix)</li>
-     * </ul>
-     *
-     * <p>If a variable is not found, the pattern is left unchanged.</p>
-     *
-     * @param input the string containing ${...} patterns
-     * @return the expanded string
-     * @since 2.13.0
-     * @since 2.14.0 All variables (including result) stored in unified JSON state
-     */
-    public String expandVariables(String input) {
-        if (input == null || !input.contains("${")) {
-            return input;
-        }
-
-        String expanded = input;
-
-        // All variables are stored in jsonState
-        if (jsonState != null) {
-            int startIndex = 0;
-            while (true) {
-                int start = expanded.indexOf("${", startIndex);
-                if (start == -1) break;
-
-                int end = expanded.indexOf("}", start);
-                if (end == -1) break;
-
-                String varName = expanded.substring(start + 2, end);
-
-                // Strip optional "json." prefix
-                String jsonPath = varName.startsWith("json.") ? varName.substring(5) : varName;
-
-                String value = getVariableValue(jsonPath);
-                if (value != null) {
-                    expanded = expanded.substring(0, start) + value + expanded.substring(end + 1);
-                    // Advance past the substituted value to avoid re-scanning it.
-                    // Re-scanning would cause an infinite loop when the substituted text
-                    // itself contains "${...}" patterns (e.g. LaTeX math in OCR output).
-                    startIndex = start + value.length();
-                } else {
-                    startIndex = end + 1;
-                }
-            }
-        }
-
-        return expanded;
-    }
-
-    /**
-     * Gets a variable value as a string, handling objects and arrays.
-     *
-     * <p>For scalar values (string, number, boolean), returns the text representation.
-     * For objects and arrays, returns the JSON string representation.</p>
-     *
-     * @param path the path to the value
-     * @return the string representation, or null if not found
-     */
-    private String getVariableValue(String path) {
-        if (jsonState == null) {
-            return null;
-        }
-        var node = jsonState.select(path);
-        if (node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-        // For objects and arrays, return JSON string representation
-        if (node.isObject() || node.isArray()) {
-            return node.toString();
-        }
-        // For scalar values, return text representation
-        return node.asText();
-    }
 
     // ========================================================================
     // AttributeKey API

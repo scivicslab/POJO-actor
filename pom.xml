@@ -7,7 +7,7 @@
 
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>4.0.0</version>
+    <version>4.1.0</version>
     <packaging>jar</packaging>
 
     <name>POJO-actor</name>
