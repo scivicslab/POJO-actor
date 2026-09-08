@@ -8,7 +8,7 @@ A lightweight, GraalVM Native Image compatible actor model library for Java that
 
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Javadoc](https://img.shields.io/badge/javadoc-3.0.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
+[![Javadoc](https://img.shields.io/badge/javadoc-4.1.0-brightgreen.svg)](https://scivicslab.github.io/POJO-actor/)
 [![Official Docs](https://img.shields.io/badge/docs-scivicslab.com-green.svg)](https://scivicslab.com/docs/pojo-actor/introduction)
 
 
@@ -42,7 +42,7 @@ Maven Dependency
 <dependency>
     <groupId>com.scivicslab</groupId>
     <artifactId>pojo-actor</artifactId>
-    <version>4.0.0</version>
+    <version>4.1.0</version>
 </dependency>
 ```
 
@@ -196,7 +196,6 @@ A comprehensive list of features provided by POJO-actor.
 
 ### Actor state
 - **JSON State** — Key-value state attached to an actor, readable as JSON or YAML
-- **Variable Expansion** — Substitute `${key}` in a string from the actor's JSON state
 - **Attribute Keys** — Typed attributes that avoid casting on the way out
 
 ### Collecting results
