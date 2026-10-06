@@ -299,12 +299,70 @@ public class ActorSystem {
 
     
     /**
-     * Removes an actor from the system.
-     * 
+     * Removes one actor: stops its virtual thread, takes it out of this system's registry, and
+     * takes its name out of its parent's {@link ActorRef#getNamesOfChildren()} (if the parent is
+     * still registered). Does nothing to any children {@code actorName} itself has — see
+     * {@link #removeOffsprings(String)} for that.
+     *
+     * <p>Removes from the registry before closing, so {@link ActorRef#close()}'s own trailing
+     * call back into this method (guarded by {@link #hasActor(String)}) is a no-op — the actor
+     * is gone from the map by the time that guard runs, whether {@code removeActor} or
+     * {@code close()} was called first.
+     *
      * @param actorName the name of the actor to remove
      */
     public void removeActor(String actorName) {
-        actors.remove(actorName);
+        ActorRef<?> actor = actors.remove(actorName);
+        if (actor == null) {
+            return;
+        }
+        String parentName = actor.getParentName();
+        if (parentName != null) {
+            ActorRef<?> parent = actors.get(parentName);
+            if (parent != null) {
+                parent.getNamesOfChildren().remove(actorName);
+            }
+        }
+        if (actor.isAlive()) {
+            actor.close();
+        }
+    }
+
+    /**
+     * Removes every descendant of {@code actorName}, leaf before parent, leaving
+     * {@code actorName} itself in place. Each descendant is removed the same way
+     * {@link #removeActor(String)} removes one actor — thread stopped, taken out of this
+     * system's registry, taken out of its own parent's children set.
+     *
+     * <p>A child name that no longer resolves to a registered {@link ActorRef} (stale
+     * bookkeeping) is still dropped from {@code actorName}'s children set — {@code
+     * removeActor} cannot do that for a name it never finds in the registry, so this method
+     * does it directly after descending into the name.
+     *
+     * @param actorName the actor whose descendants (not itself) are to be removed
+     */
+    public void removeOffsprings(String actorName) {
+        ActorRef<?> actor = actors.get(actorName);
+        if (actor == null) {
+            return;
+        }
+        for (String childName : new ArrayList<>(actor.getNamesOfChildren())) {
+            removeOffsprings(childName);
+            removeActor(childName);
+            actor.getNamesOfChildren().remove(childName);
+        }
+    }
+
+    /**
+     * Removes {@code actorName} itself along with every descendant it has — the whole
+     * subtree, leaf before root. Equivalent to {@link #removeOffsprings(String)} followed by
+     * {@link #removeActor(String)}.
+     *
+     * @param actorName the root of the subtree to remove
+     */
+    public void removeActorRecursively(String actorName) {
+        removeOffsprings(actorName);
+        removeActor(actorName);
     }
 
 

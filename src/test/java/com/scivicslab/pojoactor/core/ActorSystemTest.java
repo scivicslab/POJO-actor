@@ -316,4 +316,100 @@ public class ActorSystemTest {
 
         system.terminate();
     }
+
+    /**
+     * Example 9: removeActor stops the thread and cleans up the parent's children set.
+     *
+     * Situation: A parent actor has a child; the child is removed.
+     * Expected: The child's virtual thread stops, it is gone from the system, and its name
+     * is gone from the parent's NamesOfChildren -- not just from the system's registry.
+     */
+    @DisplayName("Should stop the thread and unlink from the parent on removeActor")
+    @Test
+    @Order(9)
+    public void testRemoveActorStopsThreadAndUnlinksParent() {
+        ActorSystem system = new ActorSystem("system1");
+        ActorRef<String> parent = system.actorOf("parent", "p");
+        ActorRef<String> child = parent.createChild("child", "c");
+
+        assertTrue(parent.getNamesOfChildren().contains("child"), "Parent should list the child before removal");
+        assertTrue(child.isAlive(), "Child should be alive before removal");
+
+        system.removeActor("child");
+
+        assertFalse(system.hasActor("child"), "Child should be gone from the system registry");
+        assertFalse(child.isAlive(), "Child's virtual thread should have stopped");
+        assertFalse(parent.getNamesOfChildren().contains("child"), "Parent should no longer list the child");
+
+        // Calling removeActor again on an already-removed name is a no-op, not an error.
+        system.removeActor("child");
+
+        system.terminate();
+    }
+
+    /**
+     * Example 10: removeOffsprings removes every descendant, leaf before parent, but not the
+     * actor itself.
+     *
+     * Situation: An actor has a child, and that child has its own child (a grandchild).
+     * Expected: removeOffsprings on the top actor stops and removes both the child and the
+     * grandchild, empties the top actor's children set, and leaves the top actor itself alive.
+     */
+    @DisplayName("Should remove every descendant leaf-first, leaving the actor itself alone")
+    @Test
+    @Order(10)
+    public void testRemoveOffsprings() {
+        ActorSystem system = new ActorSystem("system1");
+        ActorRef<String> root = system.actorOf("root", "r");
+        ActorRef<String> child = root.createChild("child", "c");
+        ActorRef<String> grandchild = child.createChild("grandchild", "g");
+
+        system.removeOffsprings("root");
+
+        assertTrue(root.isAlive(), "The actor removeOffsprings was called on should stay alive");
+        assertTrue(system.hasActor("root"), "root itself should remain in the registry");
+        assertTrue(root.getNamesOfChildren().isEmpty(), "root's children set should end up empty");
+
+        assertFalse(child.isAlive(), "child's virtual thread should have stopped");
+        assertFalse(system.hasActor("child"), "child should be gone from the system registry");
+        assertFalse(grandchild.isAlive(), "grandchild's virtual thread should have stopped");
+        assertFalse(system.hasActor("grandchild"), "grandchild should be gone from the system registry");
+
+        system.terminate();
+    }
+
+    /**
+     * Example 11: removeActorRecursively removes the whole subtree, including the actor
+     * named.
+     *
+     * Situation: An actor has a child, and that child has its own child (a grandchild).
+     * Expected: removeActorRecursively on the top actor stops and removes the top actor
+     * itself as well as the child and the grandchild, and unlinks the top actor from its own
+     * parent.
+     */
+    @DisplayName("Should remove the actor itself along with every descendant")
+    @Test
+    @Order(11)
+    public void testRemoveActorRecursively() {
+        ActorSystem system = new ActorSystem("system1");
+        ActorRef<String> top = system.actorOf("top", "t");
+        ActorRef<String> root = top.createChild("root", "r");
+        ActorRef<String> child = root.createChild("child", "c");
+        ActorRef<String> grandchild = child.createChild("grandchild", "g");
+
+        system.removeActorRecursively("root");
+
+        assertFalse(root.isAlive(), "root's virtual thread should have stopped");
+        assertFalse(system.hasActor("root"), "root should be gone from the system registry");
+        assertFalse(top.getNamesOfChildren().contains("root"), "top should no longer list root as a child");
+
+        assertFalse(child.isAlive(), "child's virtual thread should have stopped");
+        assertFalse(system.hasActor("child"), "child should be gone from the system registry");
+        assertFalse(grandchild.isAlive(), "grandchild's virtual thread should have stopped");
+        assertFalse(system.hasActor("grandchild"), "grandchild should be gone from the system registry");
+
+        assertTrue(top.isAlive(), "top itself should stay alive -- it was not the subtree root removed");
+
+        system.terminate();
+    }
 }
