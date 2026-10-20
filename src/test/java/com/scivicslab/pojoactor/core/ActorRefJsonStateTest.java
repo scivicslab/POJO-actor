@@ -245,4 +245,21 @@ class ActorRefJsonStateTest {
 
         assertTrue(nodeActor.getJsonBoolean("workflow.success", false));
     }
+
+    @Test
+    void lastResultValue_keepsTextThatLooksLikeJsonVerbatim() {
+        system = new ActorSystem("test-system");
+        ActorRef<Object> actor = system.actorOf("actor1", new Object());
+
+        String array = "[{\"role\":\"user\",\"content\":\"hello\"}]";
+        actor.setLastResultValue(array);
+        assertEquals(array, actor.getLastResultValue());
+
+        String object = "{\"a\": 1}";
+        actor.setLastResultValue(object);
+        assertEquals(object, actor.getLastResultValue());
+
+        actor.setLastResultValue(null);
+        assertNull(actor.getLastResultValue());
+    }
 }

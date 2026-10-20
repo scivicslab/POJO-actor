@@ -597,7 +597,9 @@ public class ActorRef<T> implements AutoCloseable {
      * @since 2.14.0 Now stores in JSON state instead of separate field
      */
     public void setLastResultValue(String value) {
-        json().put(LAST_RESULT_KEY, value);
+        // A TextNode, so that a result that looks like JSON is not parsed into a structure
+        // (which getString would then read back as an empty string).
+        json().put(LAST_RESULT_KEY, value == null ? null : com.fasterxml.jackson.databind.node.TextNode.valueOf(value));
     }
 
     /**
