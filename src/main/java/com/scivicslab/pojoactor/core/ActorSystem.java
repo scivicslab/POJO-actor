@@ -161,10 +161,12 @@ public class ActorSystem {
      * @param actorName the unique name for the actor
      * @param object the object that will handle messages for this actor
      * @return a reference to the created actor
+     * @throws IllegalStateException when another actor is already registered under {@code actorName}
      */
     public <T> ActorRef<T> actorOf(String actorName, T object) {
+        if (actors.containsKey(actorName)) throw alreadyRegistered(actorName);
         ActorRef<T> actor = new ActorRef<T>(actorName, object, this);
-        actors.put(actorName, actor);
+        register(actorName, actor);
         return actor;
     }
 
@@ -180,19 +182,17 @@ public class ActorSystem {
      */
     @Deprecated
     public <T> ActorRef<T> addActor(String actorName, ActorRef<T> actor) {
-        actors.put(actorName, actor);
-        return actor;
+        return register(actorName, actor);
     }
 
     /** Add the directly generated Actor to the ActorSystem.
      *
      * @param actor An ActorRef object to be added to the ActorSystem.
      * @return The same ActorRef object as the argument.
+     * @throws IllegalStateException when another actor is already registered under its name
      */
     public <T> ActorRef<T> addActor(ActorRef<T> actor) {
-        String actorName = actor.getName();
-        actors.put(actorName, actor);
-        return actor;
+        return register(actor.getName(), actor);
     }
 
     
@@ -201,10 +201,33 @@ public class ActorSystem {
      * @param actor An ActorRef object to be added to the ActorSystem.
      * @param actorName A name to be associated with the ActorRef object.
      * @return The same ActorRef object as the argument.
+     * @throws IllegalStateException when another actor is already registered under {@code actorName}
      */
     public <T> ActorRef<T> addActor(ActorRef<T> actor, String actorName) {
-        actors.put(actorName, actor);
+        return register(actorName, actor);
+    }
+
+    /**
+     * Registers an actor under a name, refusing a name another actor holds.
+     *
+     * <p>Names are one name space for the whole system. Replacing the holder of a name silently left two
+     * actors believing they had it: the first one's owner went on sending to it while a lookup by the name
+     * reached the second, and removing the name removed whichever was registered last. The same actor
+     * registered again under its own name is no change, and is allowed. A name is free again once its actor
+     * is removed.</p>
+     *
+     * @return the actor
+     * @throws IllegalStateException when another actor is already registered under {@code actorName}
+     */
+    private <T> ActorRef<T> register(String actorName, ActorRef<T> actor) {
+        ActorRef<?> held = actors.putIfAbsent(actorName, actor);
+        if (held != null && held != actor) throw alreadyRegistered(actorName);
         return actor;
+    }
+
+    private static IllegalStateException alreadyRegistered(String actorName) {
+        return new IllegalStateException("another actor is already registered as " + actorName
+                + "; remove it first, or give this one a name of its own");
     }
 
 
