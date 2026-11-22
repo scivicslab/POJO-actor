@@ -301,8 +301,9 @@ public class ActorRef<T> implements AutoCloseable {
      * for previously queued messages to complete. This allows for urgent/priority messages
      * that need to be processed right away.
      *
-     * Note: This method executes concurrently with regular tell() messages, so proper
-     * synchronization should be considered if the actor's state could be accessed simultaneously.
+     * Note: This method executes concurrently with regular tell() messages, on its own virtual
+     * thread outside the mailbox. The POJO is not protected from that: with tellNow its thread
+     * safety is the caller's responsibility.
      *
      * @param action action to be executed on actor's object immediately.
      * @return CompletableFuture that completes when the immediate action finishes.
@@ -408,6 +409,9 @@ public class ActorRef<T> implements AutoCloseable {
      * - You need to query the actor's state immediately without waiting for queued messages
      * - Concurrent execution with queued messages is desired
      *
+     * The POJO is not protected from that concurrency: with askNow its thread safety is the
+     * caller's responsibility.
+     *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
      * @return a CompletableFuture that completes with the function's result
@@ -437,9 +441,14 @@ public class ActorRef<T> implements AutoCloseable {
 
 
     /**
-     * Sends a message to this actor using a specific executor service.
-     * The action is executed asynchronously on the provided executor service,
-     * and the result is processed in this actor's thread context.
+     * Runs an action on this actor's object on a specific executor service, outside the actor's
+     * mailbox.
+     *
+     * <p>The action runs on a thread of {@code ws} -- for a {@link ManagedThreadPool}, one of its
+     * real threads -- not on the actor's mailbox virtual thread, and not in turn with the actor's
+     * queued messages. It can run at the same time as a message on the mailbox, as
+     * {@code tellNow}/{@code askNow} work, and as other actions given to this method. The POJO is
+     * not protected from that: on this path its thread safety is the caller's responsibility.</p>
      *
      * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
      * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
@@ -493,9 +502,14 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * Sends a message to this actor and returns a response using a specific executor service.
-     * The action is executed asynchronously on the provided executor service,
-     * and the result is processed in this actor's thread context.
+     * Runs a function on this actor's object on a specific executor service, outside the actor's
+     * mailbox, and returns its result.
+     *
+     * <p>The function runs on a thread of {@code ws} -- for a {@link ManagedThreadPool}, one of its
+     * real threads -- not on the actor's mailbox virtual thread, and not in turn with the actor's
+     * queued messages. It can run at the same time as a message on the mailbox, as
+     * {@code tellNow}/{@code askNow} work, and as other actions given to this method. The POJO is
+     * not protected from that: on this path its thread safety is the caller's responsibility.</p>
      *
      * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
      * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
