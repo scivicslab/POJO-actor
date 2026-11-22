@@ -169,8 +169,35 @@ public class ActorSystem {
     public <T> ActorRef<T> actorOf(String actorName, T object) {
         if (actors.containsKey(actorName)) throw alreadyRegistered(actorName);
         ActorRef<T> actor = new ActorRef<T>(actorName, object, this);
-        register(actorName, actor);
+        if (registerOrClose(actorName, actor) != actor) {
+            // Another caller registered the name after the check above.
+            throw alreadyRegistered(actorName);
+        }
         return actor;
+    }
+
+    /**
+     * Registers an actor that was just made, if the name is free; otherwise closes it.
+     *
+     * <p>Making an actor starts its mailbox loop on a virtual thread, so an actor that loses the
+     * name to another caller must be closed, or that virtual thread stays parked forever and keeps
+     * the actor and its object reachable. This is the one place that does both: every method that
+     * makes an actor for a name and then registers it -- {@link #actorOf}, and a lookup that
+     * creates an actor when its name is free -- registers through here.</p>
+     *
+     * @param actorName the name to register under
+     * @param made the actor just made for that name, not yet registered and not referred to by anyone else
+     * @return {@code made} when it now holds the name; otherwise the actor that already held it,
+     *         with {@code made} closed
+     */
+    protected ActorRef<?> registerOrClose(String actorName, ActorRef<?> made) {
+        ActorRef<?> held = actors.putIfAbsent(actorName, made);
+        if (held != null && held != made) {
+            made.close();
+            return held;
+        }
+        linkToThisSystem(made);
+        return made;
     }
 
     /** Add the directly generated Actor to the ActorSystem.
@@ -210,12 +237,18 @@ public class ActorSystem {
     private <T> ActorRef<T> register(String actorName, ActorRef<T> actor) {
         ActorRef<?> held = actors.putIfAbsent(actorName, actor);
         if (held != null && held != actor) throw alreadyRegistered(actorName);
-        // An actor made with new ActorRef(name, object) has no system yet. Link it to this one,
-        // so that its close() can take its registrations out of this system.
+        linkToThisSystem(actor);
+        return actor;
+    }
+
+    /**
+     * An actor made with new ActorRef(name, object) has no system yet. Links it to this one, so
+     * that its close() can take its registrations out of this system.
+     */
+    private void linkToThisSystem(ActorRef<?> actor) {
         if (actor.actorSystem == null) {
             actor.actorSystem = this;
         }
-        return actor;
     }
 
     private static IllegalStateException alreadyRegistered(String actorName) {
