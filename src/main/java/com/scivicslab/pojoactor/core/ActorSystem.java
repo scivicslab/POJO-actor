@@ -182,8 +182,14 @@ public class ActorSystem {
     public <T> ActorRef<T> actorOf(String actorName, T object) {
         if (actors.containsKey(actorName)) throw alreadyRegistered(actorName);
         ActorRef<T> actor = new ActorRef<T>(actorName, object, this);
-        register(actorName, actor);
-        return actor;
+        try {
+            return register(actorName, actor);
+        } catch (IllegalStateException lost) {
+            // Another caller registered the name after the check above. This actor's mailbox loop
+            // is already running on its virtual thread and nothing else refers to it: close it.
+            actor.close();
+            throw lost;
+        }
     }
 
     /** Add the directly generated Actor to the ActorSystem.
