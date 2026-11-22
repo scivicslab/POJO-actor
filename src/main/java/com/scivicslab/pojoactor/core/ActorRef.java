@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -85,6 +86,21 @@ public class ActorRef<T> implements AutoCloseable {
     }
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread actorThread;
+
+    /**
+     * {@code tellNow}/{@code askNow} work that has started and not yet ended, each on its own
+     * virtual thread outside the mailbox. close() waits for it.
+     */
+    private final Set<NowWork> runningNowWork = ConcurrentHashMap.newKeySet();
+
+    /** One piece of tellNow/askNow work while it runs: the virtual thread running it, and its end. */
+    private static final class NowWork {
+        private final Thread runner = Thread.currentThread();
+        private final CountDownLatch ended = new CountDownLatch(1);
+    }
+
+    /** How long close() waits, in all, for the running message and running tellNow/askNow work. */
+    private static final long CLOSE_WAIT_MILLIS = 5000;
 
     // CopyOnWriteArraySet preserves insertion order (unlike ConcurrentSkipListSet which sorts)
     CopyOnWriteArraySet<String> NamesOfChildren = new CopyOnWriteArraySet<>();
@@ -303,8 +319,11 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.runAsync(() -> action.accept(target),
-                                        Executors.newVirtualThreadPerTaskExecutor());
+        return CompletableFuture.runAsync(() -> {
+            NowWork work = startNowWork();
+            try { action.accept(target); }
+            finally { endNowWork(work); }
+        }, nowExecutor());
     }
 
     /**
@@ -385,8 +404,65 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.supplyAsync(() -> action.apply(target),
-                                            Executors.newVirtualThreadPerTaskExecutor());
+        return CompletableFuture.supplyAsync(() -> {
+            NowWork work = startNowWork();
+            try { return action.apply(target); }
+            finally { endNowWork(work); }
+        }, nowExecutor());
+    }
+
+    /**
+     * The executor that runs {@link #tellNow} and {@link #askNow} work: a new virtual thread per
+     * call. Package-private so that a test in this package can hold that work before it starts.
+     *
+     * @return the executor for work that bypasses the mailbox
+     */
+    java.util.concurrent.Executor nowExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    /**
+     * Called by tellNow/askNow work on its virtual thread, just before it calls the actor. Records
+     * the work as running, then checks that the actor is open; close() clears {@code running}
+     * before it reads the running work. So either the work sees the actor closed and does not
+     * call it, or close() sees the work and waits for it.
+     *
+     * @return the running work, to be passed to {@link #endNowWork}
+     * @throws ActorClosedException when the actor has been closed since the work was sent
+     */
+    private NowWork startNowWork() {
+        NowWork work = new NowWork();
+        runningNowWork.add(work);
+        if (!running.get()) {
+            endNowWork(work);
+            throw new ActorClosedException(actorName);
+        }
+        return work;
+    }
+
+    private void endNowWork(NowWork work) {
+        runningNowWork.remove(work);
+        work.ended.countDown();
+    }
+
+    /**
+     * Waits, until {@code deadline}, for the tellNow/askNow work that is running to end. Work
+     * running on the calling thread -- close() called from inside it -- is not waited for: it
+     * would wait for itself.
+     */
+    private void awaitRunningNowWork(long deadline) throws InterruptedException {
+        Thread self = Thread.currentThread();
+        for (NowWork work : runningNowWork) {
+            if (work.runner == self) {
+                continue;
+            }
+            long left = deadline - System.nanoTime();
+            if (left <= 0 || !work.ended.await(left, TimeUnit.NANOSECONDS)) {
+                logger.log(Level.WARNING, "close() of actor " + actorName
+                        + " stopped waiting for tellNow/askNow work that is still running");
+                return;
+            }
+        }
     }
 
 
@@ -760,12 +836,20 @@ public class ActorRef<T> implements AutoCloseable {
      * submitted to a {@link ManagedThreadPool} are not touched; {@link #clearPendingMessages()}
      * cancels those.</p>
      *
+     * <p>{@code tellNow} and {@code askNow} work, which runs on its own virtual thread outside the
+     * mailbox, checks just before it calls the actor whether the actor is still open; if not, its
+     * future fails with {@code ActorClosedException}. Such work that has already started is not
+     * interrupted: it runs to the end, and close() waits for it within the same five seconds, so
+     * no tellNow/askNow action starts after close() has returned. Work running on the thread that
+     * calls close() is not waited for.</p>
+     *
      * <p>This method implements the AutoCloseable interface for resource management.</p>
      */
     @Override
     public void close() {
         // Stop the message processing loop
         running.set(false);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(CLOSE_WAIT_MILLIS);
 
         // Interrupt the actor thread to wake it up from blocking queue operations -- unless close()
         // is called from an action on that very thread, the actor's own mailbox virtual thread.
@@ -774,12 +858,17 @@ public class ActorRef<T> implements AutoCloseable {
         // since running is now false.
         if (actorThread != null && Thread.currentThread() != actorThread) {
             actorThread.interrupt();
-            try {
-                actorThread.join(5000); // Wait up to 5 seconds for the thread to finish
-            } catch (InterruptedException e) {
-                logger.log(Level.WARNING, "InterruptedException occurred while waiting for actor thread to terminate.", e);
-                Thread.currentThread().interrupt();
+        }
+        try {
+            // tellNow/askNow work that has started runs to the end; it is not interrupted.
+            awaitRunningNowWork(deadline);
+            if (actorThread != null && Thread.currentThread() != actorThread) {
+                long left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                actorThread.join(Math.max(1, left)); // up to the same 5 seconds in all
             }
+        } catch (InterruptedException e) {
+            logger.log(Level.WARNING, "InterruptedException occurred while waiting for actor thread to terminate.", e);
+            Thread.currentThread().interrupt();
         }
 
         // Fail the messages that will never run
