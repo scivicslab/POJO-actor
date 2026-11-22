@@ -46,7 +46,9 @@ import java.util.logging.Logger;
  * never waits forever. After an ordinary {@code Error} such as {@code StackOverflowError} the
  * actor goes on with its next message. A {@link VirtualMachineError} other than
  * {@code StackOverflowError} (for example {@code OutOfMemoryError}) is rethrown after the
- * future is completed, and ends the actor's message loop.</p>
+ * future is completed, and ends the actor's message loop; the messages still queued then
+ * complete exceptionally too. An action that leaves the thread's interrupt flag set does not
+ * stop the actor: only {@link #close()} ends the loop.</p>
  *
  * @param <T> the type of the actor's underlying object
  * @author devteam@scivicslab.com
@@ -67,7 +69,15 @@ public class ActorRef<T> implements AutoCloseable {
     protected ActorSystem actorSystem = null;
 
     // Custom message queue management
-    private final BlockingQueue<Runnable> messageQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
+
+    /**
+     * A queued message: the code to run on the actor's thread, and the future its caller holds.
+     * The future is kept beside the code so that a message the loop will never run can still be
+     * completed (see {@link #failPendingMessages}).
+     */
+    private record Message(Runnable body, CompletableFuture<?> future) {
+    }
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread actorThread;
 
@@ -235,14 +245,14 @@ public class ActorRef<T> implements AutoCloseable {
         T target = this.object;
 
         // Add message to the queue
-        messageQueue.offer(() -> {
+        messageQueue.offer(new Message(() -> {
             try {
                 action.accept(target);
                 future.complete(null);
             } catch (Throwable t) {
                 completeExceptionally(future, t);
             }
-        });
+        }, future));
 
         return future;
     }
@@ -328,14 +338,14 @@ public class ActorRef<T> implements AutoCloseable {
         T target = this.object;
 
         // Add message to the queue
-        messageQueue.offer(() -> {
+        messageQueue.offer(new Message(() -> {
             try {
                 R result = action.apply(target);
                 future.complete(result);
             } catch (Throwable t) {
                 completeExceptionally(future, t);
             }
-        });
+        }, future));
 
         return future;
     }
@@ -711,8 +721,11 @@ public class ActorRef<T> implements AutoCloseable {
 
         this.object = null;
 
-        if (this.system() != null && system().hasActor(this.actorName)) {
-            system().removeActor(this.actorName);
+        // Remove the registrations that point to this actor, under whatever names they are --
+        // an alias given to ActorSystem.addActor(actor, alias) included -- and no other actor's,
+        // even one registered under this actor's own name.
+        if (this.system() != null) {
+            system().unregister(this);
         }
     }
 
@@ -723,28 +736,62 @@ public class ActorRef<T> implements AutoCloseable {
      */
     private Thread startMessageLoop() {
         Thread thread = Thread.ofVirtual().start(() -> {
-            while (running.get()) {
-                try {
-                    Runnable message = messageQueue.take(); // Block until message arrives
-                    message.run();
-                } catch (InterruptedException e) {
-                    // Thread was interrupted, likely shutting down
-                    Thread.currentThread().interrupt();
-                    break;
-                } catch (Throwable t) {
-                    if (isFatal(t)) {
-                        // The JVM itself is failing; do not carry on as if nothing happened.
-                        logger.log(Level.SEVERE, t.getClass().getName() + " while processing message in actor: "
-                                + actorName + "; ending its message loop", t);
-                        throw (VirtualMachineError) t;
+            Throwable fatal = null;
+            try {
+                while (running.get()) {
+                    Message message;
+                    try {
+                        message = messageQueue.take(); // Block until message arrives
+                    } catch (InterruptedException e) {
+                        if (!running.get()) {
+                            break; // close() interrupted the wait
+                        }
+                        // An action left the interrupt flag set, so this take() threw at once.
+                        // The throw has cleared the flag; the actor is still running, so go on.
+                        continue;
                     }
-                    // An ordinary Error (for example StackOverflowError) must not kill the loop:
-                    // the next message still has to run.
-                    logger.log(Level.WARNING, "Throwable occurred while processing message in actor: " + actorName, t);
+                    try {
+                        message.body().run();
+                    } catch (Throwable t) {
+                        if (isFatal(t)) {
+                            // The JVM itself is failing; do not carry on as if nothing happened.
+                            logger.log(Level.SEVERE, t.getClass().getName() + " while processing message in actor: "
+                                    + actorName + "; ending its message loop", t);
+                            fatal = t;
+                            throw (VirtualMachineError) t;
+                        }
+                        // An ordinary Error (for example StackOverflowError) must not kill the loop:
+                        // the next message still has to run.
+                        logger.log(Level.WARNING, "Throwable occurred while processing message in actor: " + actorName, t);
+                    }
+                }
+            } finally {
+                if (fatal != null) {
+                    running.set(false);
+                    failPendingMessages(fatal);
                 }
             }
         });
         return thread;
+    }
+
+    /**
+     * Completes the future of every message still queued exceptionally, after the message loop
+     * has ended on a fatal error: nothing will run them, and a caller joining one of their futures
+     * would otherwise wait forever. Each future completes with an {@link IllegalStateException}
+     * whose cause is the error that ended the loop.
+     *
+     * <p>Not called when {@link #close()} ends the loop; what close() does with the messages it
+     * discards is unchanged.</p>
+     *
+     * @param cause the error that ended the message loop
+     */
+    private void failPendingMessages(Throwable cause) {
+        Message message;
+        while ((message = messageQueue.poll()) != null) {
+            message.future().completeExceptionally(new IllegalStateException(
+                    "the message loop of actor " + actorName + " ended before this message ran", cause));
+        }
     }
 
     /**

@@ -131,8 +131,9 @@ public class ActorSystem {
      * Waits up to 60 seconds for graceful termination.
      */
     public void terminate() {
-        actors.keySet().stream()
-            .forEach((name)->actors.get(name).close());
+        // Close a snapshot of the actors: close() takes each actor's registrations (aliases
+        // included) out of the map, so looking names up again while closing would find gaps.
+        new ArrayList<>(actors.values()).forEach(ActorRef::close);
 
         this.workerPools.stream()
             .forEach((pool)->{
@@ -222,6 +223,11 @@ public class ActorSystem {
     private <T> ActorRef<T> register(String actorName, ActorRef<T> actor) {
         ActorRef<?> held = actors.putIfAbsent(actorName, actor);
         if (held != null && held != actor) throw alreadyRegistered(actorName);
+        // An actor made with new ActorRef(name, object) has no system yet. Link it to this one,
+        // so that its close() can take its registrations out of this system.
+        if (actor.actorSystem == null) {
+            actor.actorSystem = this;
+        }
         return actor;
     }
 
@@ -327,10 +333,9 @@ public class ActorSystem {
      * still registered). Does nothing to any children {@code actorName} itself has — see
      * {@link #removeOffsprings(String)} for that.
      *
-     * <p>Removes from the registry before closing, so {@link ActorRef#close()}'s own trailing
-     * call back into this method (guarded by {@link #hasActor(String)}) is a no-op — the actor
-     * is gone from the map by the time that guard runs, whether {@code removeActor} or
-     * {@code close()} was called first.
+     * <p>Removes from the registry before closing. {@link ActorRef#close()} then calls
+     * {@link #unregister(ActorRef)}, which removes any other name the same actor is registered
+     * under (an alias) and leaves every other actor's registration alone.
      *
      * @param actorName the name of the actor to remove
      */
@@ -339,17 +344,39 @@ public class ActorSystem {
         if (actor == null) {
             return;
         }
-        String parentName = actor.getParentName();
-        if (parentName != null) {
-            ActorRef<?> parent = actors.get(parentName);
-            if (parent != null) {
-                parent.getNamesOfChildren().remove(actorName);
-            }
-        }
+        forgetChildName(actor, actorName);
         if (actor.isAlive()) {
             actor.close();
         }
     }
+
+    /**
+     * Removes every registration that points to {@code actor}, under whatever name it is -- its own
+     * name or an alias given to {@link #addActor(ActorRef, String)} -- and no other actor's. Called
+     * by {@link ActorRef#close()}. A name another actor holds is left alone, even when it equals
+     * {@code actor}'s own name.
+     *
+     * @param actor the actor whose registrations are to be removed
+     */
+    void unregister(ActorRef<?> actor) {
+        for (String name : new ArrayList<>(actors.keySet())) {
+            if (actors.remove(name, actor)) {
+                forgetChildName(actor, name);
+            }
+        }
+    }
+
+    /** Takes {@code name} out of the children set of {@code actor}'s parent, if the parent is registered. */
+    private void forgetChildName(ActorRef<?> actor, String name) {
+        String parentName = actor.getParentName();
+        if (parentName != null) {
+            ActorRef<?> parent = actors.get(parentName);
+            if (parent != null) {
+                parent.getNamesOfChildren().remove(name);
+            }
+        }
+    }
+
 
     /**
      * Removes every descendant of {@code actorName}, leaf before parent, leaving

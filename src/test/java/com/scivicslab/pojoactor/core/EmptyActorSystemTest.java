@@ -164,8 +164,12 @@ public class EmptyActorSystemTest {
 
         system.terminate();
 
-        assertFalse(system.getActor("actor1").isAlive());
-        assertFalse(system.getActor("actor2").isAlive());
+        // Closing an actor takes it out of the system it was added to, as it does for an actor
+        // created by actorOf().
+        assertFalse(actor1.isAlive());
+        assertFalse(actor2.isAlive());
+        assertFalse(system.hasActor("actor1"));
+        assertFalse(system.hasActor("actor2"));
     }
 
     
