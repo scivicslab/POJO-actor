@@ -23,6 +23,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -66,6 +68,12 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
     // Track which tasks belong to which actor
     private final ConcurrentHashMap<String, CopyOnWriteArrayList<Runnable>> actorTasks;
 
+    /** Signalled when a task is queued, or a future a helper waits on completes. */
+    private final Object helpSignal = new Object();
+
+    /** How many of this pool's real threads are in {@link #awaitHelping}. */
+    private final AtomicInteger helpersWaiting = new AtomicInteger();
+
     /**
      * Creates a ManagedThreadPool with the specified parallelism level.
      *
@@ -103,6 +111,153 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      */
     public boolean ownsCurrentThread() {
         return Thread.currentThread() instanceof PoolThread poolThread && poolThread.pool == this;
+    }
+
+    /**
+     * Waits until {@code future} completes; when the caller is one of this pool's own real
+     * threads, runs queued tasks of this pool meanwhile.
+     *
+     * <p>A real thread of this pool that simply blocked on a future would hold one of the pool's
+     * real threads while the work it waits for needs one. When every real thread of the pool
+     * waits that way, nothing is left to run that work and the pool deadlocks. Waiting here
+     * instead, the real thread takes the next queued task of its pool and runs it, again and
+     * again, until the future it waits for has completed. Futures returned by
+     * {@code ActorRef.ask(action, pool)} and {@code tell(action, pool)} wait this way in their
+     * own {@code get} and {@code join}; a caller waiting on any other future from a real thread of
+     * this pool -- for example on {@code CompletableFuture.allOf(...)} -- should wait through this
+     * method.</p>
+     *
+     * <p>Called from a thread that is not one of this pool's real threads, it just waits.</p>
+     *
+     * @param future the future to wait for
+     * @throws InterruptedException if the calling thread is interrupted while it waits
+     * @since 5.0.0
+     */
+    public void awaitHelping(CompletableFuture<?> future) throws InterruptedException {
+        awaitHelping(future, null, true, false, 0L);
+    }
+
+    /**
+     * Waits until {@code future} completes, helping when the caller is one of this pool's real
+     * threads: first runs the task handed back in {@code handedBack}, if any, then queued tasks of
+     * this pool.
+     *
+     * @param future the future to wait for
+     * @param handedBack a task handed to this waiter in particular, or null
+     * @param interruptible whether an interrupt ends the wait; when false, the interrupt flag is set again afterwards
+     * @param timed whether {@code deadline} applies
+     * @param deadline the {@link System#nanoTime()} at which to give up, when {@code timed}
+     * @return true when the future has completed, false when the deadline passed first
+     * @throws InterruptedException when {@code interruptible} and the caller is interrupted
+     */
+    boolean awaitHelping(CompletableFuture<?> future, AtomicReference<Runnable> handedBack,
+                         boolean interruptible, boolean timed, long deadline) throws InterruptedException {
+        if (!ownsCurrentThread()) {
+            return awaitWithoutHelping(future, interruptible, timed, deadline);
+        }
+        future.whenComplete((result, failure) -> wakeHelpers());
+        helpersWaiting.incrementAndGet();
+        boolean interrupted = false;
+        try {
+            while (!future.isDone()) {
+                Runnable task = handedBack == null ? null : handedBack.getAndSet(null);
+                if (task == null) {
+                    task = getQueue().poll();
+                }
+                if (task != null) {
+                    runHere(task);
+                    continue;
+                }
+                synchronized (helpSignal) {
+                    if (future.isDone() || !getQueue().isEmpty()
+                            || (handedBack != null && handedBack.get() != null)) {
+                        continue;
+                    }
+                    try {
+                        if (timed) {
+                            long left = deadline - System.nanoTime();
+                            if (left <= 0) {
+                                return false;
+                            }
+                            TimeUnit.NANOSECONDS.timedWait(helpSignal, left);
+                        } else {
+                            helpSignal.wait();
+                        }
+                    } catch (InterruptedException e) {
+                        if (interruptible) {
+                            throw e;
+                        }
+                        interrupted = true;
+                    }
+                }
+            }
+            return true;
+        } finally {
+            helpersWaiting.decrementAndGet();
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private static boolean awaitWithoutHelping(CompletableFuture<?> future, boolean interruptible,
+                                               boolean timed, long deadline) throws InterruptedException {
+        boolean interrupted = false;
+        try {
+            while (!future.isDone()) {
+                try {
+                    if (timed) {
+                        long left = deadline - System.nanoTime();
+                        if (left <= 0) {
+                            return false;
+                        }
+                        future.get(left, TimeUnit.NANOSECONDS);
+                    } else {
+                        future.get();
+                    }
+                } catch (InterruptedException e) {
+                    if (interruptible) {
+                        throw e;
+                    }
+                    interrupted = true;
+                } catch (java.util.concurrent.ExecutionException | java.util.concurrent.CancellationException
+                         | java.util.concurrent.TimeoutException e) {
+                    // the future completed (or the deadline is checked again above)
+                }
+            }
+            return true;
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** Runs a task taken from the queue on the waiting real thread, as a worker of the pool would. */
+    private static void runHere(Runnable task) {
+        try {
+            task.run();
+        } catch (VirtualMachineError fatal) {
+            throw fatal;
+        } catch (Throwable t) {
+            logger.log(Level.WARNING, "A task run by a waiting real thread threw", t);
+        }
+    }
+
+    /** Wakes the real threads waiting in {@link #awaitHelping}: there may be work for them. */
+    void wakeHelpers() {
+        if (helpersWaiting.get() > 0) {
+            synchronized (helpSignal) {
+                helpSignal.notifyAll();
+            }
+        }
+    }
+
+    /** Queues a task as {@link ThreadPoolExecutor#execute} does, and wakes waiting helpers. */
+    @Override
+    public void execute(Runnable command) {
+        super.execute(command);
+        wakeHelpers();
     }
 
     /** A real thread of a ManagedThreadPool, which knows the pool it belongs to. */
