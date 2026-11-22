@@ -131,43 +131,58 @@ public class ActorSystem {
      * Terminates the actor system by closing all actors and shutting down thread pools.
      * Waits up to 60 seconds for graceful termination.
      *
+     * <p>Every actor is stopped first, so that no message of any of them starts afterwards; then
+     * the pools are shut down (their real threads are interrupted, and their jobs that never
+     * started fail with {@link ActorClosedException}); then terminate() waits for each actor, as
+     * {@link ActorRef#close()} does, and for the pools.</p>
+     *
      * <p>Called from inside an action, it leaves the calling thread's interrupt flag as it was:
      * an action on an actor's mailbox virtual thread is not interrupted by its own actor's close(),
      * and an action on a pool's real thread is not left interrupted by that pool's shutdown, which
      * terminate() then does not wait for (it would wait for itself).</p>
      */
     public void terminate() {
-        // Close a snapshot of the actors: close() takes each actor's registrations (aliases
-        // included) out of the map, so looking names up again while closing would find gaps.
-        new ArrayList<>(actors.values()).forEach(ActorRef::close);
+        // A snapshot of the actors: close() takes each actor's registrations (aliases included)
+        // out of the map, so looking names up again while closing would find gaps.
+        List<ActorRef<?>> all = new ArrayList<>(actors.values());
+
+        // Stop every actor before waiting for any: while terminate() waits for one actor's
+        // running message, another actor's queued message must not start.
+        all.forEach(ActorRef::stop);
 
         // Called from an action running on one of a pool's own real threads, shutdownNow()
         // interrupts that thread too, and awaitTermination() would wait for it to end, that is,
         // for itself.
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
-        this.workerPools.stream()
-            .forEach((pool)->{
-                    boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
-                    // The tasks that never started will not run: fail their futures.
-                    ManagedThreadPool.failClosed(pool.shutdownNow());
-                    if (onThisPool) {
-                        if (!wasInterrupted) {
-                            Thread.interrupted(); // clear the interrupt shutdownNow() gave this thread
-                        }
-                        return; // the pool terminates when this action and the others end
-                    }
-                    try {
-                        if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-                            logger.log(Level.WARNING, "Pool did not terminate");
-                        }
-                    } catch (InterruptedException e) {
-                        logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
-                    }
-                });
+        List<WorkerPool> toAwait = new ArrayList<>();
+        for (WorkerPool pool : workerPools) {
+            boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
+            // The tasks that never started will not run: fail their futures.
+            ManagedThreadPool.failClosed(pool.shutdownNow());
+            if (onThisPool) {
+                if (!wasInterrupted) {
+                    Thread.interrupted(); // clear the interrupt shutdownNow() gave this thread
+                }
+            } else {
+                toAwait.add(pool);
+            }
+        }
+
+        all.forEach(ActorRef::awaitStopped);
+
+        for (WorkerPool pool : toAwait) {
+            try {
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                    logger.log(Level.WARNING, "Pool did not terminate");
+                }
+            } catch (InterruptedException e) {
+                logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
+            }
+        }
     }
 
 
-    
+
     // =======================================================================
     // High level APIs
     // =======================================================================
