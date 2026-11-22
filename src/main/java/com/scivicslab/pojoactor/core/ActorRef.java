@@ -534,15 +534,25 @@ public class ActorRef<T> implements AutoCloseable {
      * runs the action, so a pool with one real thread does not wait for itself. The test class that
      * fixes this case is {@code PoolThreadCallerGuaranteesTest}.</p>
      *
+     * <p>While a real thread of the pool waits in {@code get} or {@code join} of the returned
+     * future, it also runs queued tasks of its pool, under the rules of
+     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}: a real thread that holds no actor's
+     * turn runs any queued task, at most 32 nested; a real thread inside an actor's action runs only
+     * the tasks that its wait depends on, namely the queued tasks of the actor it waits for. Without
+     * this wait, a pool whose real threads all wait for answers of actors would make no progress.
+     * The tests {@code ManagedThreadPoolHelpingTest} and {@code ReceiveLoopGuaranteesTest} pin these
+     * rules.</p>
+     *
      * <p>A {@code tell} to this actor from inside one of its own messages is queued after the
      * current message.</p>
      *
      * <p>Not guaranteed: two actors that ask each other from inside their own messages wait for
-     * each other for ever, as with plain {@link #ask(Function)}; and a pool real thread that waits
+     * each other for ever, as with plain {@link #ask(Function)}. A real thread of the pool that waits
      * on a stage derived from the returned future (for example through {@code thenApply} or
-     * {@code allOf}) waits without helping, so it can deadlock a pool whose real threads all wait
-     * that way. Wait on the returned future itself, or through
-     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}.</p>
+     * {@code allOf}) does not run queued tasks while it waits; wait on the returned future itself,
+     * or through {@link ManagedThreadPool#awaitHelping(CompletableFuture)}. That method, called by a
+     * real thread inside an actor's action for a future that is not the answer of an actor's message,
+     * runs no queued task.</p>
      *
      * @param action the action to execute on this actor's object
      * @param ws the executor service whose thread runs the action
@@ -584,6 +594,34 @@ public class ActorRef<T> implements AutoCloseable {
         return TURNS.get().contains(this);
     }
 
+    /**
+     * Whether the calling real thread or virtual thread holds the turn of any actor: one message of
+     * that actor, or the action of one message of it, runs on the stack of this thread now. Used by
+     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}: a thread that holds a turn runs
+     * only the tasks that its wait depends on.
+     *
+     * @return true when the calling real thread or virtual thread holds at least one actor's turn
+     */
+    static boolean currentThreadHoldsAnyTurn() {
+        return !TURNS.get().isEmpty();
+    }
+
+    /**
+     * Whether the calling real thread or virtual thread holds the turn of the actor named
+     * {@code actorName}; see {@link #currentThreadHoldsAnyTurn()}.
+     *
+     * @param actorName the name of the actor
+     * @return true when the calling real thread or virtual thread holds that actor's turn, at any depth of its stack
+     */
+    static boolean currentThreadHoldsTurnOf(String actorName) {
+        for (ActorRef<?> held : TURNS.get()) {
+            if (held.actorName.equals(actorName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void enterTurn() {
         TURNS.get().push(this);
     }
@@ -613,10 +651,10 @@ public class ActorRef<T> implements AutoCloseable {
             // The inline rule: the caller is one of the pool's own real threads. It does not run
             // the action here, which would skip the actor's turn; the message is queued like any
             // other, and the receive loop hands the action back to this caller when it waits.
-            future = new PoolFuture<>(managed);
+            future = new PoolFuture<>(managed, actorName);
             handBack = true;
         } else {
-            future = managed != null ? new PoolFuture<>(managed) : new CompletableFuture<>();
+            future = managed != null ? new PoolFuture<>(managed, actorName) : new CompletableFuture<>();
             handBack = false;
         }
         messageQueue.offer(new Message(() -> runInTurnOn(ws, managed, action, target, future, handBack), future));
@@ -779,10 +817,12 @@ public class ActorRef<T> implements AutoCloseable {
      */
     static final class PoolFuture<R> extends CompletableFuture<R> {
         private final ManagedThreadPool pool;
+        private final String actorName;
         private final AtomicReference<Runnable> handedBack = new AtomicReference<>();
 
-        PoolFuture(ManagedThreadPool pool) {
+        PoolFuture(ManagedThreadPool pool, String actorName) {
             this.pool = pool;
+            this.actorName = actorName;
         }
 
         /** Hands the action back to the pool real thread that sent it, for when it waits. */
@@ -794,7 +834,7 @@ public class ActorRef<T> implements AutoCloseable {
         @Override
         public R get() throws InterruptedException, ExecutionException {
             if (!isDone() && pool.ownsCurrentThread()) {
-                pool.awaitHelping(this, handedBack, true, false, 0L);
+                pool.awaitHelping(this, handedBack, actorName, true, false, 0L);
             }
             return super.get();
         }
@@ -803,7 +843,7 @@ public class ActorRef<T> implements AutoCloseable {
         public R get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             if (!isDone() && pool.ownsCurrentThread()) {
                 long deadline = System.nanoTime() + unit.toNanos(timeout);
-                if (!pool.awaitHelping(this, handedBack, true, true, deadline)) {
+                if (!pool.awaitHelping(this, handedBack, actorName, true, true, deadline)) {
                     throw new TimeoutException();
                 }
             }
@@ -814,7 +854,7 @@ public class ActorRef<T> implements AutoCloseable {
         public R join() {
             if (!isDone() && pool.ownsCurrentThread()) {
                 try {
-                    pool.awaitHelping(this, handedBack, false, false, 0L);
+                    pool.awaitHelping(this, handedBack, actorName, false, false, 0L);
                 } catch (InterruptedException e) {
                     throw new IllegalStateException("an uninterruptible wait was interrupted", e);
                 }
