@@ -94,11 +94,15 @@ public class Scheduler implements AutoCloseable {
             this.taskId = taskId;
         }
 
-        /** Stops further ticks; a run in progress is not interrupted. */
+        /**
+         * Stops further ticks; a run in progress is not interrupted. A task whose first tick is
+         * still being armed has no tick yet: {@link Scheduler#arm} sees {@code cancelled} and
+         * cancels the tick it sets, so such a task counts as cancelled here.
+         */
         boolean cancel() {
             cancelled = true;
             ScheduledFuture<?> current = tick;
-            return current != null && current.cancel(false);
+            return current == null || current.cancel(false);
         }
     }
 
@@ -166,14 +170,22 @@ public class Scheduler implements AutoCloseable {
                                           long initialDelay, long period, TimeUnit unit) {
         ScheduledTask task = new ScheduledTask(taskId);
         registerTask(taskId, task);
-        task.tick = executor.scheduleAtFixedRate(() -> {
+        arm(task, executor.scheduleAtFixedRate(() -> {
+            if (task.cancelled) {
+                // the first tick can come before arm() has set task.tick; arm() then cancels it
+                ScheduledFuture<?> self = task.tick;
+                if (self != null) {
+                    self.cancel(false);
+                }
+                return;
+            }
             if (task.running != null && !task.running.isDone()) {
                 logger.log(Level.WARNING, "Skipping a tick of scheduled task " + taskId
                         + ": its previous execution has not finished");
                 return;
             }
             task.running = executeOnActor(taskId, actorRef, action);
-        }, initialDelay, period, unit);
+        }, initialDelay, period, unit));
 
         logger.log(Level.INFO, String.format(
             "Scheduled at fixed rate: %s (initial=%d, period=%d %s)",
@@ -263,10 +275,13 @@ public class Scheduler implements AutoCloseable {
                                    long delay, TimeUnit unit) {
         ScheduledTask task = new ScheduledTask(taskId);
         registerTask(taskId, task);
-        task.tick = executor.schedule(() -> {
+        arm(task, executor.schedule(() -> {
+            if (task.cancelled) {
+                return;
+            }
             task.running = executeOnActor(taskId, actorRef, action);
             scheduledTasks.remove(taskId, task);
-        }, delay, unit);
+        }, delay, unit));
 
         logger.log(Level.INFO, String.format(
             "Scheduled once: %s (delay=%d %s)", taskId, delay, unit));
@@ -382,12 +397,24 @@ public class Scheduler implements AutoCloseable {
             return;
         }
         try {
-            task.tick = executor.schedule(run, delay, unit);
+            arm(task, executor.schedule(run, delay, unit));
         } catch (java.util.concurrent.RejectedExecutionException e) {
             return; // the scheduler is shutting down
         }
+    }
+
+    /**
+     * Sets {@code tick} as the task's next tick, and cancels it if the task was cancelled
+     * meanwhile. A task is registered before its tick exists, so a cancelTask or a replacement
+     * with the same id can find {@code tick} still null; it sets {@code cancelled} first and then
+     * reads {@code tick}, while this method sets {@code tick} first and then reads
+     * {@code cancelled}. Both fields are volatile, so at least one side sees the other's write
+     * and the tick is cancelled.
+     */
+    private static void arm(ScheduledTask task, ScheduledFuture<?> tick) {
+        task.tick = tick;
         if (task.cancelled) {
-            task.tick.cancel(false); // cancelled while the tick was being scheduled
+            tick.cancel(false);
         }
     }
 
