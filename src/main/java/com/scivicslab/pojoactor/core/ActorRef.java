@@ -221,9 +221,21 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * Sends a message to the actor defined by this reference.
      *
-     * The specified action is executed on the actor's object asynchronously in actor's thread context.
-     * This method does not wait for completion of the action, it returns immediately.
-     * Messages are processed in the order they are received (FIFO).
+     * The specified action is executed on the actor's object asynchronously, on the actor's receive
+     * loop, which is a virtual thread. This method does not wait for completion of the action, it
+     * returns immediately. Messages are processed in the order they are received (FIFO).
+     *
+     * <p>Guarantees (the design document is ActorMessageGuarantees_261123_oo01; the test class that
+     * fixes them for this method is {@code TellAskGuaranteesTest}):</p>
+     * <ul>
+     *   <li>messages sent with {@code tell} and {@code ask}, with or without an executor, start and
+     *       end in the order the sending calls returned;</li>
+     *   <li>at most one thread, real or virtual, is running a method of the actor's object for any
+     *       of those messages at any time;</li>
+     *   <li>the action runs on the actor's receive loop, a virtual thread, not on a real thread.</li>
+     * </ul>
+     * <p>{@link #tellNow} and {@link #askNow} skip the mailbox and are the only calls that give
+     * none of these guarantees.</p>
      *
      * @param action action to be executed on actor's object.
      * @return CompletableFuture that completes when the action finishes execution.
@@ -310,9 +322,11 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * Sends a message to actor and returns a CompletableFuture to be completed with the response value.
      *
-     * Performs the specified call on the actor's object asynchronously. The call is executed in this actor's
-     * thread context, and the future is completed with the result value. Messages are processed in order (FIFO),
-     * so this ask() will wait for previously sent tell() messages to complete first.
+     * Performs the specified call on the actor's object asynchronously. The call is executed on this actor's
+     * receive loop, which is a virtual thread, and the future is completed with the result value. Messages are
+     * processed in order (FIFO), so this ask() will wait for previously sent tell() messages to complete first.
+     * The guarantees listed at {@link #tell(Consumer)} hold for it; the test class that fixes them for this
+     * method is {@code TellAskGuaranteesTest}.
      *
      * This method returns a CompletableFuture, which is completed with a result once the actor's call completes.
      * If an exception occurs during the actor's call, the exception is passed to the CompletableFuture.
@@ -391,15 +405,28 @@ public class ActorRef<T> implements AutoCloseable {
 
 
     /**
-     * Sends a message to this actor using a specific executor service.
-     * The action is executed asynchronously on the provided executor service,
-     * and the result is processed in this actor's thread context.
+     * Sends a message to this actor whose action runs on a thread of the executor service
+     * {@code ws}, not on the actor's receive loop.
      *
-     * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
-     * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
-     * the returned future is already complete: a task on the pool that gave the pool more work and
-     * waited for it could otherwise deadlock the pool. A {@code Throwable} from the action completes
-     * the future exceptionally, under the same rules as on the pool.</p>
+     * <p>The message is queued in the actor's mailbox like any other message, so it starts after the
+     * messages sent before it have ended. The receive loop, on its virtual thread, takes it, gives the
+     * action to a thread of {@code ws} (a real thread, when {@code ws} is a {@link ManagedThreadPool}),
+     * and waits until the action has ended before it takes the next message. The wait keeps the order:
+     * a message sent after this one cannot start while the action runs. The real thread that runs the
+     * action is what limits CPU-bound work to the size of the pool; the receive loop's virtual thread
+     * only waits and holds no real thread.</p>
+     *
+     * <p>So this message and every other message sent with {@code tell} or {@code ask}, with or without
+     * an executor, run one at a time in the order sent: at most one thread, real or virtual, is running
+     * a method of the object at any time. Heavy work given here delays the actor's later messages; to
+     * run something beside the mailbox, use {@link #tellNow} or {@link #askNow}. The test class that
+     * fixes these guarantees for a {@link ManagedThreadPool} is {@code PoolTellAskGuaranteesTest}.</p>
+     *
+     * <p>When the caller is a real thread of {@code ws} ({@link ManagedThreadPool#ownsCurrentThread()}),
+     * the message is still queued and taken in order. If that real thread then waits on the returned
+     * future with {@code get} or {@code join}, the receive loop gives the action back to it and it
+     * runs the action, so a pool with one real thread does not wait for itself. The test class that
+     * fixes this case is {@code PoolThreadCallerGuaranteesTest}.</p>
      *
      * @param action the action to execute on this actor's object
      * @param ws the executor service to use for executing the action
@@ -439,15 +466,19 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * Sends a message to this actor and returns a response using a specific executor service.
-     * The action is executed asynchronously on the provided executor service,
-     * and the result is processed in this actor's thread context.
+     * Sends a message to this actor whose function runs on a thread of the executor service
+     * {@code ws}, not on the actor's receive loop, and returns its result.
      *
-     * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
-     * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
-     * the returned future is already complete: a task on the pool that gave the pool more work and
-     * waited for it could otherwise deadlock the pool. A {@code Throwable} from the action completes
-     * the future exceptionally, under the same rules as on the pool.</p>
+     * <p>Everything said for {@link #tell(Consumer, ExecutorService)} holds: the message is queued
+     * in the mailbox and taken in the order sent, its function runs on a thread of {@code ws} (a real
+     * thread, for a {@link ManagedThreadPool}) while the receive loop's virtual thread waits, and at
+     * most one thread, real or virtual, is running a method of the object at any time. The test classes
+     * that fix this are {@code PoolTellAskGuaranteesTest} and {@code PoolThreadCallerGuaranteesTest}.</p>
+     *
+     * <p>Asked from inside one of this actor's own messages, the function runs at once, as a method
+     * call would: on the calling thread when that is a real thread of the pool, and otherwise on a
+     * thread of {@code ws} while the calling thread waits. Queued behind the running message, it would
+     * make that message wait for itself. This case is not part of the order guarantee.</p>
      *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
