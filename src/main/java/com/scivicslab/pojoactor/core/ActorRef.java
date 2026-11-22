@@ -783,7 +783,8 @@ public class ActorRef<T> implements AutoCloseable {
      * Destroys the actor and cleans up its resources.
      *
      * <p>Stops the message loop (a message already running is interrupted and waited for, up to
-     * five seconds), then fails the future of every message still queued with
+     * five seconds; when close() is called from that message itself, it is neither interrupted
+     * nor waited for, and the loop ends when the message returns), then fails the future of every message still queued with
      * {@link ActorClosedException}, and removes the actor's registrations from its system. A
      * {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent afterwards queues nothing
      * and returns a future already failed with {@code ActorClosedException}. Jobs this actor
@@ -797,8 +798,12 @@ public class ActorRef<T> implements AutoCloseable {
         // Stop the message processing loop
         running.set(false);
 
-        // Interrupt the actor thread to wake it up from blocking queue operations
-        if (actorThread != null) {
+        // Interrupt the actor thread to wake it up from blocking queue operations -- unless close()
+        // is called from an action on that very thread, the actor's own mailbox virtual thread.
+        // Interrupting it would leave the interrupt flag set for the rest of the action, and
+        // joining it would wait for itself. The loop ends by itself when the action returns,
+        // since running is now false.
+        if (actorThread != null && Thread.currentThread() != actorThread) {
             actorThread.interrupt();
             try {
                 actorThread.join(5000); // Wait up to 5 seconds for the thread to finish
