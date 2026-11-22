@@ -1,3 +1,8 @@
+---
+name: pojo-actor
+description: "Complete reference for POJO-actor, a Java 21 library that runs any plain POJO as an actor using virtual threads, zero reflection and FIFO message ordering. Use when writing or reviewing code built on it — creating an ActorSystem, tell/ask/tellNow/askNow, child actors and naming, the managed thread pool, or diagnosing mailbox, lifecycle and exception-swallowing behaviour."
+---
+
 # POJO-actor SKILL
 
 A lightweight library that runs any Java POJO as an actor.
