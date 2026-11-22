@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -85,6 +86,33 @@ public class ActorRef<T> implements AutoCloseable {
     }
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread actorThread;
+
+    /**
+     * Work this actor runs off its mailbox loop: a job given to {@code tell(action, ws)} or
+     * {@code ask(action, ws)}, or {@code tellNow}/{@code askNow} work. Until it starts, close()
+     * may claim it and fail its future. Once the job has claimed itself it is running, and
+     * close() waits for it to end.
+     */
+    private static final class OffLoopJob {
+        private final AtomicBoolean claimed = new AtomicBoolean();
+        /** The caller's future, which close() fails if it claims the job; null when close() need not. */
+        private final CompletableFuture<?> future;
+        private final CountDownLatch ended = new CountDownLatch(1);
+        private volatile Thread runner;
+
+        OffLoopJob(CompletableFuture<?> future) {
+            this.future = future;
+        }
+    }
+
+    /** Off-loop jobs handed to an executor and not yet started; close() fails their futures. */
+    private final Set<OffLoopJob> unstartedJobs = ConcurrentHashMap.newKeySet();
+
+    /** Off-loop jobs that have started and not yet ended; close() waits for them. */
+    private final Set<OffLoopJob> runningJobs = ConcurrentHashMap.newKeySet();
+
+    /** How long close() waits for the message or off-loop jobs that are running. */
+    private static final long CLOSE_WAIT_MILLIS = 5000;
 
     // CopyOnWriteArraySet preserves insertion order (unlike ConcurrentSkipListSet which sorts)
     CopyOnWriteArraySet<String> NamesOfChildren = new CopyOnWriteArraySet<>();
@@ -303,8 +331,12 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.runAsync(() -> action.accept(target),
-                                        Executors.newVirtualThreadPerTaskExecutor());
+        OffLoopJob job = new OffLoopJob(null);
+        return CompletableFuture.runAsync(() -> {
+            if (!startJob(job)) throw new ActorClosedException(actorName);
+            try { action.accept(target); }
+            finally { endJob(job); }
+        }, nowExecutor());
     }
 
     /**
@@ -385,8 +417,22 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.supplyAsync(() -> action.apply(target),
-                                            Executors.newVirtualThreadPerTaskExecutor());
+        OffLoopJob job = new OffLoopJob(null);
+        return CompletableFuture.supplyAsync(() -> {
+            if (!startJob(job)) throw new ActorClosedException(actorName);
+            try { return action.apply(target); }
+            finally { endJob(job); }
+        }, nowExecutor());
+    }
+
+    /**
+     * The executor that runs {@link #tellNow} and {@link #askNow} work: a new virtual thread per
+     * call. Package-private so that a test in this package can hold that work before it starts.
+     *
+     * @return the executor for work that bypasses the mailbox
+     */
+    java.util.concurrent.Executor nowExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
 
@@ -418,18 +464,26 @@ public class ActorRef<T> implements AutoCloseable {
         if (ws instanceof ManagedThreadPool pool && pool.ownsCurrentThread()) {
             // Already on one of this pool's real threads: run here. Submitting and waiting could
             // deadlock the pool when all its real threads wait the same way.
-            try { action.accept(target); future.complete(null); }
-            catch (Throwable t) { completeExceptionally(future, t); }
+            runJob(new OffLoopJob(future), () -> { action.accept(target); future.complete(null); });
         } else if (ws instanceof ManagedThreadPool pool) {
-            pool.submitForActor(actorName, () -> {
-                try { action.accept(target); future.complete(null); }
-                catch (Throwable t) { completeExceptionally(future, t); }
-            }, future);
+            OffLoopJob job = trackJob(future);
+            handOverRun(future, () -> pool.submitForActor(actorName,
+                    () -> runJob(job, () -> { action.accept(target); future.complete(null); }), future));
         } else {
-            CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
+            OffLoopJob job = trackJob(future);
+            CompletableFuture<Void> task = handOver(future, () -> CompletableFuture.runAsync(() -> {
+                if (!startJob(job)) throw new ActorClosedException(actorName);
+                try { action.accept(target); }
+                finally { endJob(job); }
+            }, ws));
             CompletableFuture.runAsync(() -> {
                 try { task.get(); future.complete(null); }
-                catch (InterruptedException | ExecutionException e) {
+                catch (ExecutionException e) {
+                    if (failIfClosedCause(future, e)) return;
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
+                    future.completeExceptionally(e);
+                }
+                catch (InterruptedException e) {
                     logger.log(Level.WARNING, "Exception occurred while waiting for the result of the tell method.", e);
                     future.completeExceptionally(e);
                 }
@@ -467,18 +521,26 @@ public class ActorRef<T> implements AutoCloseable {
         if (ws instanceof ManagedThreadPool pool && pool.ownsCurrentThread()) {
             // Already on one of this pool's real threads: run here. Submitting and waiting could
             // deadlock the pool when all its real threads wait the same way.
-            try { future.complete(action.apply(target)); }
-            catch (Throwable t) { completeExceptionally(future, t); }
+            runJob(new OffLoopJob(future), () -> future.complete(action.apply(target)));
         } else if (ws instanceof ManagedThreadPool pool) {
-            pool.submitForActor(actorName, () -> {
-                try { future.complete(action.apply(target)); }
-                catch (Throwable t) { completeExceptionally(future, t); }
-            }, future);
+            OffLoopJob job = trackJob(future);
+            handOverRun(future, () -> pool.submitForActor(actorName,
+                    () -> runJob(job, () -> future.complete(action.apply(target))), future));
         } else {
-            CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> action.apply(target), ws);
+            OffLoopJob job = trackJob(future);
+            CompletableFuture<R> task = handOver(future, () -> CompletableFuture.supplyAsync(() -> {
+                if (!startJob(job)) throw new ActorClosedException(actorName);
+                try { return action.apply(target); }
+                finally { endJob(job); }
+            }, ws));
             CompletableFuture.supplyAsync(() -> {
                 try { future.complete(task.get()); }
-                catch (InterruptedException | ExecutionException e) {
+                catch (ExecutionException e) {
+                    if (failIfClosedCause(future, e)) return null;
+                    logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
+                    future.completeExceptionally(e);
+                }
+                catch (InterruptedException e) {
                     logger.log(Level.WARNING, "Exception occurred while waiting for the result of the ask method.", e);
                     future.completeExceptionally(e);
                 }
@@ -755,26 +817,66 @@ public class ActorRef<T> implements AutoCloseable {
      * five seconds), then fails the future of every message still queued with
      * {@link ActorClosedException}, and removes the actor's registrations from its system. A
      * {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent afterwards queues nothing
-     * and returns a future already failed with {@code ActorClosedException}. Jobs this actor
-     * submitted to a {@link ManagedThreadPool} are not touched; {@link #clearPendingMessages()}
-     * cancels those.</p>
+     * and returns a future already failed with {@code ActorClosedException}.</p>
+     *
+     * <p>Work this actor handed out off its message loop does not run against the closed actor
+     * either. The future of every job given to {@code tell(action, ws)} or {@code ask(action, ws)}
+     * that has not started fails at once with {@code ActorClosedException}; the job itself stays
+     * in the executor's queue and, when a thread takes it, ends without calling the actor.
+     * {@code tellNow} and {@code askNow} work checks just before it calls the actor whether the
+     * actor is still running; if it is not, its future fails with {@code ActorClosedException}
+     * instead. A job that has already started is not interrupted: it runs to the end on its real
+     * or virtual thread, its future completes as usual, and close() waits for it within the same
+     * five seconds, so no action of this actor starts after close() has returned. A job running
+     * on the thread that calls close() is not waited for.</p>
      *
      * <p>This method implements the AutoCloseable interface for resource management.</p>
      */
     @Override
     public void close() {
+        stop();
+        awaitStopped();
+    }
+
+    /**
+     * The first half of {@link #close()}: marks the actor closed, fails the futures of its
+     * off-loop jobs that have not started, and interrupts its mailbox loop. Once this has
+     * returned, no message or off-loop job of this actor starts.
+     *
+     * <p>{@link ActorSystem#terminate()} stops every actor before it waits for any, so that while
+     * it waits for one actor's running work, another actor's queued work cannot start.</p>
+     */
+    void stop() {
         // Stop the message processing loop
         running.set(false);
+
+        // Fail this actor's off-loop jobs that have not started. Each stays in its executor's
+        // queue and, when a thread takes it, ends at once without calling the actor.
+        failUnstartedJobs();
 
         // Interrupt the actor thread to wake it up from blocking queue operations
         if (actorThread != null) {
             actorThread.interrupt();
-            try {
-                actorThread.join(5000); // Wait up to 5 seconds for the thread to finish
-            } catch (InterruptedException e) {
-                logger.log(Level.WARNING, "InterruptedException occurred while waiting for actor thread to terminate.", e);
-                Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * The second half of {@link #close()}: waits, up to five seconds in all, for the off-loop jobs
+     * that have started and for the mailbox loop to end, then fails the messages still queued,
+     * drops the object and removes the actor's registrations.
+     */
+    void awaitStopped() {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(CLOSE_WAIT_MILLIS);
+        try {
+            // Off-loop jobs that have started run to the end; they are not interrupted.
+            awaitRunningJobs(deadline);
+            if (actorThread != null) {
+                long left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                actorThread.join(Math.max(1, left));
             }
+        } catch (InterruptedException e) {
+            logger.log(Level.WARNING, "InterruptedException occurred while waiting for actor thread to terminate.", e);
+            Thread.currentThread().interrupt();
         }
 
         // Fail the messages that will never run
@@ -850,6 +952,133 @@ public class ActorRef<T> implements AutoCloseable {
     /** A future already failed with {@link ActorClosedException}, for a message sent after close(). */
     private <R> CompletableFuture<R> closedFuture() {
         return CompletableFuture.failedFuture(new ActorClosedException(actorName));
+    }
+
+    /** Records an off-loop job about to be handed to an executor, until it starts or its future completes. */
+    private OffLoopJob trackJob(CompletableFuture<?> future) {
+        OffLoopJob job = new OffLoopJob(future);
+        unstartedJobs.add(job);
+        future.whenComplete((result, failure) -> unstartedJobs.remove(job));
+        return job;
+    }
+
+    /**
+     * Hands a tracked job to its executor. When the executor refuses it, fails the caller's future
+     * (so the job is no longer tracked) and rethrows. When the actor was closed between the
+     * caller's check and the hand-over, close() may have failed the unstarted jobs before this one
+     * was recorded, so that is done again now rather than leave the job waiting for a thread.
+     */
+    private <V> V handOver(CompletableFuture<?> future, java.util.function.Supplier<V> submit) {
+        V submitted;
+        try {
+            submitted = submit.get();
+        } catch (RuntimeException e) {
+            future.completeExceptionally(e);
+            throw e;
+        }
+        if (!running.get()) {
+            failUnstartedJobs();
+        }
+        return submitted;
+    }
+
+    private void handOverRun(CompletableFuture<?> future, Runnable submit) {
+        handOver(future, () -> { submit.run(); return null; });
+    }
+
+    /**
+     * Called by an off-loop job on the thread that runs it, just before it calls the actor.
+     * Claims the job, so that close() no longer fails it, and records it as running, so that
+     * close() waits for it. When close() claimed it first, or the actor has been closed, the job
+     * must not run; in the second case its future, if it has one, is failed here.
+     *
+     * <p>The job is recorded as running before {@code running} is read, and close() clears
+     * {@code running} before it reads the running jobs: so either the job sees the actor closed,
+     * or close() sees the job and waits for it.</p>
+     *
+     * @return true when the job may call the actor; {@link #endJob} must follow
+     */
+    private boolean startJob(OffLoopJob job) {
+        if (!job.claimed.compareAndSet(false, true)) {
+            return false;
+        }
+        unstartedJobs.remove(job);
+        job.runner = Thread.currentThread();
+        runningJobs.add(job);
+        if (!running.get()) {
+            endJob(job);
+            if (job.future != null) {
+                job.future.completeExceptionally(new ActorClosedException(actorName));
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /** Called when a running off-loop job has ended. */
+    private void endJob(OffLoopJob job) {
+        runningJobs.remove(job);
+        job.ended.countDown();
+    }
+
+    /**
+     * Runs an off-loop job on the current thread: the body completes the job's future; whatever it
+     * throws completes the future exceptionally.
+     */
+    private void runJob(OffLoopJob job, Runnable body) {
+        if (!startJob(job)) {
+            return;
+        }
+        try {
+            body.run();
+        } catch (Throwable t) {
+            completeExceptionally(job.future, t);
+        } finally {
+            endJob(job);
+        }
+    }
+
+    /** Fails, with {@link ActorClosedException}, the future of every off-loop job not yet started. */
+    private void failUnstartedJobs() {
+        for (OffLoopJob job : unstartedJobs) {
+            if (job.claimed.compareAndSet(false, true)) {
+                job.future.completeExceptionally(new ActorClosedException(actorName));
+            }
+        }
+    }
+
+    /**
+     * Waits, until {@code deadline}, for the off-loop jobs that are running to end. A job running
+     * on the calling thread -- close() called from inside one of this actor's own off-loop
+     * actions -- is not waited for: it would wait for itself.
+     */
+    private void awaitRunningJobs(long deadline) throws InterruptedException {
+        Thread self = Thread.currentThread();
+        for (OffLoopJob job : runningJobs) {
+            if (job.runner == self) {
+                continue;
+            }
+            long left = deadline - System.nanoTime();
+            if (left <= 0 || !job.ended.await(left, TimeUnit.NANOSECONDS)) {
+                logger.log(Level.WARNING, "close() of actor " + actorName
+                        + " stopped waiting for an off-loop job that is still running");
+                return;
+            }
+        }
+    }
+
+    /**
+     * When a job on another executor failed because the actor was closed before it ran, fails
+     * {@code future} with that {@link ActorClosedException} itself rather than wrapped.
+     *
+     * @return true when {@code e} was caused by the actor being closed
+     */
+    private static boolean failIfClosedCause(CompletableFuture<?> future, ExecutionException e) {
+        if (e.getCause() instanceof ActorClosedException closed) {
+            future.completeExceptionally(closed);
+            return true;
+        }
+        return false;
     }
 
     /** Fails every message still queued with {@link ActorClosedException}: the actor is closed. */

@@ -130,24 +130,37 @@ public class ActorSystem {
     /**
      * Terminates the actor system by closing all actors and shutting down thread pools.
      * Waits up to 60 seconds for graceful termination.
+     *
+     * <p>Every actor is stopped first, so that no message or off-loop job of any of them starts
+     * afterwards; then the pools are shut down (their real threads are interrupted and their jobs
+     * that never started fail with {@link ActorClosedException}); then terminate() waits for each
+     * actor's running work and mailbox loop, as {@link ActorRef#close()} does, and for the pools.</p>
      */
     public void terminate() {
-        // Close a snapshot of the actors: close() takes each actor's registrations (aliases
-        // included) out of the map, so looking names up again while closing would find gaps.
-        new ArrayList<>(actors.values()).forEach(ActorRef::close);
+        // A snapshot of the actors: close() takes each actor's registrations (aliases included)
+        // out of the map, so looking names up again while closing would find gaps.
+        List<ActorRef<?>> all = new ArrayList<>(actors.values());
 
-        this.workerPools.stream()
-            .forEach((pool)->{
-                    // The tasks that never started will not run: fail their futures.
-                    ManagedThreadPool.failClosed(pool.shutdownNow());
-                    try {
-                        if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-                            logger.log(Level.WARNING, "Pool did not terminate");
-                        }
-                    } catch (InterruptedException e) {
-                        logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
-                    }
-                });
+        // Stop every actor before waiting for any: while terminate() waits for one actor's
+        // running work, another actor's queued work must not start.
+        all.forEach(ActorRef::stop);
+
+        for (WorkerPool pool : workerPools) {
+            // The tasks that never started will not run: fail their futures.
+            ManagedThreadPool.failClosed(pool.shutdownNow());
+        }
+
+        all.forEach(ActorRef::awaitStopped);
+
+        for (WorkerPool pool : workerPools) {
+            try {
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                    logger.log(Level.WARNING, "Pool did not terminate");
+                }
+            } catch (InterruptedException e) {
+                logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
+            }
+        }
     }
 
 
