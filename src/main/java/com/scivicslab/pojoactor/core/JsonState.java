@@ -61,6 +61,15 @@ import java.util.Optional;
  * }
  * }</pre>
  *
+ * <h2>Threads</h2>
+ * <p>The state is a Jackson {@code ObjectNode} tree, which is not thread-safe, and an actor's
+ * state is reached from more than one thread: the actions of a workflow run on the
+ * ManagedThreadPool's real threads, on other callers' threads, or on the actor's own virtual
+ * thread. So every public method holds this object's lock while it reads or changes the tree,
+ * and {@link #append} reads the end of a list and writes past it under one hold of the lock.
+ * {@link #select}, {@link #get}, {@link #getRoot} and {@link #fieldNames} return parts of the
+ * live tree; read them while no other thread writes, or take a {@link #copy()}.</p>
+ *
  * @author devteam@scivicslab.com
  * @since 2.10.0
  */
@@ -68,7 +77,7 @@ public class JsonState {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    private ObjectNode root;
+    private final ObjectNode root;
 
     /**
      * Constructs an empty JsonState.
@@ -103,7 +112,7 @@ public class JsonState {
      * @param path the XPath-style path expression
      * @return the JsonNode at the path, or MissingNode if not found
      */
-    public JsonNode select(String path) {
+    public synchronized JsonNode select(String path) {
         if (path == null || path.isEmpty()) {
             return root;
         }
@@ -179,7 +188,7 @@ public class JsonState {
      * @param path the path expression
      * @return the string value, or null if not found
      */
-    public String getString(String path) {
+    public synchronized String getString(String path) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? null : node.asText();
     }
@@ -191,7 +200,7 @@ public class JsonState {
      * @param defaultValue the default value if not found
      * @return the string value, or defaultValue if not found
      */
-    public String getString(String path, String defaultValue) {
+    public synchronized String getString(String path, String defaultValue) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? defaultValue : node.asText();
     }
@@ -203,7 +212,7 @@ public class JsonState {
      * @param defaultValue the default value if not found
      * @return the integer value, or defaultValue if not found
      */
-    public int getInt(String path, int defaultValue) {
+    public synchronized int getInt(String path, int defaultValue) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? defaultValue : node.asInt(defaultValue);
     }
@@ -215,7 +224,7 @@ public class JsonState {
      * @param defaultValue the default value if not found
      * @return the long value, or defaultValue if not found
      */
-    public long getLong(String path, long defaultValue) {
+    public synchronized long getLong(String path, long defaultValue) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? defaultValue : node.asLong(defaultValue);
     }
@@ -227,7 +236,7 @@ public class JsonState {
      * @param defaultValue the default value if not found
      * @return the double value, or defaultValue if not found
      */
-    public double getDouble(String path, double defaultValue) {
+    public synchronized double getDouble(String path, double defaultValue) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? defaultValue : node.asDouble(defaultValue);
     }
@@ -239,7 +248,7 @@ public class JsonState {
      * @param defaultValue the default value if not found
      * @return the boolean value, or defaultValue if not found
      */
-    public boolean getBoolean(String path, boolean defaultValue) {
+    public synchronized boolean getBoolean(String path, boolean defaultValue) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? defaultValue : node.asBoolean(defaultValue);
     }
@@ -250,7 +259,7 @@ public class JsonState {
      * @param path the path expression
      * @return Optional containing the JsonNode, or empty if not found
      */
-    public Optional<JsonNode> get(String path) {
+    public synchronized Optional<JsonNode> get(String path) {
         JsonNode node = select(path);
         return node.isMissingNode() || node.isNull() ? Optional.empty() : Optional.of(node);
     }
@@ -261,7 +270,7 @@ public class JsonState {
      * @param path the path expression
      * @return true if a non-null value exists at the path
      */
-    public boolean has(String path) {
+    public synchronized boolean has(String path) {
         JsonNode node = select(path);
         return !node.isMissingNode() && !node.isNull();
     }
@@ -279,7 +288,7 @@ public class JsonState {
      * @param value the value to set (String, Number, Boolean, or null)
      * @return this JsonState for method chaining
      */
-    public JsonState put(String path, Object value) {
+    public synchronized JsonState put(String path, Object value) {
         if (path == null || path.isEmpty()) {
             return this;
         }
@@ -319,6 +328,27 @@ public class JsonState {
         }
 
         return this;
+    }
+
+    /**
+     * Adds a value to the end of the list at the given path, and answers the index it was
+     * written at. A path that holds nothing becomes a list of one. Reading the end of the list
+     * and writing past it happen under one hold of this object's lock, so two threads appending
+     * to the same list never write the same index.
+     *
+     * @param path the path expression of the list
+     * @param value the value to add, as {@link #put} takes it
+     * @return the index of the added value
+     * @throws IllegalStateException if the path holds a value that is not a list
+     */
+    public synchronized int append(String path, Object value) {
+        JsonNode at = select(path);
+        if (!at.isMissingNode() && !at.isNull() && !at.isArray()) {
+            throw new IllegalStateException("'" + path + "' holds " + at.getNodeType() + ", not a list");
+        }
+        int end = at.isArray() ? at.size() : 0;
+        put(path + "[" + end + "]", value);
+        return end;
     }
 
     /**
@@ -471,7 +501,7 @@ public class JsonState {
      * @param path the path expression
      * @return true if a value was removed
      */
-    public boolean remove(String path) {
+    public synchronized boolean remove(String path) {
         if (path == null || path.isEmpty()) {
             return false;
         }
@@ -527,7 +557,7 @@ public class JsonState {
      *
      * @return the root node
      */
-    public ObjectNode getRoot() {
+    public synchronized ObjectNode getRoot() {
         return root;
     }
 
@@ -536,7 +566,7 @@ public class JsonState {
      *
      * @return true if no values are stored
      */
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return root.isEmpty();
     }
 
@@ -545,14 +575,14 @@ public class JsonState {
      *
      * @return the number of keys
      */
-    public int size() {
+    public synchronized int size() {
         return root.size();
     }
 
     /**
      * Clears all values.
      */
-    public void clear() {
+    public synchronized void clear() {
         root.removeAll();
     }
 
@@ -562,7 +592,7 @@ public class JsonState {
      * @return JSON string
      */
     @Override
-    public String toString() {
+    public synchronized String toString() {
         return root.toString();
     }
 
@@ -571,7 +601,7 @@ public class JsonState {
      *
      * @return formatted JSON string
      */
-    public String toPrettyString() {
+    public synchronized String toPrettyString() {
         return root.toPrettyString();
     }
 
@@ -585,7 +615,7 @@ public class JsonState {
      * @return formatted JSON string for the subtree
      * @since 2.15.0
      */
-    public String toStringOfJson(String path) {
+    public synchronized String toStringOfJson(String path) {
         if (path == null || path.isEmpty()) {
             return root.toPrettyString();
         }
@@ -606,7 +636,7 @@ public class JsonState {
      * @return YAML string for the subtree
      * @since 2.15.0
      */
-    public String toStringOfYaml(String path) {
+    public synchronized String toStringOfYaml(String path) {
         JsonNode node;
         if (path == null || path.isEmpty()) {
             node = root;
@@ -635,7 +665,7 @@ public class JsonState {
      *
      * @return field name iterator
      */
-    public Iterator<String> fieldNames() {
+    public synchronized Iterator<String> fieldNames() {
         return root.fieldNames();
     }
 
@@ -644,7 +674,7 @@ public class JsonState {
      *
      * @return a new JsonState with copied data
      */
-    public JsonState copy() {
+    public synchronized JsonState copy() {
         return new JsonState(root.deepCopy());
     }
 }
