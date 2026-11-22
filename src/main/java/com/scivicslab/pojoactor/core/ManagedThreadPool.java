@@ -157,7 +157,14 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param future the future the task completes when it runs, or null when there is none
      */
     void submitForActor(String actorName, Runnable task, CompletableFuture<?> future) {
-        execute(track(actorName, task, future));
+        ActorTask wrappedTask = track(actorName, task, future);
+        try {
+            execute(wrappedTask);
+        } catch (RuntimeException rejected) {
+            // Not queued (the pool is shut down, for example): it must not stay tracked.
+            untrack(wrappedTask);
+            throw rejected;
+        }
     }
 
     /**
@@ -174,14 +181,34 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
         deque.offerFirst(wrappedTask);
     }
 
-    /** Wraps a task so that it is tracked under its actor until it has run. */
+    /**
+     * Wraps a task so that it is tracked under its actor until it has run.
+     *
+     * <p>The task is added under the lock of its actor's list, and only while that list is still
+     * the one registered for the actor: {@link #cancelJobsForActor(String)} may remove an empty
+     * list from the map, and a task added to a removed list would be queued but tracked nowhere.</p>
+     */
     private ActorTask track(String actorName, Runnable task, CompletableFuture<?> future) {
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
-        ActorTask wrappedTask = new ActorTask(actorName, task, future, tasks);
-        synchronized (tasks) {
-            tasks.add(wrappedTask);
+        while (true) {
+            CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
+            synchronized (tasks) {
+                if (actorTasks.get(actorName) == tasks) {
+                    ActorTask wrappedTask = new ActorTask(actorName, task, future, tasks);
+                    tasks.add(wrappedTask);
+                    return wrappedTask;
+                }
+            }
         }
-        return wrappedTask;
+    }
+
+    /** Takes a task that was never queued out of its actor's list again. */
+    private void untrack(ActorTask wrappedTask) {
+        synchronized (wrappedTask.tasks) {
+            wrappedTask.tasks.remove(wrappedTask);
+            if (wrappedTask.tasks.isEmpty()) {
+                actorTasks.remove(wrappedTask.actorName, wrappedTask.tasks);
+            }
+        }
     }
 
     /**
@@ -260,27 +287,35 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
     @Override
     public int cancelJobsForActor(String actorName) {
         CopyOnWriteArrayList<Runnable> tasks = actorTasks.get(actorName);
-        if (tasks == null || tasks.isEmpty()) {
+        if (tasks == null) {
             return 0;
         }
 
-        int cancelled = 0;
+        // Under the list's lock, so that no task is tracked while the queued ones are taken out:
+        // a task tracked meanwhile was dropped from the list although it was still queued, and
+        // then ran although its actor's jobs had been cancelled. A task that is running stays in
+        // the list until it has run.
+        java.util.List<ActorTask> removed = new java.util.ArrayList<>();
         BlockingQueue<Runnable> queue = getQueue();
-
-        for (Runnable task : tasks) {
-            if (queue.remove(task)) {
-                cancelled++;
-                if (task instanceof ActorTask actorTask) {
-                    actorTask.cancel();
+        synchronized (tasks) {
+            for (Runnable task : tasks) {
+                if (queue.remove(task)) {
+                    tasks.remove(task);
+                    if (task instanceof ActorTask actorTask) {
+                        removed.add(actorTask);
+                    }
                 }
+            }
+            if (tasks.isEmpty()) {
+                actorTasks.remove(actorName, tasks);
             }
         }
 
-        tasks.clear();
-        actorTasks.remove(actorName);
+        // Cancel the futures outside the lock: cancelling runs the callers' dependent actions.
+        removed.forEach(ActorTask::cancel);
 
-        logger.log(Level.INFO, "Cancelled " + cancelled + " jobs for actor: " + actorName);
-        return cancelled;
+        logger.log(Level.INFO, "Cancelled " + removed.size() + " jobs for actor: " + actorName);
+        return removed.size();
     }
 
     /**
