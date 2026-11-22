@@ -814,7 +814,9 @@ public class ActorRef<T> implements AutoCloseable {
      * Destroys the actor and cleans up its resources.
      *
      * <p>Stops the message loop (a message already running is interrupted and waited for, up to
-     * five seconds), then fails the future of every message still queued with
+     * five seconds; when close() is called from that message itself, it is neither interrupted
+     * nor waited for, and the loop ends when the message returns), then fails the future of every
+     * message still queued with
      * {@link ActorClosedException}, and removes the actor's registrations from its system. A
      * {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent afterwards queues nothing
      * and returns a future already failed with {@code ActorClosedException}.</p>
@@ -855,7 +857,7 @@ public class ActorRef<T> implements AutoCloseable {
         failUnstartedJobs();
 
         // Interrupt the actor thread to wake it up from blocking queue operations
-        if (actorThread != null) {
+        if (actorThread != null && !onOwnLoop()) {
             actorThread.interrupt();
         }
     }
@@ -870,7 +872,7 @@ public class ActorRef<T> implements AutoCloseable {
         try {
             // Off-loop jobs that have started run to the end; they are not interrupted.
             awaitRunningJobs(deadline);
-            if (actorThread != null) {
+            if (actorThread != null && !onOwnLoop()) {
                 long left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
                 actorThread.join(Math.max(1, left));
             }
@@ -890,6 +892,16 @@ public class ActorRef<T> implements AutoCloseable {
         if (this.system() != null) {
             system().unregister(this);
         }
+    }
+
+    /**
+     * Whether the caller is an action on this actor's own mailbox virtual thread. close() then
+     * neither interrupts that thread, which would leave the interrupt flag set for the rest of the
+     * action, nor joins it, which would wait for itself; the loop ends by itself when the action
+     * returns, since running is false.
+     */
+    private boolean onOwnLoop() {
+        return Thread.currentThread() == actorThread;
     }
 
     /**

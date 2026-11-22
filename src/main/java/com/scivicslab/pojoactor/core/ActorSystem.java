@@ -135,6 +135,11 @@ public class ActorSystem {
      * afterwards; then the pools are shut down (their real threads are interrupted and their jobs
      * that never started fail with {@link ActorClosedException}); then terminate() waits for each
      * actor's running work and mailbox loop, as {@link ActorRef#close()} does, and for the pools.</p>
+     *
+     * <p>Called from inside an action, it leaves the calling thread's interrupt flag as it was:
+     * an action on an actor's mailbox virtual thread is not interrupted by its own actor's close(),
+     * and an action on a pool's real thread is not left interrupted by that pool's shutdown, which
+     * terminate() then does not wait for (it would wait for itself).</p>
      */
     public void terminate() {
         // A snapshot of the actors: close() takes each actor's registrations (aliases included)
@@ -145,14 +150,27 @@ public class ActorSystem {
         // running work, another actor's queued work must not start.
         all.forEach(ActorRef::stop);
 
+        // Called from an action running on one of a pool's own real threads, shutdownNow()
+        // interrupts that thread too, and awaitTermination() would wait for it to end, that is,
+        // for itself.
+        boolean wasInterrupted = Thread.currentThread().isInterrupted();
+        List<WorkerPool> toAwait = new ArrayList<>();
         for (WorkerPool pool : workerPools) {
+            boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
             // The tasks that never started will not run: fail their futures.
             ManagedThreadPool.failClosed(pool.shutdownNow());
+            if (onThisPool) {
+                if (!wasInterrupted) {
+                    Thread.interrupted(); // clear the interrupt shutdownNow() gave this thread
+                }
+            } else {
+                toAwait.add(pool);
+            }
         }
 
         all.forEach(ActorRef::awaitStopped);
 
-        for (WorkerPool pool : workerPools) {
+        for (WorkerPool pool : toAwait) {
             try {
                 if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
                     logger.log(Level.WARNING, "Pool did not terminate");
