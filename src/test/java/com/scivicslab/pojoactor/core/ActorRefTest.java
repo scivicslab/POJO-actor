@@ -305,21 +305,21 @@ public class ActorRefTest {
     }
 
     /**
-     * Example 8: CPU-intensive tasks with WorkStealingPool.
+     * Example 8: CPU-intensive tasks on the managed thread pool.
      *
      * Situation: Running CPU-intensive tasks in parallel
-     * Expected: Tasks are executed in parallel on the WorkStealingPool
+     * Expected: Tasks are executed in parallel on the real threads of the ManagedThreadPool
      */
     @Tag("S_base.04")
-    @DisplayName("Should execute CPU-intensive tasks with WorkStealingPool")
+    @DisplayName("Should execute CPU-intensive tasks on the ManagedThreadPool")
     @Test
     @Order(8)
-    public void testWorkStealingPoolExecution() throws InterruptedException, ExecutionException, TimeoutException {
+    public void testManagedThreadPoolExecution() throws InterruptedException, ExecutionException, TimeoutException {
         ActorRef<AtomicInteger> actor = system.actorOf("counter", new AtomicInteger(0));
 
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-        // Submit CPU-intensive tasks to WorkStealingPool
+        // Submit CPU-intensive tasks to the ManagedThreadPool
         for (int i = 0; i < 10; i++) {
             CompletableFuture<Void> future = actor.tell((AtomicInteger counter) -> {
                 // Simulate CPU-intensive work (~30ms)

@@ -23,7 +23,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 /**
  * Test class for verifying POJO-actor's ability to handle thousands of actors
- * using virtual threads while controlling CPU core usage through work-stealing pools.
+ * using virtual threads while controlling CPU core usage through a managed pool of real threads.
  * This demonstrates the scalability advantages over traditional thread-per-actor systems.
  *
  * @author devteam@scivicslab.com

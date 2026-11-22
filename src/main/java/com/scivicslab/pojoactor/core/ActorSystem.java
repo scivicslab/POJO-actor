@@ -78,9 +78,9 @@ public class ActorSystem {
         }
 
         /**
-         * Sets the number of threads for the actor system.
-         * 
-         * @param num the number of threads to use
+         * Sets the number of real threads in the actor system's default managed thread pool.
+         *
+         * @param num the number of real threads in the pool
          * @return this builder instance for method chaining
          */
         public Builder threadNum(int num) {
@@ -103,7 +103,8 @@ public class ActorSystem {
 
     
     /**
-     * Constructs an ActorSystem with the specified name and default thread pool.
+     * Constructs an ActorSystem with the specified name and a default managed thread pool
+     * of one real thread per available processor.
      *
      * @param systemName the name of the actor system
      */
@@ -116,7 +117,7 @@ public class ActorSystem {
      * Constructs an ActorSystem with the specified name and thread count.
      *
      * @param systemName the name of the actor system
-     * @param threadNum the number of threads in the worker pool
+     * @param threadNum the number of real threads in the default managed thread pool
      */
     public ActorSystem(String systemName, int threadNum) {
         this.systemName = systemName;
@@ -170,21 +171,6 @@ public class ActorSystem {
         ActorRef<T> actor = new ActorRef<T>(actorName, object, this);
         register(actorName, actor);
         return actor;
-    }
-
-    
-    /**
-     * Adds an existing actor to the system with the specified name.
-     * 
-     * @deprecated Use {@link #addActor(ActorRef)} instead
-     * @param <T> the type of the actor object
-     * @param actorName the name to associate with the actor
-     * @param actor the actor reference to add
-     * @return the added actor reference
-     */
-    @Deprecated
-    public <T> ActorRef<T> addActor(String actorName, ActorRef<T> actor) {
-        return register(actorName, actor);
     }
 
     /** Add the directly generated Actor to the ActorSystem.
@@ -241,23 +227,11 @@ public class ActorSystem {
     /**
      * Adds a new managed thread pool to the actor system.
      *
-     * @param threadNum the number of threads in the new pool
+     * @param threadNum the number of real threads in the new pool
      * @return true if the pool was successfully added
      * @since 2.12.0
      */
     public boolean addManagedThreadPool(int threadNum) {
-        return this.workerPools.add(new ManagedThreadPool(threadNum));
-    }
-
-    /**
-     * Adds a new work stealing pool to the actor system.
-     *
-     * @param threadNum the number of threads in the new pool
-     * @return true if the pool was successfully added
-     * @deprecated Use {@link #addManagedThreadPool(int)} instead.
-     */
-    @Deprecated
-    public boolean addWorkStealingPool(int threadNum) {
         return this.workerPools.add(new ManagedThreadPool(threadNum));
     }
 
@@ -489,29 +463,6 @@ public class ActorSystem {
      * @since 2.12.0
      */
     public ExecutorService getManagedThreadPool(int n) {
-        return this.workerPools.get(n);
-    }
-
-    /**
-     * Returns the default work stealing pool of the actor system.
-     *
-     * @return the default work stealing pool (index 0)
-     * @deprecated Use {@link #getManagedThreadPool()} instead.
-     */
-    @Deprecated
-    public ExecutorService getWorkStealingPool() {
-        return this.workerPools.get(0);
-    }
-
-    /**
-     * Returns a work stealing pool at the specified index.
-     *
-     * @param n the index of the work stealing pool to return
-     * @return the work stealing pool at the specified index
-     * @deprecated Use {@link #getManagedThreadPool(int)} instead.
-     */
-    @Deprecated
-    public ExecutorService getWorkStealingPool(int n) {
         return this.workerPools.get(n);
     }
 }
