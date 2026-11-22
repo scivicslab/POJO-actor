@@ -116,16 +116,18 @@ public class Scheduler implements AutoCloseable {
     }
 
     /**
-     * Constructs a new Scheduler with the specified thread pool size.
+     * Constructs a new Scheduler with the specified number of tick threads.
      *
-     * @param poolSize the number of threads in the scheduler's thread pool
+     * <p>The tick threads are virtual threads. A tick only hands the action to the actor with
+     * {@code ask()} and never waits for it, so it needs no real thread; the only real-thread
+     * pool is the actor system's {@code ManagedThreadPool}
+     * ({@code RealThreadsOutsideManagedThreadPool_261122_oo01}).</p>
+     *
+     * @param poolSize the number of virtual threads that fire the ticks
      */
     public Scheduler(int poolSize) {
-        this.executor = Executors.newScheduledThreadPool(poolSize, (Runnable r) -> {
-            Thread t = new Thread(r, "Scheduler-Worker"); // a real thread
-            t.setDaemon(true);
-            return t;
-        });
+        this.executor = Executors.newScheduledThreadPool(poolSize,
+                Thread.ofVirtual().name("Scheduler-Worker-", 0).factory());
         this.scheduledTasks = new ConcurrentHashMap<>();
     }
 
