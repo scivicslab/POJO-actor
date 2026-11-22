@@ -85,6 +85,21 @@
         <finalName>${project.artifactId}-${project.version}</finalName>
         <plugins>
 
+            <!-- The name this jar has on the module path. Without it the JVM derives one from the file
+                 name, which changes with the version and is not the package root. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Automatic-Module-Name>com.scivicslab.pojoactor</Automatic-Module-Name>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
