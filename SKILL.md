@@ -46,16 +46,40 @@ CompletableFuture<Integer> f = ref.ask(c -> c.getValue());
 int value = f.join();
 ```
 
-| Method | Queue | Thread-safe | Return type | Use case |
-|--------|-------|-------------|-------------|----------|
-| `tell(action)` | ✓ | automatic | `CompletableFuture<Void>` | Normal state mutation |
-| `ask(action)` | ✓ | automatic | `CompletableFuture<R>` | Normal data retrieval |
-| `tell(action, pool)` | ✗ | caller's responsibility | `CompletableFuture<Void>` | CPU-heavy processing |
-| `ask(action, pool)` | ✗ | caller's responsibility | `CompletableFuture<R>` | CPU-heavy processing + result |
-| `tellNow(action)` | ✗ bypass | caller's responsibility | `CompletableFuture<Void>` | Emergency stop / priority processing |
-| `askNow(action)` | ✗ bypass | caller's responsibility | `CompletableFuture<R>` | Monitoring / debugging |
+| Method | Return type | Use case |
+|--------|-------------|----------|
+| `tell(action)` | `CompletableFuture<Void>` | Normal state mutation |
+| `ask(action)` | `CompletableFuture<R>` | Normal data retrieval |
+| `tell(action, pool)` | `CompletableFuture<Void>` | CPU-heavy processing |
+| `ask(action, pool)` | `CompletableFuture<R>` | CPU-heavy processing + result |
+| `tellNow(action)` | `CompletableFuture<Void>` | Emergency stop / priority processing |
+| `askNow(action)` | `CompletableFuture<R>` | Monitoring / debugging |
 
-Queue-based methods are processed FIFO on the actor's internal thread, so no locking is needed on the caller side.
+### What each way of sending guarantees
+
+`P` is the actor's object and `pool` is the `ManagedThreadPool` returned by `system.getManagedThreadPool()`.
+"Running at once" counts every real thread and every virtual thread that is running a method of `P`.
+
+| How it is sent | Messages start and end in the order sent | Real and virtual threads running a method of `P` at once | Real or virtual thread that runs the action | Test class that fixes it |
+|---|---|---|---|---|
+| `tell(action)`, `ask(action)` | kept | at most 1 | the actor's receive loop (a virtual thread) | `TellAskGuaranteesTest` |
+| `tell(action, pool)`, `ask(action, pool)` | kept | at most 1 | a real thread of `pool`; the receive loop's virtual thread does not run `P` and waits until that real thread has finished | `PoolTellAskGuaranteesTest` |
+| `tell(action, pool)`, `ask(action, pool)` sent from a real thread of `pool` (the inline case) | kept | at most 1 | a real thread of `pool`; when the sending real thread waits on the returned future with `get` or `join`, the receive loop gives the action back to it when the receive loop reaches the message, and it runs the action | `PoolThreadCallerGuaranteesTest` |
+| `tellNow(action)`, `askNow(action)` | not kept: they skip the receive loop and start when called | not guaranteed: they run at the same time as the message the receive loop is running and as each other | a new virtual thread per call; neither the receive loop's virtual thread nor a real thread | `TellNowAskNowSpecTest` |
+
+Why the receive loop waits for a pool job: it takes the next message only after the pool job has ended. The wait is what keeps the order
+(design document `PD_230128_oo01`). The real thread of `pool` is what limits CPU-bound work to the size of the pool, and the receive loop's
+virtual thread that waits holds no real thread. The full table, the reasons and the tests are in the design document
+`ActorMessageGuarantees_261123_oo01`.
+
+Notes outside the table:
+
+- On the current main these guarantees are broken for the two pool rows: `PoolTellAskGuaranteesTest` and `PoolThreadCallerGuaranteesTest`
+  fail in `aLaterMessageWaitsForTheEarlierOne`, `messagesStartInTheOrderTheyWereSent`, `atMostOneThreadIsInsideTheObject` and `noWriteIsLost`
+  (8 tests), because a pool job is run directly on a real thread of `pool` and not through the receive loop.
+- An `ask(action, pool)` sent from inside one of the same actor's own messages runs at once, as a method call would, so that the message does not wait for itself.
+  It is not part of the order guarantee and no test fixes it.
+- With `tellNow` and `askNow` the thread safety of `P` is the caller's responsibility.
 
 ### Lifecycle
 
