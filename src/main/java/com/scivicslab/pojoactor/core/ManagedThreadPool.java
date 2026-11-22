@@ -16,6 +16,7 @@
 package com.scivicslab.pojoactor.core;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -88,26 +89,21 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param task the task to execute
      */
     public void submitForActor(String actorName, Runnable task) {
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
+        submitForActor(actorName, task, null);
+    }
 
-        Runnable wrappedTask = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    task.run();
-                } finally {
-                    synchronized (tasks) {
-                        tasks.remove(this);
-                    }
-                }
-            }
-        };
-
-        synchronized (tasks) {
-            tasks.add(wrappedTask);
-        }
-
-        execute(wrappedTask);
+    /**
+     * Submits a task associated with a specific actor, together with the future its caller holds,
+     * so that the future can be completed if the task is discarded before it runs: cancelled by
+     * {@link #cancelJobsForActor(String)}, failed with {@link ActorClosedException} when the
+     * actor system terminates.
+     *
+     * @param actorName the name of the actor submitting this task
+     * @param task the task to execute
+     * @param future the future the task completes when it runs, or null when there is none
+     */
+    void submitForActor(String actorName, Runnable task, CompletableFuture<?> future) {
+        execute(track(actorName, task, future));
     }
 
     /**
@@ -118,27 +114,78 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param task the urgent task to execute
      */
     public void submitUrgentForActor(String actorName, Runnable task) {
-        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
-
-        Runnable wrappedTask = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    task.run();
-                } finally {
-                    synchronized (tasks) {
-                        tasks.remove(this);
-                    }
-                }
-            }
-        };
-
-        synchronized (tasks) {
-            tasks.add(wrappedTask);
-        }
+        ActorTask wrappedTask = track(actorName, task, null);
 
         LinkedBlockingDeque<Runnable> deque = (LinkedBlockingDeque<Runnable>) getQueue();
         deque.offerFirst(wrappedTask);
+    }
+
+    /** Wraps a task so that it is tracked under its actor until it has run. */
+    private ActorTask track(String actorName, Runnable task, CompletableFuture<?> future) {
+        CopyOnWriteArrayList<Runnable> tasks = actorTasks.computeIfAbsent(actorName, (String k) -> new CopyOnWriteArrayList<>());
+        ActorTask wrappedTask = new ActorTask(actorName, task, future, tasks);
+        synchronized (tasks) {
+            tasks.add(wrappedTask);
+        }
+        return wrappedTask;
+    }
+
+    /**
+     * A task queued for an actor: the code to run, the actor's name, and the future its caller
+     * holds (null for a task submitted without one). Keeping the future here lets a task that is
+     * thrown away before it runs still complete its future.
+     */
+    static final class ActorTask implements Runnable {
+        private final String actorName;
+        private final Runnable task;
+        private final CompletableFuture<?> future;
+        private final CopyOnWriteArrayList<Runnable> tasks;
+
+        ActorTask(String actorName, Runnable task, CompletableFuture<?> future, CopyOnWriteArrayList<Runnable> tasks) {
+            this.actorName = actorName;
+            this.task = task;
+            this.future = future;
+            this.tasks = tasks;
+        }
+
+        @Override
+        public void run() {
+            try {
+                task.run();
+            } finally {
+                synchronized (tasks) {
+                    tasks.remove(this);
+                }
+            }
+        }
+
+        /** Cancels the caller's future: the task was discarded on request. */
+        void cancel() {
+            if (future != null) {
+                future.cancel(false);
+            }
+        }
+
+        /** Fails the caller's future with {@link ActorClosedException}: the pool is shutting down. */
+        void failClosed() {
+            if (future != null) {
+                future.completeExceptionally(new ActorClosedException(actorName));
+            }
+        }
+    }
+
+    /**
+     * Completes, with {@link ActorClosedException}, the futures of the actor tasks among
+     * {@code dropped} -- the tasks {@link #shutdownNow()} returned because they never started.
+     *
+     * @param dropped the tasks that will never run
+     */
+    static void failClosed(java.util.List<Runnable> dropped) {
+        for (Runnable r : dropped) {
+            if (r instanceof ActorTask actorTask) {
+                actorTask.failClosed();
+            }
+        }
     }
 
     @Override
@@ -149,7 +196,9 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
     /**
      * Cancels all pending jobs for a specific actor.
      * Jobs that are already running will continue to completion.
-     * Only jobs that are still in the queue will be removed.
+     * Only jobs that are still in the queue will be removed. The future of each removed job
+     * that was submitted by {@code ActorRef.tell(action, pool)} or {@code ask(action, pool)} is
+     * cancelled, so its caller sees a {@code CancellationException}.
      *
      * @param actorName the name of the actor whose jobs should be cancelled
      * @return the number of jobs that were cancelled
@@ -167,6 +216,9 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
         for (Runnable task : tasks) {
             if (queue.remove(task)) {
                 cancelled++;
+                if (task instanceof ActorTask actorTask) {
+                    actorTask.cancel();
+                }
             }
         }
 

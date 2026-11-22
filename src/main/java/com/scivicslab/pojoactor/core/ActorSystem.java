@@ -137,7 +137,8 @@ public class ActorSystem {
 
         this.workerPools.stream()
             .forEach((pool)->{
-                    pool.shutdownNow();
+                    // The tasks that never started will not run: fail their futures.
+                    ManagedThreadPool.failClosed(pool.shutdownNow());
                     try {
                         if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
                             logger.log(Level.WARNING, "Pool did not terminate");

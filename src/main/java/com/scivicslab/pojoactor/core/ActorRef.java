@@ -50,6 +50,11 @@ import java.util.logging.Logger;
  * complete exceptionally too. An action that leaves the thread's interrupt flag set does not
  * stop the actor: only {@link #close()} ends the loop.</p>
  *
+ * <p>A message thrown away before it runs still completes its future: cancelled when discarded on
+ * request ({@link #clearPendingMessages()}, {@link WorkerPool#cancelJobsForActor(String)}), failed
+ * with {@link ActorClosedException} when its actor or system closes, or when it is sent to an
+ * actor that is already closed.</p>
+ *
  * @param <T> the type of the actor's underlying object
  * @author devteam@scivicslab.com
  * @since 1.0.0
@@ -241,6 +246,9 @@ public class ActorRef<T> implements AutoCloseable {
      * }</pre>
      */
     public CompletableFuture<Void> tell(Consumer<T> action) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         CompletableFuture<Void> future = new CompletableFuture<>();
         T target = this.object;
 
@@ -253,6 +261,7 @@ public class ActorRef<T> implements AutoCloseable {
                 completeExceptionally(future, t);
             }
         }, future));
+        failQueuedIfClosed();
 
         return future;
     }
@@ -290,6 +299,9 @@ public class ActorRef<T> implements AutoCloseable {
      * }</pre>
      */
     public CompletableFuture<Void> tellNow(Consumer<T> action) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         T target = this.object;
         return CompletableFuture.runAsync(() -> action.accept(target),
                                         Executors.newVirtualThreadPerTaskExecutor());
@@ -334,6 +346,9 @@ public class ActorRef<T> implements AutoCloseable {
      * }</pre>
      */
     public <R> CompletableFuture<R> ask(Function<T, R> action) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         CompletableFuture<R> future = new CompletableFuture<>();
         T target = this.object;
 
@@ -346,6 +361,7 @@ public class ActorRef<T> implements AutoCloseable {
                 completeExceptionally(future, t);
             }
         }, future));
+        failQueuedIfClosed();
 
         return future;
     }
@@ -365,6 +381,9 @@ public class ActorRef<T> implements AutoCloseable {
      * @return a CompletableFuture that completes with the function's result
      */
     public <R> CompletableFuture<R> askNow(Function<T, R> action) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         T target = this.object;
         return CompletableFuture.supplyAsync(() -> action.apply(target),
                                             Executors.newVirtualThreadPerTaskExecutor());
@@ -381,6 +400,9 @@ public class ActorRef<T> implements AutoCloseable {
      * @return a CompletableFuture that completes when the action is processed
      */
     public CompletableFuture<Void> tell(Consumer<T> action, ExecutorService ws) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         T target = this.object;
 
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -388,7 +410,7 @@ public class ActorRef<T> implements AutoCloseable {
             pool.submitForActor(actorName, () -> {
                 try { action.accept(target); future.complete(null); }
                 catch (Throwable t) { completeExceptionally(future, t); }
-            });
+            }, future);
         } else {
             CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
             CompletableFuture.runAsync(() -> {
@@ -413,6 +435,9 @@ public class ActorRef<T> implements AutoCloseable {
      * @return a CompletableFuture containing the response from the action
      */
     public <R> CompletableFuture<R> ask(Function<T, R> action, ExecutorService ws) {
+        if (!running.get()) {
+            return closedFuture();
+        }
         T target = this.object;
 
         CompletableFuture<R> future = new CompletableFuture<>();
@@ -420,7 +445,7 @@ public class ActorRef<T> implements AutoCloseable {
             pool.submitForActor(actorName, () -> {
                 try { future.complete(action.apply(target)); }
                 catch (Throwable t) { completeExceptionally(future, t); }
-            });
+            }, future);
         } else {
             CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> action.apply(target), ws);
             CompletableFuture.supplyAsync(() -> {
@@ -697,8 +722,16 @@ public class ActorRef<T> implements AutoCloseable {
 
     /**
      * Destroys the actor and cleans up its resources.
-     * Pending messages will be cancelled and the actor will be removed from its system.
-     * This method implements the AutoCloseable interface for resource management.
+     *
+     * <p>Stops the message loop (a message already running is interrupted and waited for, up to
+     * five seconds), then fails the future of every message still queued with
+     * {@link ActorClosedException}, and removes the actor's registrations from its system. A
+     * {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent afterwards queues nothing
+     * and returns a future already failed with {@code ActorClosedException}. Jobs this actor
+     * submitted to a {@link ManagedThreadPool} are not touched; {@link #clearPendingMessages()}
+     * cancels those.</p>
+     *
+     * <p>This method implements the AutoCloseable interface for resource management.</p>
      */
     @Override
     public void close() {
@@ -716,8 +749,8 @@ public class ActorRef<T> implements AutoCloseable {
             }
         }
 
-        // Clear any remaining messages
-        messageQueue.clear();
+        // Fail the messages that will never run
+        failQueued();
 
         this.object = null;
 
@@ -781,11 +814,34 @@ public class ActorRef<T> implements AutoCloseable {
      * would otherwise wait forever. Each future completes with an {@link IllegalStateException}
      * whose cause is the error that ended the loop.
      *
-     * <p>Not called when {@link #close()} ends the loop; what close() does with the messages it
-     * discards is unchanged.</p>
+     * <p>Not called when {@link #close()} ends the loop: close() fails the messages it discards
+     * with {@link ActorClosedException} instead.</p>
      *
      * @param cause the error that ended the message loop
      */
+    /** A future already failed with {@link ActorClosedException}, for a message sent after close(). */
+    private <R> CompletableFuture<R> closedFuture() {
+        return CompletableFuture.failedFuture(new ActorClosedException(actorName));
+    }
+
+    /** Fails every message still queued with {@link ActorClosedException}: the actor is closed. */
+    private void failQueued() {
+        Message message;
+        while ((message = messageQueue.poll()) != null) {
+            message.future().completeExceptionally(new ActorClosedException(actorName));
+        }
+    }
+
+    /**
+     * Called after a message is queued. If the actor was closed between the caller's check and
+     * the queueing, nothing will take the message, so fail it (and anything else left) now.
+     */
+    private void failQueuedIfClosed() {
+        if (!running.get()) {
+            failQueued();
+        }
+    }
+
     private void failPendingMessages(Throwable cause) {
         Message message;
         while ((message = messageQueue.poll()) != null) {
@@ -837,6 +893,8 @@ public class ActorRef<T> implements AutoCloseable {
      * by this actor, without affecting other actors in the system.
      * The currently running message will complete normally.
      * Only affects messages sent via tell() and ask() - tellNow() messages are not queued.
+     * The future of each cleared message, and of each cancelled pool job, is cancelled, so its
+     * caller sees a {@code CancellationException}.
      *
      * @return the number of messages that were cleared
      *
@@ -866,8 +924,12 @@ public class ActorRef<T> implements AutoCloseable {
      * }</pre>
      */
     public int clearPendingMessages() {
-        int clearedFromQueue = messageQueue.size();
-        messageQueue.clear();
+        int clearedFromQueue = 0;
+        Message message;
+        while ((message = messageQueue.poll()) != null) {
+            message.future().cancel(false);
+            clearedFromQueue++;
+        }
 
         int clearedFromPool = 0;
         if (actorSystem != null) {
