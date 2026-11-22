@@ -170,6 +170,22 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
+     * Whether the caller is running on this actor's own mailbox virtual thread, inside one of the
+     * messages it has queued.
+     *
+     * <p>A caller that gets {@code true} must not ask or tell this actor and wait for the answer:
+     * the message would queue behind the one now running, which is the one waiting. It can do the
+     * work where it is instead, as {@link ManagedThreadPool#ownsCurrentThread()} lets a task on a
+     * pool real thread do.</p>
+     *
+     * @return true when {@code Thread.currentThread()} is this actor's mailbox virtual thread
+     * @since 4.9.0
+     */
+    public boolean ownsCurrentThread() {
+        return Thread.currentThread() == actorThread;
+    }
+
+    /**
      * Checks if this actor is still alive and able to process messages.
      * 
      * @return true if the actor is alive, false otherwise
