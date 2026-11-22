@@ -395,6 +395,12 @@ public class ActorRef<T> implements AutoCloseable {
      * The action is executed asynchronously on the provided executor service,
      * and the result is processed in this actor's thread context.
      *
+     * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
+     * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
+     * the returned future is already complete: a task on the pool that gave the pool more work and
+     * waited for it could otherwise deadlock the pool. A {@code Throwable} from the action completes
+     * the future exceptionally, under the same rules as on the pool.</p>
+     *
      * @param action the action to execute on this actor's object
      * @param ws the executor service to use for executing the action
      * @return a CompletableFuture that completes when the action is processed
@@ -406,7 +412,15 @@ public class ActorRef<T> implements AutoCloseable {
         T target = this.object;
 
         CompletableFuture<Void> future = new CompletableFuture<>();
-        if (ws instanceof ManagedThreadPool pool) {
+        // This path never goes through the actor's virtual-thread message loop: the action runs on
+        // a real thread of ws (or, below, on the caller's real thread), not in the actor's queue,
+        // so running it inline does not change the order of the actor's queued messages.
+        if (ws instanceof ManagedThreadPool pool && pool.ownsCurrentThread()) {
+            // Already on one of this pool's real threads: run here. Submitting and waiting could
+            // deadlock the pool when all its real threads wait the same way.
+            try { action.accept(target); future.complete(null); }
+            catch (Throwable t) { completeExceptionally(future, t); }
+        } else if (ws instanceof ManagedThreadPool pool) {
             pool.submitForActor(actorName, () -> {
                 try { action.accept(target); future.complete(null); }
                 catch (Throwable t) { completeExceptionally(future, t); }
@@ -429,6 +443,12 @@ public class ActorRef<T> implements AutoCloseable {
      * The action is executed asynchronously on the provided executor service,
      * and the result is processed in this actor's thread context.
      *
+     * <p>When {@code ws} is a {@link ManagedThreadPool} and the caller is already on one of its
+     * real threads ({@link ManagedThreadPool#ownsCurrentThread()}), the action runs right there and
+     * the returned future is already complete: a task on the pool that gave the pool more work and
+     * waited for it could otherwise deadlock the pool. A {@code Throwable} from the action completes
+     * the future exceptionally, under the same rules as on the pool.</p>
+     *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
      * @param ws the executor service to use for executing the action
@@ -441,7 +461,15 @@ public class ActorRef<T> implements AutoCloseable {
         T target = this.object;
 
         CompletableFuture<R> future = new CompletableFuture<>();
-        if (ws instanceof ManagedThreadPool pool) {
+        // This path never goes through the actor's virtual-thread message loop: the action runs on
+        // a real thread of ws (or, below, on the caller's real thread), not in the actor's queue,
+        // so running it inline does not change the order of the actor's queued messages.
+        if (ws instanceof ManagedThreadPool pool && pool.ownsCurrentThread()) {
+            // Already on one of this pool's real threads: run here. Submitting and waiting could
+            // deadlock the pool when all its real threads wait the same way.
+            try { future.complete(action.apply(target)); }
+            catch (Throwable t) { completeExceptionally(future, t); }
+        } else if (ws instanceof ManagedThreadPool pool) {
             pool.submitForActor(actorName, () -> {
                 try { future.complete(action.apply(target)); }
                 catch (Throwable t) { completeExceptionally(future, t); }

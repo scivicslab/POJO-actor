@@ -71,14 +71,68 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * @param parallelism the number of threads in the pool (typically matches CPU core count)
      */
     public ManagedThreadPool(int parallelism) {
+        this(parallelism, new PoolThreadFactory());
+    }
+
+    private ManagedThreadPool(int parallelism, PoolThreadFactory threadFactory) {
         super(
             parallelism,                          // corePoolSize
             parallelism,                          // maximumPoolSize
             0L,                                   // keepAliveTime
             TimeUnit.MILLISECONDS,
-            new LinkedBlockingDeque<>()           // workQueue - allows front insertion
+            new LinkedBlockingDeque<>(),          // workQueue - allows front insertion
+            threadFactory
         );
+        // The pool's real threads are made lazily, on the first execute(), so the factory knows
+        // its owner before it makes any of them.
+        threadFactory.owner = this;
         this.actorTasks = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * Whether the caller is running on one of this pool's own real threads.
+     *
+     * <p>A task already running on one of these real threads that submits more work to this pool
+     * and waits for it can deadlock: with every real thread of the pool waiting the same way,
+     * nothing is left to run the submitted work. A caller that gets {@code true} here can run the
+     * work where it is instead (as {@code ActorRef.ask(action, pool)} does).</p>
+     *
+     * @return true when {@code Thread.currentThread()} is a real thread of this pool
+     * @since 4.9.0
+     */
+    public boolean ownsCurrentThread() {
+        return Thread.currentThread() instanceof PoolThread poolThread && poolThread.pool == this;
+    }
+
+    /** A real thread of a ManagedThreadPool, which knows the pool it belongs to. */
+    private static final class PoolThread extends Thread {
+        private final ManagedThreadPool pool;
+
+        PoolThread(ManagedThreadPool pool, Runnable work, String name) {
+            super(work, name);
+            this.pool = pool;
+        }
+    }
+
+    /**
+     * Makes the pool's real threads as PoolThreads. They are named
+     * {@code managed-pool-<pool number>-thread-<thread number>}, and are not daemons, as the
+     * real threads of the default thread factory are not.
+     */
+    private static final class PoolThreadFactory implements java.util.concurrent.ThreadFactory {
+        private static final java.util.concurrent.atomic.AtomicInteger POOL_NUMBER = new java.util.concurrent.atomic.AtomicInteger(1);
+        private final int poolNumber = POOL_NUMBER.getAndIncrement();
+        private final java.util.concurrent.atomic.AtomicInteger threadNumber = new java.util.concurrent.atomic.AtomicInteger(1);
+        private volatile ManagedThreadPool owner;
+
+        @Override
+        public Thread newThread(Runnable work) {
+            Thread thread = new PoolThread(owner, work,
+                    "managed-pool-" + poolNumber + "-thread-" + threadNumber.getAndIncrement());
+            thread.setDaemon(false);
+            thread.setPriority(Thread.NORM_PRIORITY);
+            return thread;
+        }
     }
 
     /**
