@@ -62,11 +62,13 @@ import java.util.Optional;
  * }</pre>
  *
  * <h2>Threads</h2>
- * <p>The state is a Jackson {@code ObjectNode} tree, which is not thread-safe, and an actor's
- * state is reached from more than one thread: the actions of a workflow run on the
- * ManagedThreadPool's real threads, on other callers' threads, or on the actor's own virtual
- * thread. So every public method holds this object's lock while it reads or changes the tree,
- * and {@link #append} reads the end of a list and writes past it under one hold of the lock.
+ * <p>The state is a Jackson {@code ObjectNode} tree, which is not thread-safe. Messages to an
+ * actor run one at a time through its mailbox, but the state is also reached beside the mailbox:
+ * {@code tellNow} and {@code askNow} run beside it by design, and a workflow writes its own
+ * actor's state ({@code this.putJson}) while the workflow's message holds that mailbox, so that
+ * write cannot be queued behind it. So every public method holds this object's lock while it
+ * reads or changes the tree, and {@link #append} reads the end of a list and writes past it
+ * under one hold of the lock.
  * {@link #select}, {@link #get}, {@link #getRoot} and {@link #fieldNames} return parts of the
  * live tree; read them while no other thread writes, or take a {@link #copy()}.</p>
  *
