@@ -18,6 +18,7 @@
 package com.scivicslab.pojoactor.core.scheduler;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -27,6 +28,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.scivicslab.pojoactor.core.ActorClosedException;
 import com.scivicslab.pojoactor.core.ActorRef;
 
 /**
@@ -184,7 +186,7 @@ public class Scheduler implements AutoCloseable {
                         + ": its previous execution has not finished");
                 return;
             }
-            task.running = executeOnActor(taskId, actorRef, action);
+            task.running = executeOnActor(task, actorRef, action);
         }, initialDelay, period, unit));
 
         logger.log(Level.INFO, String.format(
@@ -242,7 +244,7 @@ public class Scheduler implements AutoCloseable {
             if (task.cancelled) {
                 return;
             }
-            task.running = executeOnActor(taskId, actorRef, action);
+            task.running = executeOnActor(task, actorRef, action);
             // Count the delay from the end of this execution, as the fixed-delay contract says,
             // without holding the scheduler's real thread until then.
             task.running.whenComplete((ignored, failure) -> scheduleNext(task, run[0], delay, unit));
@@ -279,7 +281,7 @@ public class Scheduler implements AutoCloseable {
             if (task.cancelled) {
                 return;
             }
-            task.running = executeOnActor(taskId, actorRef, action);
+            task.running = executeOnActor(task, actorRef, action);
             scheduledTasks.remove(taskId, task);
         }, delay, unit));
 
@@ -371,8 +373,13 @@ public class Scheduler implements AutoCloseable {
      * not wait for the action: a failure is logged when its future completes, and the future is
      * returned so the caller can tell whether this execution has finished. Following
      * {@code TimeoutAndScheduler_251012_oo01}, no time limit is put on the action here.
+     *
+     * <p>An actor that is closed will never run the action again, so an execution that fails
+     * with {@link ActorClosedException} stops the task instead of logging the same failure at
+     * every tick. Any other failure is logged and the task keeps its schedule. The returned
+     * future completes after this handling, so a fixed-delay task re-arms only after it.</p>
      */
-    private <T> CompletableFuture<?> executeOnActor(String taskId, ActorRef<T> actorRef, Consumer<T> action) {
+    private <T> CompletableFuture<?> executeOnActor(ScheduledTask task, ActorRef<T> actorRef, Consumer<T> action) {
         CompletableFuture<Object> execution;
         try {
             execution = actorRef.ask((T actor) -> {
@@ -382,13 +389,28 @@ public class Scheduler implements AutoCloseable {
         } catch (RuntimeException e) {
             execution = CompletableFuture.failedFuture(e);
         }
-        execution.whenComplete((ignored, failure) -> {
-            if (failure != null) {
-                logger.log(Level.SEVERE,
-                    String.format("Error executing scheduled task %s: %s", taskId, failure.getMessage()), failure);
+        return execution.whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                return;
             }
+            Throwable cause = failure instanceof CompletionException && failure.getCause() != null
+                    ? failure.getCause() : failure;
+            if (cause instanceof ActorClosedException) {
+                stopForClosedActor(task, actorRef.getName());
+                return;
+            }
+            logger.log(Level.SEVERE,
+                String.format("Error executing scheduled task %s: %s", task.taskId, failure.getMessage()), failure);
         });
-        return execution;
+    }
+
+    /** Cancels a task whose actor is closed and takes it out of the map, logging it once. */
+    private void stopForClosedActor(ScheduledTask task, String actorName) {
+        task.cancel();
+        if (scheduledTasks.remove(task.taskId, task)) {
+            logger.log(Level.WARNING, "Stopped scheduled task " + task.taskId
+                    + ": its actor " + actorName + " is closed");
+        }
     }
 
     /** Schedules the next fixed-delay execution of {@code task}, unless it has been cancelled. */
