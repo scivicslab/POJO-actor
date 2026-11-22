@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -164,14 +165,33 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * Submits an urgent task to the front of the queue.
      * The task will be executed before other pending tasks.
      *
+     * <p>The task goes into the queue directly, not through {@link #execute}, and
+     * {@code execute} is what starts the pool's real threads. So this method starts a core
+     * real thread itself when fewer than the pool's parallelism are running; otherwise the
+     * urgent task given to a fresh pool would wait in a queue that no real thread reads.</p>
+     *
      * @param actorName the name of the actor submitting this task
      * @param task the urgent task to execute
+     * @throws RejectedExecutionException if the pool is shut down
      */
     public void submitUrgentForActor(String actorName, Runnable task) {
+        if (isShutdown()) {
+            throw new RejectedExecutionException(
+                    "the pool is shut down; urgent task of actor " + actorName + " refused");
+        }
         ActorTask wrappedTask = track(actorName, task, null);
 
         LinkedBlockingDeque<Runnable> deque = (LinkedBlockingDeque<Runnable>) getQueue();
         deque.offerFirst(wrappedTask);
+        prestartCoreThread();
+        if (isShutdown() && deque.remove(wrappedTask)) {
+            // shut down while the task was being queued: no real thread may be left to run it
+            synchronized (wrappedTask.tasks) {
+                wrappedTask.tasks.remove(wrappedTask);
+            }
+            throw new RejectedExecutionException(
+                    "the pool is shut down; urgent task of actor " + actorName + " refused");
+        }
     }
 
     /** Wraps a task so that it is tracked under its actor until it has run. */
