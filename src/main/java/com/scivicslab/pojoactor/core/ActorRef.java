@@ -289,8 +289,10 @@ public class ActorRef<T> implements AutoCloseable {
      * for previously queued messages to complete. This allows for urgent/priority messages
      * that need to be processed right away.
      *
-     * Note: This method executes concurrently with regular tell() messages, so proper
-     * synchronization should be considered if the actor's state could be accessed simultaneously.
+     * Note: this method skips the mailbox. The action runs on its own virtual thread, at the same
+     * time as the message the mailbox is running, as other tellNow/askNow work, and as any other
+     * action on the object. Nothing serialises these, so with tellNow the object's thread safety
+     * is the caller's responsibility.
      *
      * @param action action to be executed on actor's object immediately.
      * @return CompletableFuture that completes when the immediate action finishes.
@@ -394,6 +396,11 @@ public class ActorRef<T> implements AutoCloseable {
      * This method is useful when:
      * - You need to query the actor's state immediately without waiting for queued messages
      * - Concurrent execution with queued messages is desired
+     *
+     * Note: this method skips the mailbox. The function runs on its own virtual thread, at the
+     * same time as the message the mailbox is running, as other tellNow/askNow work, and as any
+     * other action on the object. Nothing serialises these, so with askNow the object's thread
+     * safety is the caller's responsibility.
      *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
