@@ -34,6 +34,7 @@ import com.scivicslab.pojoactor.core.guarantees.ActorGuaranteeSupport.Fixture;
  * back.
  */
 @Tag("PD_230128_oo01")
+@Tag("ActorMessageGuarantees_261123_oo01")
 @DisplayName("Actor guarantees — tell and ask with a ManagedThreadPool, from a real thread of that pool")
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class PoolThreadCallerGuaranteesTest extends ActorGuaranteesBase {

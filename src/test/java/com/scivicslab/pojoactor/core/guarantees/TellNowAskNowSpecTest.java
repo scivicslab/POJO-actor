@@ -45,6 +45,7 @@ import com.scivicslab.pojoactor.core.guarantees.ActorGuaranteeSupport.Sent;
  * those guarantees. A change that sent them through the mailbox would turn these tests red.
  */
 @Tag("PD_230128_oo01")
+@Tag("ActorMessageGuarantees_261123_oo01")
 @DisplayName("Actor guarantees — tellNow and askNow run beside the mailbox, by specification")
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class TellNowAskNowSpecTest {

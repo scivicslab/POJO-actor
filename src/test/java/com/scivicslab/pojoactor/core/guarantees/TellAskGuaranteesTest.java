@@ -32,6 +32,7 @@ import com.scivicslab.pojoactor.core.guarantees.ActorGuaranteeSupport.Fixture;
  * a virtual thread, one at a time, in the order sent.
  */
 @Tag("PD_230128_oo01")
+@Tag("ActorMessageGuarantees_261123_oo01")
 @DisplayName("Actor guarantees — tell and ask")
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class TellAskGuaranteesTest extends ActorGuaranteesBase {

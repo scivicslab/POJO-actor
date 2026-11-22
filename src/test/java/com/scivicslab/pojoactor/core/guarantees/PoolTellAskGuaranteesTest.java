@@ -32,6 +32,7 @@ import com.scivicslab.pojoactor.core.guarantees.ActorGuaranteeSupport.Fixture;
  * waits for it, so the guarantees of plain {@code tell} hold and the work runs on a real thread.
  */
 @Tag("PD_230128_oo01")
+@Tag("ActorMessageGuarantees_261123_oo01")
 @DisplayName("Actor guarantees — tell and ask with a ManagedThreadPool")
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class PoolTellAskGuaranteesTest extends ActorGuaranteesBase {
