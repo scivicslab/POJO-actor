@@ -17,6 +17,7 @@
 
 package com.scivicslab.pojoactor.core.scheduler;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -76,7 +77,30 @@ public class Scheduler implements AutoCloseable {
     private static final Logger logger = Logger.getLogger(Scheduler.class.getName());
 
     private final ScheduledExecutorService executor;
-    private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledTasks;
+    private final ConcurrentHashMap<String, ScheduledTask> scheduledTasks;
+
+    /**
+     * One scheduled task: the executor's future for its next tick, the future of its run in
+     * progress (null when none), and whether it has been cancelled. A run is the action handed to
+     * the actor; the scheduler's real thread never waits for it.
+     */
+    private static final class ScheduledTask {
+        final String taskId;
+        volatile ScheduledFuture<?> tick;
+        volatile CompletableFuture<?> running;
+        volatile boolean cancelled;
+
+        ScheduledTask(String taskId) {
+            this.taskId = taskId;
+        }
+
+        /** Stops further ticks; a run in progress is not interrupted. */
+        boolean cancel() {
+            cancelled = true;
+            ScheduledFuture<?> current = tick;
+            return current != null && current.cancel(false);
+        }
+    }
 
     /**
      * Constructs a new Scheduler with default thread pool size (2).
@@ -92,7 +116,7 @@ public class Scheduler implements AutoCloseable {
      */
     public Scheduler(int poolSize) {
         this.executor = Executors.newScheduledThreadPool(poolSize, (Runnable r) -> {
-            Thread t = new Thread(r, "Scheduler-Worker");
+            Thread t = new Thread(r, "Scheduler-Worker"); // a real thread
             t.setDaemon(true);
             return t;
         });
@@ -108,9 +132,11 @@ public class Scheduler implements AutoCloseable {
      * <p><strong>Fixed Rate vs Fixed Delay:</strong></p>
      * <p>With {@code scheduleAtFixedRate}, executions are scheduled to start at
      * regular intervals (0, period, 2*period, 3*period, ...) regardless of how
-     * long each execution takes. If an execution takes longer than the period,
-     * the next execution starts immediately after the previous one completes
-     * (no delay accumulation).</p>
+     * long each execution takes. The scheduler's real thread only hands the action to the
+     * actor and does not wait for it. A tick that comes while the previous execution of the
+     * same task has not finished is skipped and logged as a WARNING naming the task, so
+     * executions of one task never pile up, and a task that never completes stops only its own
+     * executions, not the other tasks.</p>
      *
      * <p>Use this method when you need consistent timing intervals, such as
      * metrics collection or heartbeat checks at precise intervals.</p>
@@ -138,11 +164,16 @@ public class Scheduler implements AutoCloseable {
     public <T> String scheduleAtFixedRate(String taskId, ActorRef<T> actorRef,
                                           Consumer<T> action,
                                           long initialDelay, long period, TimeUnit unit) {
-        ScheduledFuture<?> task = executor.scheduleAtFixedRate(() -> {
-            executeOnActor(taskId, actorRef, action);
-        }, initialDelay, period, unit);
-
+        ScheduledTask task = new ScheduledTask(taskId);
         registerTask(taskId, task);
+        task.tick = executor.scheduleAtFixedRate(() -> {
+            if (task.running != null && !task.running.isDone()) {
+                logger.log(Level.WARNING, "Skipping a tick of scheduled task " + taskId
+                        + ": its previous execution has not finished");
+                return;
+            }
+            task.running = executeOnActor(taskId, actorRef, action);
+        }, initialDelay, period, unit);
 
         logger.log(Level.INFO, String.format(
             "Scheduled at fixed rate: %s (initial=%d, period=%d %s)",
@@ -161,7 +192,9 @@ public class Scheduler implements AutoCloseable {
      * <p>With {@code scheduleWithFixedDelay}, the delay between the <em>termination</em>
      * of one execution and the <em>start</em> of the next is always {@code delay} time
      * units. This ensures that executions never overlap and there is always a guaranteed
-     * rest period between executions.</p>
+     * rest period between executions. The next execution is scheduled when the actor finishes
+     * the current one; the scheduler's real thread does not wait for it, so a task that never
+     * completes stops only its own executions, not the other tasks.</p>
      *
      * <p>Use this method when you need to ensure a minimum gap between executions,
      * such as polling operations where you want to avoid overwhelming a resource,
@@ -190,11 +223,19 @@ public class Scheduler implements AutoCloseable {
     public <T> String scheduleWithFixedDelay(String taskId, ActorRef<T> actorRef,
                                              Consumer<T> action,
                                              long initialDelay, long delay, TimeUnit unit) {
-        ScheduledFuture<?> task = executor.scheduleWithFixedDelay(() -> {
-            executeOnActor(taskId, actorRef, action);
-        }, initialDelay, delay, unit);
-
+        ScheduledTask task = new ScheduledTask(taskId);
         registerTask(taskId, task);
+        Runnable[] run = new Runnable[1];
+        run[0] = () -> {
+            if (task.cancelled) {
+                return;
+            }
+            task.running = executeOnActor(taskId, actorRef, action);
+            // Count the delay from the end of this execution, as the fixed-delay contract says,
+            // without holding the scheduler's real thread until then.
+            task.running.whenComplete((ignored, failure) -> scheduleNext(task, run[0], delay, unit));
+        };
+        scheduleNext(task, run[0], initialDelay, unit);
 
         logger.log(Level.INFO, String.format(
             "Scheduled with fixed delay: %s (initial=%d, delay=%d %s)",
@@ -220,15 +261,12 @@ public class Scheduler implements AutoCloseable {
     public <T> String scheduleOnce(String taskId, ActorRef<T> actorRef,
                                    Consumer<T> action,
                                    long delay, TimeUnit unit) {
-        ScheduledFuture<?> task = executor.schedule(() -> {
-            try {
-                executeOnActor(taskId, actorRef, action);
-            } finally {
-                scheduledTasks.remove(taskId);
-            }
-        }, delay, unit);
-
+        ScheduledTask task = new ScheduledTask(taskId);
         registerTask(taskId, task);
+        task.tick = executor.schedule(() -> {
+            task.running = executeOnActor(taskId, actorRef, action);
+            scheduledTasks.remove(taskId, task);
+        }, delay, unit);
 
         logger.log(Level.INFO, String.format(
             "Scheduled once: %s (delay=%d %s)", taskId, delay, unit));
@@ -246,9 +284,9 @@ public class Scheduler implements AutoCloseable {
      * @return true if the task was found and cancelled, false otherwise
      */
     public boolean cancelTask(String taskId) {
-        ScheduledFuture<?> task = scheduledTasks.remove(taskId);
+        ScheduledTask task = scheduledTasks.remove(taskId);
         if (task != null) {
-            boolean cancelled = task.cancel(false);
+            boolean cancelled = task.cancel();
             logger.log(Level.INFO, cancelled ?
                 "Cancelled: " + taskId :
                 "Task already completed or cancelled: " + taskId);
@@ -274,8 +312,10 @@ public class Scheduler implements AutoCloseable {
      * @return true if the task exists and is not cancelled, false otherwise
      */
     public boolean isScheduled(String taskId) {
-        ScheduledFuture<?> task = scheduledTasks.get(taskId);
-        return task != null && !task.isCancelled() && !task.isDone();
+        // A fixed-delay task's tick future is done between executions, so ask the task whether
+        // it has been cancelled instead of asking its current tick.
+        ScheduledTask task = scheduledTasks.get(taskId);
+        return task != null && !task.cancelled;
     }
 
     /**
@@ -290,7 +330,7 @@ public class Scheduler implements AutoCloseable {
             scheduledTasks.size() + " scheduled tasks");
 
         // Cancel all scheduled tasks
-        scheduledTasks.values().forEach((ScheduledFuture<?> task) -> task.cancel(false));
+        scheduledTasks.values().forEach(ScheduledTask::cancel);
         scheduledTasks.clear();
 
         // Shutdown the executor
@@ -312,27 +352,52 @@ public class Scheduler implements AutoCloseable {
     // ========== Private Helper Methods ==========
 
     /**
-     * Executes an action on an actor via ask().
+     * Hands an action to an actor via ask() and returns at once. The scheduler's real thread does
+     * not wait for the action: a failure is logged when its future completes, and the future is
+     * returned so the caller can tell whether this execution has finished. Following
+     * {@code TimeoutAndScheduler_251012_oo01}, no time limit is put on the action here.
      */
-    private <T> void executeOnActor(String taskId, ActorRef<T> actorRef, Consumer<T> action) {
+    private <T> CompletableFuture<?> executeOnActor(String taskId, ActorRef<T> actorRef, Consumer<T> action) {
+        CompletableFuture<Object> execution;
         try {
-            actorRef.ask((T actor) -> {
+            execution = actorRef.ask((T actor) -> {
                 action.accept(actor);
                 return null;
-            }).join();
-        } catch (Exception e) {
-            logger.log(Level.SEVERE,
-                String.format("Error executing scheduled task %s: %s", taskId, e.getMessage()), e);
+            });
+        } catch (RuntimeException e) {
+            execution = CompletableFuture.failedFuture(e);
+        }
+        execution.whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                logger.log(Level.SEVERE,
+                    String.format("Error executing scheduled task %s: %s", taskId, failure.getMessage()), failure);
+            }
+        });
+        return execution;
+    }
+
+    /** Schedules the next fixed-delay execution of {@code task}, unless it has been cancelled. */
+    private void scheduleNext(ScheduledTask task, Runnable run, long delay, TimeUnit unit) {
+        if (task.cancelled) {
+            return;
+        }
+        try {
+            task.tick = executor.schedule(run, delay, unit);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            return; // the scheduler is shutting down
+        }
+        if (task.cancelled) {
+            task.tick.cancel(false); // cancelled while the tick was being scheduled
         }
     }
 
     /**
      * Registers a task, replacing any existing task with the same ID.
      */
-    private void registerTask(String taskId, ScheduledFuture<?> task) {
-        ScheduledFuture<?> oldTask = scheduledTasks.put(taskId, task);
+    private void registerTask(String taskId, ScheduledTask task) {
+        ScheduledTask oldTask = scheduledTasks.put(taskId, task);
         if (oldTask != null) {
-            oldTask.cancel(false);
+            oldTask.cancel();
             logger.log(Level.INFO, "Replaced existing scheduled task: " + taskId);
         }
     }
