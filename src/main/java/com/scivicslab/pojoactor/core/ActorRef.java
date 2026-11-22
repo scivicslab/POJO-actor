@@ -41,6 +41,13 @@ import java.util.logging.Logger;
  * This class implements the actor model pattern, allowing asynchronous message passing
  * between actors using tell() and ask() methods.
  *
+ * <p>Whatever an action throws -- an {@code Exception} or an {@code Error} -- completes the
+ * future returned by {@code tell()} or {@code ask()} exceptionally, so that a caller joining it
+ * never waits forever. After an ordinary {@code Error} such as {@code StackOverflowError} the
+ * actor goes on with its next message. A {@link VirtualMachineError} other than
+ * {@code StackOverflowError} (for example {@code OutOfMemoryError}) is rethrown after the
+ * future is completed, and ends the actor's message loop.</p>
+ *
  * @param <T> the type of the actor's underlying object
  * @author devteam@scivicslab.com
  * @since 1.0.0
@@ -232,8 +239,8 @@ public class ActorRef<T> implements AutoCloseable {
             try {
                 action.accept(target);
                 future.complete(null);
-            } catch (Exception e) {
-                future.completeExceptionally(e);
+            } catch (Throwable t) {
+                completeExceptionally(future, t);
             }
         });
 
@@ -325,8 +332,8 @@ public class ActorRef<T> implements AutoCloseable {
             try {
                 R result = action.apply(target);
                 future.complete(result);
-            } catch (Exception e) {
-                future.completeExceptionally(e);
+            } catch (Throwable t) {
+                completeExceptionally(future, t);
             }
         });
 
@@ -370,7 +377,7 @@ public class ActorRef<T> implements AutoCloseable {
         if (ws instanceof ManagedThreadPool pool) {
             pool.submitForActor(actorName, () -> {
                 try { action.accept(target); future.complete(null); }
-                catch (Exception e) { future.completeExceptionally(e); }
+                catch (Throwable t) { completeExceptionally(future, t); }
             });
         } else {
             CompletableFuture<Void> task = CompletableFuture.runAsync(() -> action.accept(target), ws);
@@ -402,7 +409,7 @@ public class ActorRef<T> implements AutoCloseable {
         if (ws instanceof ManagedThreadPool pool) {
             pool.submitForActor(actorName, () -> {
                 try { future.complete(action.apply(target)); }
-                catch (Exception e) { future.completeExceptionally(e); }
+                catch (Throwable t) { completeExceptionally(future, t); }
             });
         } else {
             CompletableFuture<R> task = CompletableFuture.supplyAsync(() -> action.apply(target), ws);
@@ -724,12 +731,56 @@ public class ActorRef<T> implements AutoCloseable {
                     // Thread was interrupted, likely shutting down
                     Thread.currentThread().interrupt();
                     break;
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Exception occurred while processing message in actor: " + actorName, e);
+                } catch (Throwable t) {
+                    if (isFatal(t)) {
+                        // The JVM itself is failing; do not carry on as if nothing happened.
+                        logger.log(Level.SEVERE, t.getClass().getName() + " while processing message in actor: "
+                                + actorName + "; ending its message loop", t);
+                        throw (VirtualMachineError) t;
+                    }
+                    // An ordinary Error (for example StackOverflowError) must not kill the loop:
+                    // the next message still has to run.
+                    logger.log(Level.WARNING, "Throwable occurred while processing message in actor: " + actorName, t);
                 }
             }
         });
         return thread;
+    }
+
+    /**
+     * Completes {@code future} exceptionally with {@code t}, whatever kind of {@link Throwable}
+     * it is, so that a caller waiting on the future is never left waiting for a message whose
+     * action failed.
+     *
+     * <p>A fatal error (see {@link #isFatal}) is rethrown after the future is completed: the JVM
+     * is failing, and the thread that ran the action should not continue as if nothing happened.
+     * On this actor's own message loop that ends the loop. Any other {@code Error}, such as
+     * {@link StackOverflowError}, only completes the future.</p>
+     *
+     * @param future the future of the message whose action failed
+     * @param t      what the action threw
+     */
+    private static void completeExceptionally(CompletableFuture<?> future, Throwable t) {
+        future.completeExceptionally(t);
+        if (isFatal(t)) {
+            throw (VirtualMachineError) t;
+        }
+    }
+
+    /**
+     * Whether {@code t} means the JVM can no longer be trusted to run the next message: a
+     * {@link VirtualMachineError} such as {@link OutOfMemoryError} or {@link InternalError}.
+     *
+     * <p>{@link StackOverflowError} is also a {@code VirtualMachineError}, but it is not fatal:
+     * by the time it is caught here the deep stack that caused it has unwound, so the thread can
+     * go on. A long input that recursed too deeply, for example a regular expression run on a
+     * very long line, must fail one message, not stop the actor.</p>
+     *
+     * @param t what an action threw
+     * @return true when {@code t} is to be rethrown after its future is completed
+     */
+    private static boolean isFatal(Throwable t) {
+        return t instanceof VirtualMachineError && !(t instanceof StackOverflowError);
     }
 
     /**
