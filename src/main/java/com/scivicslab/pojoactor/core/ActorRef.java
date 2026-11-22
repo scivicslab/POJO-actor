@@ -303,8 +303,7 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.runAsync(() -> action.accept(target),
-                                        Executors.newVirtualThreadPerTaskExecutor());
+        return CompletableFuture.runAsync(() -> action.accept(target), nowExecutor());
     }
 
     /**
@@ -385,8 +384,11 @@ public class ActorRef<T> implements AutoCloseable {
             return closedFuture();
         }
         T target = this.object;
-        return CompletableFuture.supplyAsync(() -> action.apply(target),
-                                            Executors.newVirtualThreadPerTaskExecutor());
+        return CompletableFuture.supplyAsync(() -> action.apply(target), nowExecutor());
+    }
+
+    java.util.concurrent.Executor nowExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
 
