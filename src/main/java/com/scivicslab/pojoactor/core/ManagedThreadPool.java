@@ -107,7 +107,7 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
      * work where it is instead (as {@code ActorRef.ask(action, pool)} does).</p>
      *
      * @return true when {@code Thread.currentThread()} is a real thread of this pool
-     * @since 4.9.0
+     * @since 5.0.0
      */
     public boolean ownsCurrentThread() {
         return Thread.currentThread() instanceof PoolThread poolThread && poolThread.pool == this;

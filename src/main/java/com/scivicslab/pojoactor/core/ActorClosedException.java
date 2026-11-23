@@ -25,7 +25,7 @@ package com.scivicslab.pojoactor.core;
  * {@link ActorRef#clearPendingMessages()} or {@link WorkerPool#cancelJobsForActor(String)}, is
  * cancelled instead.</p>
  *
- * @since 4.9.0
+ * @since 5.0.0
  */
 public class ActorClosedException extends RuntimeException {
 

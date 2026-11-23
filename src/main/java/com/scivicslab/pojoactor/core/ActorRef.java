@@ -205,7 +205,7 @@ public class ActorRef<T> implements AutoCloseable {
      * pool real thread do.</p>
      *
      * @return true when {@code Thread.currentThread()} is this actor's mailbox virtual thread
-     * @since 4.9.0
+     * @since 5.0.0
      */
     public boolean ownsCurrentThread() {
         return Thread.currentThread() == actorThread;
