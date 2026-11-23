@@ -56,50 +56,64 @@ public class ActorRefIntegrationTest {
     }
 
     @Test
-    @DisplayName("tell(action, pool) routes through submitForActor() — jobs are tracked")
+    @DisplayName("tell(action, pool) routes through submitForActor() — the job in the actor's turn is tracked, one at a time")
     void tellWithPoolTracksJobs() throws Exception {
         Counter counter = new Counter();
         ActorRef<Counter> actor = system.actorOf("counter", counter);
+        ActorRef<Counter> blocker = system.actorOf("blocker", new Counter());
 
         CountDownLatch blocking = new CountDownLatch(1);
+        CountDownLatch blockerStarted = new CountDownLatch(1);
 
-        // Block the single thread so subsequent jobs queue up
-        actor.tell(c -> {
+        // Another actor's job blocks the pool's single real thread.
+        blocker.tell(c -> {
+            blockerStarted.countDown();
             try { blocking.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }, pool);
+        assertTrue(blockerStarted.await(3, TimeUnit.SECONDS));
 
-        // Queue more jobs while thread is blocked
+        // The first job is taken in the actor's turn and handed to the pool, where it waits for
+        // the real thread; the others wait in the actor's mailbox behind it.
         actor.tell(c -> c.increment(), pool);
         actor.tell(c -> c.increment(), pool);
         actor.tell(c -> c.increment(), pool);
 
-        Thread.sleep(100); // let jobs enter the queue
-
-        int pending = pool.getPendingJobCountForActor("counter");
-        assertTrue(pending > 0, "Jobs submitted via tell(pool) must be tracked in ManagedThreadPool");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (pool.getPendingJobCountForActor("counter") == 0 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(1, pool.getPendingJobCountForActor("counter"),
+                "the job in the actor's turn must be tracked in ManagedThreadPool, and only that one");
 
         blocking.countDown();
+        assertEquals(3, actor.ask(c -> c.get()).get(3, TimeUnit.SECONDS));
     }
 
     @Test
-    @DisplayName("ask(action, pool) routes through submitForActor() — jobs are tracked")
+    @DisplayName("ask(action, pool) routes through submitForActor() — the job in the actor's turn is tracked, one at a time")
     void askWithPoolTracksJobs() throws Exception {
         Counter counter = new Counter();
         ActorRef<Counter> actor = system.actorOf("counter", counter);
+        ActorRef<Counter> blocker = system.actorOf("blocker", new Counter());
 
         CountDownLatch blocking = new CountDownLatch(1);
+        CountDownLatch blockerStarted = new CountDownLatch(1);
 
-        actor.tell(c -> {
+        blocker.tell(c -> {
+            blockerStarted.countDown();
             try { blocking.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }, pool);
+        assertTrue(blockerStarted.await(3, TimeUnit.SECONDS));
 
         actor.ask(c -> c.get(), pool);
         actor.ask(c -> c.get(), pool);
 
-        Thread.sleep(100);
-
-        int pending = pool.getPendingJobCountForActor("counter");
-        assertTrue(pending > 0, "Jobs submitted via ask(pool) must be tracked in ManagedThreadPool");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (pool.getPendingJobCountForActor("counter") == 0 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(1, pool.getPendingJobCountForActor("counter"),
+                "the job in the actor's turn must be tracked in ManagedThreadPool, and only that one");
 
         blocking.countDown();
     }

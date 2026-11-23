@@ -138,12 +138,20 @@ class DiscardedMessagesTest {
         CompletableFuture<Void> queuedTell = actor.tell(sb -> sb.append("x"), pool);
         CompletableFuture<Integer> queuedAsk = actor.ask(StringBuilder::length, pool);
 
-        assertEquals(2, pool.cancelJobsForActor("pooled"));
+        // Only the message in the actor's turn has been handed to the pool; the ask waits in the
+        // actor's mailbox behind it, and is not the pool's to cancel.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (pool.getPendingJobCountForActor("pooled") == 0 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(1, pool.cancelJobsForActor("pooled"));
 
         assertCancelled(queuedTell);
-        assertCancelled(queuedAsk);
-        blocker.close();
+        // The actor goes on to its next message, which fails when the actor closes before it runs.
         actor.close();
+        assertInstanceOf(ActorClosedException.class, failureOf(queuedAsk));
+        release.countDown(); // close() waits for the blocker's running pool job
+        blocker.close();
     }
 
     @Test

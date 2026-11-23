@@ -130,28 +130,59 @@ public class ActorSystem {
     /**
      * Terminates the actor system by closing all actors and shutting down thread pools.
      * Waits up to 60 seconds for graceful termination.
+     *
+     * <p>Every actor is stopped first, so that no message of any of them starts afterwards; then
+     * the pools are shut down (their real threads are interrupted, and their jobs that never
+     * started fail with {@link ActorClosedException}); then terminate() waits for each actor, as
+     * {@link ActorRef#close()} does, and for the pools.</p>
+     *
+     * <p>Called from inside an action, it leaves the calling thread's interrupt flag as it was:
+     * an action on an actor's mailbox virtual thread is not interrupted by its own actor's close(),
+     * and an action on a pool's real thread is not left interrupted by that pool's shutdown, which
+     * terminate() then does not wait for (it would wait for itself).</p>
      */
     public void terminate() {
-        // Close a snapshot of the actors: close() takes each actor's registrations (aliases
-        // included) out of the map, so looking names up again while closing would find gaps.
-        new ArrayList<>(actors.values()).forEach(ActorRef::close);
+        // A snapshot of the actors: close() takes each actor's registrations (aliases included)
+        // out of the map, so looking names up again while closing would find gaps.
+        List<ActorRef<?>> all = new ArrayList<>(actors.values());
 
-        this.workerPools.stream()
-            .forEach((pool)->{
-                    // The tasks that never started will not run: fail their futures.
-                    ManagedThreadPool.failClosed(pool.shutdownNow());
-                    try {
-                        if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-                            logger.log(Level.WARNING, "Pool did not terminate");
-                        }
-                    } catch (InterruptedException e) {
-                        logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
-                    }
-                });
+        // Stop every actor before waiting for any: while terminate() waits for one actor's
+        // running message, another actor's queued message must not start.
+        all.forEach(ActorRef::stop);
+
+        // Called from an action running on one of a pool's own real threads, shutdownNow()
+        // interrupts that thread too, and awaitTermination() would wait for it to end, that is,
+        // for itself.
+        boolean wasInterrupted = Thread.currentThread().isInterrupted();
+        List<WorkerPool> toAwait = new ArrayList<>();
+        for (WorkerPool pool : workerPools) {
+            boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
+            // The tasks that never started will not run: fail their futures.
+            ManagedThreadPool.failClosed(pool.shutdownNow());
+            if (onThisPool) {
+                if (!wasInterrupted) {
+                    Thread.interrupted(); // clear the interrupt shutdownNow() gave this thread
+                }
+            } else {
+                toAwait.add(pool);
+            }
+        }
+
+        all.forEach(ActorRef::awaitStopped);
+
+        for (WorkerPool pool : toAwait) {
+            try {
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                    logger.log(Level.WARNING, "Pool did not terminate");
+                }
+            } catch (InterruptedException e) {
+                logger.log(Level.WARNING, "InterruptedException occurred while waiting for the pool to terminate.");
+            }
+        }
     }
 
 
-    
+
     // =======================================================================
     // High level APIs
     // =======================================================================
@@ -169,8 +200,35 @@ public class ActorSystem {
     public <T> ActorRef<T> actorOf(String actorName, T object) {
         if (actors.containsKey(actorName)) throw alreadyRegistered(actorName);
         ActorRef<T> actor = new ActorRef<T>(actorName, object, this);
-        register(actorName, actor);
+        if (registerOrClose(actorName, actor) != actor) {
+            // Another caller registered the name after the check above.
+            throw alreadyRegistered(actorName);
+        }
         return actor;
+    }
+
+    /**
+     * Registers an actor that was just made, if the name is free; otherwise closes it.
+     *
+     * <p>Making an actor starts its mailbox loop on a virtual thread, so an actor that loses the
+     * name to another caller must be closed, or that virtual thread stays parked forever and keeps
+     * the actor and its object reachable. This is the one place that does both: every method that
+     * makes an actor for a name and then registers it -- {@link #actorOf}, and a lookup that
+     * creates an actor when its name is free -- registers through here.</p>
+     *
+     * @param actorName the name to register under
+     * @param made the actor just made for that name, not yet registered and not referred to by anyone else
+     * @return {@code made} when it now holds the name; otherwise the actor that already held it,
+     *         with {@code made} closed
+     */
+    protected ActorRef<?> registerOrClose(String actorName, ActorRef<?> made) {
+        ActorRef<?> held = actors.putIfAbsent(actorName, made);
+        if (held != null && held != made) {
+            made.close();
+            return held;
+        }
+        linkToThisSystem(made);
+        return made;
     }
 
     /** Add the directly generated Actor to the ActorSystem.
@@ -210,12 +268,18 @@ public class ActorSystem {
     private <T> ActorRef<T> register(String actorName, ActorRef<T> actor) {
         ActorRef<?> held = actors.putIfAbsent(actorName, actor);
         if (held != null && held != actor) throw alreadyRegistered(actorName);
-        // An actor made with new ActorRef(name, object) has no system yet. Link it to this one,
-        // so that its close() can take its registrations out of this system.
+        linkToThisSystem(actor);
+        return actor;
+    }
+
+    /**
+     * An actor made with new ActorRef(name, object) has no system yet. Links it to this one, so
+     * that its close() can take its registrations out of this system.
+     */
+    private void linkToThisSystem(ActorRef<?> actor) {
         if (actor.actorSystem == null) {
             actor.actorSystem = this;
         }
-        return actor;
     }
 
     private static IllegalStateException alreadyRegistered(String actorName) {
