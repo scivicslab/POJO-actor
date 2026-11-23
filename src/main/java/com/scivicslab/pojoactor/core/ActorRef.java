@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -522,16 +523,6 @@ public class ActorRef<T> implements AutoCloseable {
                 return;
             }
         }
-    }
-
-    /**
-     * The executor that runs {@link #tellNow} and {@link #askNow} work: a new virtual thread per
-     * call. Package-private so that a test in this package can hold that work before it starts.
-     *
-     * @return the executor for work that bypasses the mailbox
-     */
-    java.util.concurrent.Executor nowExecutor() {
-        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
