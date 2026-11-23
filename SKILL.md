@@ -113,16 +113,17 @@ int cleared = ref.clearPendingMessages();
 
 The actor's message loop (virtual thread) is designed for lightweight work.
 Delegate CPU-bound processing to a managed thread pool.
+`tell(action, pool)` and `ask(action, pool)` take a `ManagedThreadPool` and nothing else: `commonPool` or any other executor does not compile.
 
 ```java
-ExecutorService pool = system.getManagedThreadPool();
+ManagedThreadPool pool = system.getManagedThreadPool();
 ref.tell(c -> c.heavyCompute(), pool);
 double result = ref.ask(c -> c.calculate(), pool).join();
 
 // Using multiple pools
 system.addManagedThreadPool(8);   // index 1
 system.addManagedThreadPool(2);   // index 2
-ExecutorService pool1 = system.getManagedThreadPool(1);
+ManagedThreadPool pool1 = system.getManagedThreadPool(1);
 ```
 
 ---
