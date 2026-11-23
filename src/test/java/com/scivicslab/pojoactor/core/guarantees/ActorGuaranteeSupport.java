@@ -35,6 +35,7 @@ import java.util.function.Function;
 
 import com.scivicslab.pojoactor.core.ActorRef;
 import com.scivicslab.pojoactor.core.ActorSystem;
+import com.scivicslab.pojoactor.core.ManagedThreadPool;
 
 /**
  * What the actor-guarantee tests share: the POJO under test, a fixture that makes an actor system
@@ -176,7 +177,7 @@ final class ActorGuaranteeSupport {
     static final class Fixture implements AutoCloseable {
         /** The pool has {@code availableProcessors()} real threads; -XX:ActiveProcessorCount changes that. */
         final ActorSystem system = new ActorSystem("actor-guarantees");
-        final ExecutorService pool = system.getManagedThreadPool();
+        final ManagedThreadPool pool = system.getManagedThreadPool();
         /** The real (platform) threads of {@link #pool}. */
         final Set<Thread> poolThreads = ConcurrentHashMap.newKeySet();
         final P p = new P();

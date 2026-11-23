@@ -104,7 +104,7 @@ class ActorRefErrorTest {
     @DisplayName("tell and ask on the managed pool: a StackOverflowError completes the future, and the pool runs the next task")
     void tellAndAskOnManagedPool_actionThrowsStackOverflowError_futureCompletesAndPoolContinues() throws Exception {
         ActorRef<StringBuilder> actor = system.actorOf("poolOverflow", new StringBuilder("data"));
-        ExecutorService pool = system.getManagedThreadPool();
+        ManagedThreadPool pool = system.getManagedThreadPool();
         StackOverflowError error = new StackOverflowError("test overflow");
 
         CompletableFuture<Void> told = actor.tell(sb -> { throw error; }, pool);

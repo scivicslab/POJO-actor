@@ -144,17 +144,4 @@ public class ActorRefIntegrationTest {
 
         assertEquals(0, counter.value.get(), "Cancelled jobs must not have executed");
     }
-
-    @Test
-    @DisplayName("tell(action, executor) works with any ExecutorService — job tracking is skipped")
-    void tellWithGenericExecutorServiceStillWorks() throws Exception {
-        Counter counter = new Counter();
-        ActorRef<Counter> actor = system.actorOf("counter", counter);
-
-        actor.tell(c -> c.increment(),
-                java.util.concurrent.ForkJoinPool.commonPool())
-             .get(2, TimeUnit.SECONDS);
-
-        assertEquals(1, counter.value.get());
-    }
 }

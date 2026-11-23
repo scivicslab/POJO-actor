@@ -20,7 +20,6 @@ package com.scivicslab.pojoactor.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -58,7 +57,7 @@ public class ActorSystem {
     protected ConcurrentHashMap<String, ActorRef<?>> actors = new ConcurrentHashMap<>();
 
 
-    protected List<WorkerPool> workerPools = new ArrayList<>();
+    protected List<ManagedThreadPool> workerPools = new ArrayList<>();
 
     
     /**
@@ -154,8 +153,8 @@ public class ActorSystem {
         // interrupts that thread too, and awaitTermination() would wait for it to end, that is,
         // for itself.
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
-        List<WorkerPool> toAwait = new ArrayList<>();
-        for (WorkerPool pool : workerPools) {
+        List<ManagedThreadPool> toAwait = new ArrayList<>();
+        for (ManagedThreadPool pool : workerPools) {
             boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
             // The tasks that never started will not run: fail their futures.
             ManagedThreadPool.failClosed(pool.shutdownNow());
@@ -170,7 +169,7 @@ public class ActorSystem {
 
         all.forEach(ActorRef::awaitStopped);
 
-        for (WorkerPool pool : toAwait) {
+        for (ManagedThreadPool pool : toAwait) {
             try {
                 if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
                     logger.log(Level.WARNING, "Pool did not terminate");
@@ -515,7 +514,7 @@ public class ActorSystem {
      * @return the default managed thread pool (index 0)
      * @since 2.12.0
      */
-    public ExecutorService getManagedThreadPool() {
+    public ManagedThreadPool getManagedThreadPool() {
         return this.workerPools.get(0);
     }
 
@@ -526,7 +525,7 @@ public class ActorSystem {
      * @return the managed thread pool at the specified index
      * @since 2.12.0
      */
-    public ExecutorService getManagedThreadPool(int n) {
+    public ManagedThreadPool getManagedThreadPool(int n) {
         return this.workerPools.get(n);
     }
 }

@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -68,36 +67,6 @@ class PoolJobsLeftByCloseTest {
         int call() {
             return calls.incrementAndGet();
         }
-    }
-
-    /**
-     * An executor that holds every task until {@link #release()}, then runs each on a new
-     * virtual thread. It stands for a pool whose real threads are all busy, without making one.
-     */
-    static final class HoldingExecutor extends AbstractExecutorService {
-        private final List<Runnable> held = new ArrayList<>();
-        private boolean released;
-
-        @Override
-        public synchronized void execute(Runnable task) {
-            if (released) {
-                Thread.ofVirtual().start(task);
-            } else {
-                held.add(task);
-            }
-        }
-
-        synchronized void release() {
-            released = true;
-            held.forEach(task -> Thread.ofVirtual().start(task));
-            held.clear();
-        }
-
-        @Override public void shutdown() { }
-        @Override public List<Runnable> shutdownNow() { return List.of(); }
-        @Override public boolean isShutdown() { return false; }
-        @Override public boolean isTerminated() { return false; }
-        @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
     }
 
     /** Waits for the future with a timeout and returns the cause it failed with. */
@@ -147,28 +116,6 @@ class PoolJobsLeftByCloseTest {
             assertInstanceOf(ActorClosedException.class, failureOf(future));
         }
         assertEquals(0, pool.getPendingJobCountForActor("worker"));
-    }
-
-    @Test
-    @DisplayName("work queued on another executor checks, before it runs, that the actor is open")
-    void heldExecutorJobsFailAfterClose() throws Exception {
-        HoldingExecutor ws = new HoldingExecutor();
-        Target target = new Target();
-        ActorRef<Target> actor = new ActorRef<>("worker", target);
-
-        List<CompletableFuture<?>> futures = new ArrayList<>();
-        for (int i = 0; i < N; i++) {
-            futures.add(actor.tell(Target::call, ws));
-            futures.add(actor.ask(Target::call, ws));
-        }
-
-        actor.close();
-        ws.release();
-
-        for (CompletableFuture<?> future : futures) {
-            assertInstanceOf(ActorClosedException.class, failureOf(future));
-        }
-        assertEquals(0, target.calls.get(), "no held job may call the closed actor");
     }
 
     @Test

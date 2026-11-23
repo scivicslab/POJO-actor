@@ -158,7 +158,7 @@ class DiscardedMessagesTest {
     @DisplayName("terminate(): a pool job still queued fails with ActorClosedException")
     void terminate_queuedPoolJob_failsWithActorClosedException() throws Exception {
         system = new ActorSystem("terminating", 1);
-        ExecutorService systemPool = system.getManagedThreadPool();
+        ManagedThreadPool systemPool = system.getManagedThreadPool();
         ActorRef<StringBuilder> blocker = system.actorOf("blocker", new StringBuilder());
         ActorRef<StringBuilder> actor = system.actorOf("pooledInSystem", new StringBuilder("data"));
         CountDownLatch started = new CountDownLatch(1);
