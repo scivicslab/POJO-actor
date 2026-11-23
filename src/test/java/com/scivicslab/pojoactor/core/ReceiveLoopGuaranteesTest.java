@@ -27,8 +27,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -49,9 +47,8 @@ import org.junit.jupiter.api.TestFactory;
  * Pins what an actor guarantees about the calls into its object, on every way of sending it work.
  *
  * <p>The actor's receive loop runs on the actor's own virtual thread and takes one message at a
- * time, in the order sent. A message given a {@link ManagedThreadPool} or another
- * {@link ExecutorService} is still taken in that turn: the receive loop hands the action to a
- * real thread of the pool (or a thread of the executor) and waits, on its virtual thread, until
+ * time, in the order sent. A message given a {@link ManagedThreadPool} is still taken in that turn: the receive loop
+ * hands the action to a real thread of the pool and waits, on its virtual thread, until
  * the action has finished. So at most one thread is inside the object at any time, and the
  * object sees the messages in the order they were sent, whichever path each took. Only
  * {@code tellNow} and {@code askNow} run outside the turn, and that is their contract.</p>
@@ -67,19 +64,16 @@ class ReceiveLoopGuaranteesTest {
 
     private ActorSystem system;
     private ManagedThreadPool pool;
-    private ExecutorService plainExecutor;
 
     @BeforeEach
     void setUp() {
         system = new ActorSystem("receive-loop", POOL_SIZE);
         pool = (ManagedThreadPool) system.getManagedThreadPool();
-        plainExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     @AfterEach
     void tearDown() {
         system.terminate();
-        plainExecutor.shutdownNow();
     }
 
     // ------------------------------------------------------------------------------------------
@@ -139,7 +133,7 @@ class ReceiveLoopGuaranteesTest {
     // ------------------------------------------------------------------------------------------
 
     /** Which thread a path's action is expected to run on. */
-    enum Runs { ON_MAILBOX_THREAD, ON_POOL_REAL_THREAD, ON_EXECUTOR_THREAD }
+    enum Runs { ON_MAILBOX_THREAD, ON_POOL_REAL_THREAD }
 
     /** A way of sending work to an actor, from one sender, in order. */
     interface Path {
@@ -195,10 +189,6 @@ class ReceiveLoopGuaranteesTest {
             each((t, actor) -> a -> actor.tell(p -> a.apply(p), t.pool)));
     static final Path ASK_POOL = path("ask(action, ManagedThreadPool)", Runs.ON_POOL_REAL_THREAD,
             each((t, actor) -> a -> actor.ask(a, t.pool)));
-    static final Path TELL_EXECUTOR = path("tell(action, ExecutorService)", Runs.ON_EXECUTOR_THREAD,
-            each((t, actor) -> a -> actor.tell(p -> a.apply(p), t.plainExecutor)));
-    static final Path ASK_EXECUTOR = path("ask(action, ExecutorService)", Runs.ON_EXECUTOR_THREAD,
-            each((t, actor) -> a -> actor.ask(a, t.plainExecutor)));
 
     /** The inline path: the sender is a raw task on one of the pool's own real threads. */
     static final Path INLINE_FROM_POOL_THREAD = path("ask(action, pool) from a pool real thread",
@@ -233,7 +223,7 @@ class ReceiveLoopGuaranteesTest {
 
     /** Every path above, taken in turn by one sender. */
     static final Path MIX = path("a mix of all paths", null, (t, actor, actions) -> {
-        Path[] rotation = { TELL, ASK_POOL, ASK, TELL_POOL, ASK_EXECUTOR, TELL_EXECUTOR };
+        Path[] rotation = { TELL, ASK_POOL, ASK, TELL_POOL };
         List<CompletableFuture<?>> futures = new ArrayList<>();
         for (int i = 0; i < actions.size(); i++) {
             futures.addAll(rotation[i % rotation.length].sendAll(t, actor, List.of(actions.get(i))));
@@ -241,10 +231,10 @@ class ReceiveLoopGuaranteesTest {
         return futures;
     });
 
-    static final List<Path> ALL = List.of(TELL, ASK, TELL_POOL, ASK_POOL, TELL_EXECUTOR, ASK_EXECUTOR,
+    static final List<Path> ALL = List.of(TELL, ASK, TELL_POOL, ASK_POOL,
             INLINE_FROM_POOL_THREAD, INLINE_WAITING_ON_POOL_THREAD, INLINE_FROM_OTHER_ACTOR, MIX);
 
-    static final List<Path> OFF_THE_MAILBOX_THREAD = List.of(TELL_POOL, ASK_POOL, TELL_EXECUTOR, ASK_EXECUTOR,
+    static final List<Path> OFF_THE_MAILBOX_THREAD = List.of(TELL_POOL, ASK_POOL,
             INLINE_FROM_POOL_THREAD, INLINE_FROM_OTHER_ACTOR);
 
     private static void awaitAll(List<CompletableFuture<?>> futures) throws Exception {
@@ -397,8 +387,6 @@ class ReceiveLoopGuaranteesTest {
                         assertFalse(th.isVirtual(), "a pool call ran on a virtual thread: " + th);
                         assertTrue(probe.onPoolThread.get(i), "a pool call ran on a real thread outside the pool: " + th);
                     }
-                    case ON_EXECUTOR_THREAD -> assertTrue(th != mailboxThread && !probe.onPoolThread.get(i),
-                            "an executor call ran on the mailbox or pool thread: " + th);
                 }
             }
         });
@@ -627,7 +615,7 @@ class ReceiveLoopGuaranteesTest {
     @Test
     @DisplayName("8 stress: many actors, many senders, every path mixed — exclusion and per-sender order hold")
     void stress() throws Exception {
-        Path[] paths = { TELL, ASK, TELL_POOL, ASK_POOL, TELL_EXECUTOR, ASK_EXECUTOR, INLINE_FROM_POOL_THREAD };
+        Path[] paths = { TELL, ASK, TELL_POOL, ASK_POOL, INLINE_FROM_POOL_THREAD };
         int actors = 12, senders = 3, perSender = 40;
         List<ActorRef<Probe>> refs = new ArrayList<>();
         List<CompletableFuture<List<CompletableFuture<?>>>> sent = new ArrayList<>();
