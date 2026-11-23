@@ -555,7 +555,7 @@ public class ActorRef<T> implements AutoCloseable {
      * @param ws the executor service whose thread runs the action
      * @return a CompletableFuture that completes when the action has run
      */
-    public CompletableFuture<Void> tell(Consumer<T> action, ExecutorService ws) {
+    public CompletableFuture<Void> tell(Consumer<T> action, ManagedThreadPool ws) {
         return inTurnOn(ws, target -> {
             action.accept(target);
             return null;
@@ -581,7 +581,7 @@ public class ActorRef<T> implements AutoCloseable {
      * @param ws the executor service whose thread runs the function
      * @return a CompletableFuture containing the response from the function
      */
-    public <R> CompletableFuture<R> ask(Function<T, R> action, ExecutorService ws) {
+    public <R> CompletableFuture<R> ask(Function<T, R> action, ManagedThreadPool ws) {
         return inTurnOn(ws, action, true);
     }
 
