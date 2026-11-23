@@ -107,8 +107,8 @@ public class ActorRef<T> implements AutoCloseable {
     /**
      * The actors whose turn the current thread holds: one of their messages, or the pool action
      * of one of their messages, is running on it. An actor's turn is held by its receive loop's
-     * virtual thread while it runs a message, and by the real thread of a {@code ManagedThreadPool}
-     * that runs the action of a message given that pool.
+     * virtual thread while it runs a message, and by the real (or executor) thread that runs the
+     * action of a message given a {@code ManagedThreadPool} or {@code ExecutorService}.
      */
     private static final ThreadLocal<ArrayDeque<ActorRef<?>>> TURNS = ThreadLocal.withInitial(ArrayDeque::new);
 
@@ -524,41 +524,47 @@ public class ActorRef<T> implements AutoCloseable {
         }
     }
 
+    /**
+     * The executor that runs {@link #tellNow} and {@link #askNow} work: a new virtual thread per
+     * call. Package-private so that a test in this package can hold that work before it starts.
+     *
+     * @return the executor for work that bypasses the mailbox
+     */
+    java.util.concurrent.Executor nowExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     /**
-     * Sends a message to this actor whose action runs on a real thread of {@code ws}, in the actor's turn.
+     * Called by tellNow/askNow work on its virtual thread, just before it calls the actor. Records
+     * the work as running, then checks that the actor is open; close() clears {@code running}
+     * before it reads the running work. So either the work sees the actor closed and does not
+     * call it, or close() sees the work and waits for it.
      *
-     * <p>The message is queued in the actor's mailbox like any other. When the actor's receive
-     * loop, on the actor's own virtual thread, reaches it, the loop hands the action to
-     * {@code ws}, to one of its real threads, and waits, on its virtual thread, until the action has finished; only then does it take the next message.
-     * So this message and every other message to this actor -- {@code tell}, {@code ask}, and
-     * {@code tell}/{@code ask} with a pool -- run one at a time, in the order they were
-     * sent: at most one thread is inside the object at any time. The CPU work runs on the
-     * pool's real thread, and the actor's virtual thread, which only waits, holds no real thread.
-     * Heavy work given here therefore delays the actor's later messages; to run something at the
-     * same time as the actor's messages, use {@link #tellNow} or {@link #askNow}.</p>
-     *
-     * <p>When the caller is one of the pool's own real threads ({@link ManagedThreadPool#ownsCurrentThread()}),
-     * the message is still queued and taken in turn, and the pool real thread that waits for it
-     * (through the returned future's {@code get} or {@code join}) runs the action itself when the
-     * receive loop hands it back. While it waits it also runs other queued tasks of its pool, so
-     * that a pool whose every real thread waits this way still makes progress.</p>
+     * <p>While a real thread of the pool waits in {@code get} or {@code join} of the returned
+     * future, it also runs queued tasks of its pool, under the rules of
+     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}: a real thread that holds no actor's
+     * turn runs any queued task, at most 32 nested; a real thread inside an actor's action runs only
+     * the tasks that its wait depends on, namely the queued tasks of the actor it waits for. Without
+     * this wait, a pool whose real threads all wait for answers of actors would make no progress.
+     * The tests {@code ManagedThreadPoolHelpingTest} and {@code ReceiveLoopGuaranteesTest} pin these
+     * rules.</p>
      *
      * <p>A {@code tell} to this actor from inside one of its own messages is queued after the
      * current message.</p>
      *
      * <p>Not guaranteed: two actors that ask each other from inside their own messages wait for
-     * each other for ever, as with plain {@link #ask(Function)}; and a pool real thread that waits
+     * each other for ever, as with plain {@link #ask(Function)}. A real thread of the pool that waits
      * on a stage derived from the returned future (for example through {@code thenApply} or
-     * {@code allOf}) waits without helping, so it can deadlock a pool whose real threads all wait
-     * that way. Wait on the returned future itself, or through
-     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}.</p>
+     * {@code allOf}) does not run queued tasks while it waits; wait on the returned future itself,
+     * or through {@link ManagedThreadPool#awaitHelping(CompletableFuture)}. That method, called by a
+     * real thread inside an actor's action for a future that is not the answer of an actor's message,
+     * runs no queued task.</p>
      *
      * @param action the action to execute on this actor's object
-     * @param ws the managed thread pool whose real thread runs the action
+     * @param ws the executor service whose thread runs the action
      * @return a CompletableFuture that completes when the action has run
      */
-    public CompletableFuture<Void> tell(Consumer<T> action, ManagedThreadPool ws) {
+    public CompletableFuture<Void> tell(Consumer<T> action, ExecutorService ws) {
         return inTurnOn(ws, target -> {
             action.accept(target);
             return null;
@@ -581,16 +587,44 @@ public class ActorRef<T> implements AutoCloseable {
      *
      * @param <R> the type of the response
      * @param action the function to execute on this actor's object
-     * @param ws the managed thread pool whose real thread runs the function
+     * @param ws the executor service whose thread runs the function
      * @return a CompletableFuture containing the response from the function
      */
-    public <R> CompletableFuture<R> ask(Function<T, R> action, ManagedThreadPool ws) {
+    public <R> CompletableFuture<R> ask(Function<T, R> action, ExecutorService ws) {
         return inTurnOn(ws, action, true);
     }
 
     /** Whether the current thread holds this actor's turn. */
     private boolean currentThreadHoldsTurn() {
         return TURNS.get().contains(this);
+    }
+
+    /**
+     * Whether the calling real thread or virtual thread holds the turn of any actor: one message of
+     * that actor, or the action of one message of it, runs on the stack of this thread now. Used by
+     * {@link ManagedThreadPool#awaitHelping(CompletableFuture)}: a thread that holds a turn runs
+     * only the tasks that its wait depends on.
+     *
+     * @return true when the calling real thread or virtual thread holds at least one actor's turn
+     */
+    static boolean currentThreadHoldsAnyTurn() {
+        return !TURNS.get().isEmpty();
+    }
+
+    /**
+     * Whether the calling real thread or virtual thread holds the turn of the actor named
+     * {@code actorName}; see {@link #currentThreadHoldsAnyTurn()}.
+     *
+     * @param actorName the name of the actor
+     * @return true when the calling real thread or virtual thread holds that actor's turn, at any depth of its stack
+     */
+    static boolean currentThreadHoldsTurnOf(String actorName) {
+        for (ActorRef<?> held : TURNS.get()) {
+            if (held.actorName.equals(actorName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void enterTurn() {
@@ -602,39 +636,42 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * The one path for an action given a pool: queued in the mailbox and run in the actor's
+     * The one path for an action given an executor: queued in the mailbox and run in the actor's
      * turn by {@link #runInTurnOn}, or, for an ask from inside the actor's own turn, nested.
      */
-    private <R> CompletableFuture<R> inTurnOn(ManagedThreadPool ws, Function<T, R> action, boolean waitsForAnswer) {
+    private <R> CompletableFuture<R> inTurnOn(ExecutorService ws, Function<T, R> action, boolean waitsForAnswer) {
         if (!running.get()) {
             return closedFuture();
         }
         T target = this.object;
+        ManagedThreadPool managed = ws instanceof ManagedThreadPool pool ? pool : null;
 
         if (waitsForAnswer && currentThreadHoldsTurn()) {
-            return nested(ws, action, target);
+            return nested(ws, managed, action, target);
         }
 
-        CompletableFuture<R> future = new PoolFuture<>(ws);
+        CompletableFuture<R> future;
         boolean handBack;
-        if (ws.ownsCurrentThread()) {
+        if (managed != null && managed.ownsCurrentThread()) {
             // The inline rule: the caller is one of the pool's own real threads. It does not run
             // the action here, which would skip the actor's turn; the message is queued like any
             // other, and the receive loop hands the action back to this caller when it waits.
+            future = new PoolFuture<>(managed, actorName);
             handBack = true;
         } else {
+            future = managed != null ? new PoolFuture<>(managed, actorName) : new CompletableFuture<>();
             handBack = false;
         }
-        messageQueue.offer(new Message(() -> runInTurnOn(ws, action, target, future, handBack), future));
+        messageQueue.offer(new Message(() -> runInTurnOn(ws, managed, action, target, future, handBack), future));
         failQueuedIfClosed();
         return future;
     }
 
     /**
      * Runs, on the receive loop's virtual thread and in the actor's turn, a message whose action
-     * goes to a pool: hands the action to {@code ws} and waits until it has finished.
+     * goes to an executor: hands the action to {@code ws} and waits until it has finished.
      */
-    private <R> void runInTurnOn(ManagedThreadPool ws, Function<T, R> action, T target,
+    private <R> void runInTurnOn(ExecutorService ws, ManagedThreadPool managed, Function<T, R> action, T target,
                                  CompletableFuture<R> future, boolean handBack) {
         if (!running.get()) {
             future.completeExceptionally(new ActorClosedException(actorName));
@@ -661,7 +698,11 @@ public class ActorRef<T> implements AutoCloseable {
             ((PoolFuture<R>) future).handBack(job);
         }
         try {
-            ws.submitForActor(actorName, job, future);
+            if (managed != null) {
+                managed.submitForActor(actorName, job, future);
+            } else {
+                ws.execute(job);
+            }
         } catch (RuntimeException refused) {
             if (job.abandon()) {
                 future.completeExceptionally(running.get() ? refused : new ActorClosedException(actorName));
@@ -671,7 +712,7 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * Waits, on the receive loop's virtual thread, for a job handed to a pool to end. The
+     * Waits, on the receive loop's virtual thread, for a job handed to an executor to end. The
      * interrupt from close() does not end the wait for a job that has started: it runs to the
      * end, and close() waits for this thread. A job that has not started is abandoned, and its
      * future fails with {@link ActorClosedException}.
@@ -692,10 +733,10 @@ public class ActorRef<T> implements AutoCloseable {
 
     /**
      * An ask from inside this actor's own turn, run at once: on the calling thread when it is one
-     * of the pool's real threads, otherwise on a real thread of {@code ws} while the calling thread
+     * of the pool's real threads, otherwise on a thread of {@code ws} while the calling thread
      * waits.
      */
-    private <R> CompletableFuture<R> nested(ManagedThreadPool ws, Function<T, R> action, T target) {
+    private <R> CompletableFuture<R> nested(ExecutorService ws, ManagedThreadPool managed, Function<T, R> action, T target) {
         CompletableFuture<R> future = new CompletableFuture<>();
         Runnable run = () -> {
             enterTurn();
@@ -707,12 +748,16 @@ public class ActorRef<T> implements AutoCloseable {
                 leaveTurn();
             }
         };
-        if (ws.ownsCurrentThread()) {
+        if (managed != null && managed.ownsCurrentThread()) {
             run.run();
             return future;
         }
         try {
-            ws.submitForActor(actorName, run, future);
+            if (managed != null) {
+                managed.submitForActor(actorName, run, future);
+            } else {
+                ws.execute(run);
+            }
         } catch (RuntimeException refused) {
             future.completeExceptionally(refused);
             return future;
@@ -734,8 +779,8 @@ public class ActorRef<T> implements AutoCloseable {
     }
 
     /**
-     * An action handed to a pool in the actor's turn. Run at most once: by a thread of the
-     * pool, by the waiting caller it was handed back to, or not at all when it is abandoned
+     * An action handed to an executor in the actor's turn. Run at most once: by a thread of the
+     * executor, by the waiting caller it was handed back to, or not at all when it is abandoned
      * first.
      */
     private static final class TurnJob implements Runnable {
@@ -777,10 +822,12 @@ public class ActorRef<T> implements AutoCloseable {
      */
     static final class PoolFuture<R> extends CompletableFuture<R> {
         private final ManagedThreadPool pool;
+        private final String actorName;
         private final AtomicReference<Runnable> handedBack = new AtomicReference<>();
 
-        PoolFuture(ManagedThreadPool pool) {
+        PoolFuture(ManagedThreadPool pool, String actorName) {
             this.pool = pool;
+            this.actorName = actorName;
         }
 
         /** Hands the action back to the pool real thread that sent it, for when it waits. */
@@ -792,7 +839,7 @@ public class ActorRef<T> implements AutoCloseable {
         @Override
         public R get() throws InterruptedException, ExecutionException {
             if (!isDone() && pool.ownsCurrentThread()) {
-                pool.awaitHelping(this, handedBack, true, false, 0L);
+                pool.awaitHelping(this, handedBack, actorName, true, false, 0L);
             }
             return super.get();
         }
@@ -801,7 +848,7 @@ public class ActorRef<T> implements AutoCloseable {
         public R get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             if (!isDone() && pool.ownsCurrentThread()) {
                 long deadline = System.nanoTime() + unit.toNanos(timeout);
-                if (!pool.awaitHelping(this, handedBack, true, true, deadline)) {
+                if (!pool.awaitHelping(this, handedBack, actorName, true, true, deadline)) {
                     throw new TimeoutException();
                 }
             }
@@ -812,7 +859,7 @@ public class ActorRef<T> implements AutoCloseable {
         public R join() {
             if (!isDone() && pool.ownsCurrentThread()) {
                 try {
-                    pool.awaitHelping(this, handedBack, false, false, 0L);
+                    pool.awaitHelping(this, handedBack, actorName, false, false, 0L);
                 } catch (InterruptedException e) {
                     throw new IllegalStateException("an uninterruptible wait was interrupted", e);
                 }
@@ -1086,11 +1133,11 @@ public class ActorRef<T> implements AutoCloseable {
      *
      * <p>Stops the receive loop. The message running when close() is called is waited for, up to
      * five seconds: a plain message on the actor's virtual thread is interrupted, and a message
-     * whose action runs on a pool real thread is not interrupted -- the
+     * whose action runs on a pool real thread (or an executor's thread) is not interrupted -- the
      * receive loop goes on waiting for that action, and close() for the receive loop. Every
-     * message still queued, those given a pool included, fails with
+     * message still queued, those given a pool or an executor included, fails with
      * {@link ActorClosedException}; so does such a message whose action had not yet started on
-     * its pool. A {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent
+     * its pool or executor. A {@code tell}, {@code ask}, {@code tellNow} or {@code askNow} sent
      * afterwards queues nothing and returns a future already failed with
      * {@code ActorClosedException}. Then the actor's registrations are removed from its system.</p>
      *

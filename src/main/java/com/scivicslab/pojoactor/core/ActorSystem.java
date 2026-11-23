@@ -153,8 +153,8 @@ public class ActorSystem {
         // interrupts that thread too, and awaitTermination() would wait for it to end, that is,
         // for itself.
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
-        List<ManagedThreadPool> toAwait = new ArrayList<>();
-        for (ManagedThreadPool pool : workerPools) {
+        List<WorkerPool> toAwait = new ArrayList<>();
+        for (WorkerPool pool : workerPools) {
             boolean onThisPool = pool instanceof ManagedThreadPool mtp && mtp.ownsCurrentThread();
             // The tasks that never started will not run: fail their futures.
             ManagedThreadPool.failClosed(pool.shutdownNow());
@@ -169,7 +169,7 @@ public class ActorSystem {
 
         all.forEach(ActorRef::awaitStopped);
 
-        for (ManagedThreadPool pool : toAwait) {
+        for (WorkerPool pool : toAwait) {
             try {
                 if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
                     logger.log(Level.WARNING, "Pool did not terminate");

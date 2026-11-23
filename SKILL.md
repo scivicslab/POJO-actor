@@ -86,6 +86,10 @@ Notes outside the table:
   It is not part of the order guarantee and no test fixes it.
 - With `tellNow` and `askNow` the thread safety of `P` is the caller's responsibility.
 
+### Waiting for an answer from a real thread of `pool`
+
+A real thread of `pool` that waits with `get` or `join` for the future of `ask(action, pool)` or `tell(action, pool)` does not only block: while it waits it runs queued tasks of `pool` (`ManagedThreadPool.awaitHelping`), so that a pool whose real threads all wait for answers of actors still makes progress. A real thread that holds no actor's turn runs queued tasks in queue order, at most 32 nested in its stack. A real thread inside an actor's action runs only the action the receive loop hands back to it and the queued tasks of the actor it waits for; if it waits for a future that is not an actor's answer, for example `CompletableFuture.allOf(...)`, it runs no task. It never runs a task of an actor whose turn it holds, and an `ask` to such an actor runs at once, nested. `pool.awaitHelping(future, Duration)` checks its time limit before every task, and the interrupt status belongs to the waiting caller. Wait on the returned future itself, or call `pool.awaitHelping(future)`. Design document: `HelpingWaitOfManagedThreadPool_261123_oo01`; test class: `ManagedThreadPoolHelpingTest`.
+
 ### Lifecycle
 
 ```java

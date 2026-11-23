@@ -15,6 +15,7 @@
  */
 package com.scivicslab.pojoactor.core;
 
+import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,6 +25,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -68,11 +70,32 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
     // Track which tasks belong to which actor
     private final ConcurrentHashMap<String, CopyOnWriteArrayList<Runnable>> actorTasks;
 
-    /** Signalled when a task is queued, or a future a helper waits on completes. */
+    /** Signalled when a task is queued, a task is handed back, or a future a waiting real thread waits on completes. */
     private final Object helpSignal = new Object();
+
+    /** Counts the signals, so that a waiting real thread does not miss one sent while it looked at the queue. */
+    private final AtomicLong helpSignals = new AtomicLong();
 
     /** How many of this pool's real threads are in {@link #awaitHelping}. */
     private final AtomicInteger helpersWaiting = new AtomicInteger();
+
+    /**
+     * The largest number of tasks of other callers that one real thread, holding no actor's turn,
+     * runs nested in its own stack while it waits (see {@link #awaitHelping(CompletableFuture)}). A
+     * real thread that has reached it runs only what a real thread that holds a turn runs.
+     *
+     * <p>The value is 32. With the limit removed and tasks that do nothing else, one real thread of
+     * a pool nested 984 tasks before its stack ended the nesting (one measurement, GraalVM CE 25, the
+     * default stack size of a real thread). A limit of 32 uses about 3 percent of that stack and leaves
+     * the rest to the code of the nested tasks.</p>
+     */
+    static final int MAX_HELPING_DEPTH = 32;
+
+    /** Per real thread: how many tasks, own or others', it runs nested in its stack while waiting. */
+    private static final ThreadLocal<int[]> HELPING_DEPTH = ThreadLocal.withInitial(() -> new int[1]);
+
+    /** The deepest nesting any real thread of this pool has reached; read by the tests. */
+    private final AtomicInteger deepestHelping = new AtomicInteger();
 
     /**
      * Creates a ManagedThreadPool with the specified parallelism level.
@@ -115,42 +138,106 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
 
     /**
      * Waits until {@code future} completes; when the caller is one of this pool's own real
-     * threads, runs queued tasks of this pool meanwhile.
+     * threads, it runs queued tasks of this pool while it waits.
      *
-     * <p>A real thread of this pool that simply blocked on a future would hold one of the pool's
-     * real threads while the work it waits for needs one. When every real thread of the pool
-     * waits that way, nothing is left to run that work and the pool deadlocks. Waiting here
-     * instead, the real thread takes the next queued task of its pool and runs it, again and
-     * again, until the future it waits for has completed. Futures returned by
-     * {@code ActorRef.ask(action, pool)} and {@code tell(action, pool)} wait this way in their
-     * own {@code get} and {@code join}; a caller waiting on any other future from a real thread of
-     * this pool -- for example on {@code CompletableFuture.allOf(...)} -- should wait through this
-     * method.</p>
+     * <p>A real thread of this pool that just blocks on a future holds one of the pool's real
+     * threads while the work it waits for needs one. When every real thread of the pool blocks that
+     * way, no real thread is left to run that work, and the pool stops. Waiting here instead, the
+     * real thread takes a queued task of its pool, runs it on its own stack, and looks again,
+     * until the future has completed. The futures returned by {@code ActorRef.ask(action, pool)} and
+     * {@code ActorRef.tell(action, pool)} wait this way in their own {@code get} and {@code join}.
+     * A real thread of this pool that waits on any other future, for example on
+     * {@code CompletableFuture.allOf(...)} or on a stage derived from such a future, does not wait
+     * this way by itself, and should call this method.</p>
      *
-     * <p>Called from a thread that is not one of this pool's real threads, it just waits.</p>
+     * <p>Rules, each pinned by {@code ManagedThreadPoolHelpingTest}:</p>
+     * <ul>
+     *   <li><b>Whose tasks.</b> A real thread that holds no actor's turn takes any queued task of its
+     *       pool, in queue order. A real thread that holds an actor's turn, that is, a thread inside the
+     *       action of a message of an actor, runs only the tasks that its wait depends on: the action
+     *       that {@code ActorRef} hands back to it, and, when the future is the answer of an actor's
+     *       message, the queued tasks of that actor, since the answer comes behind them. It leaves every
+     *       other task to other real threads. Running an unrelated task on top of a held turn keeps
+     *       that turn held until the unrelated task ends, and two real threads that each wait, on top
+     *       of a held turn, for an actor whose turn the other holds below, wait for each other for
+     *       ever. A wait on a future that is not the answer of an actor's message, made by a real
+     *       thread that holds a turn, therefore runs no task of the pool; wait on the answers of the
+     *       actors instead.</li>
+     *   <li><b>Per actor.</b> The real thread never takes a task of an actor whose turn it holds,
+     *       at any depth of its stack: that task would be a second call into that actor's object on the
+     *       same stack. Tasks are taken in queue order, so the tasks of one actor keep the order
+     *       they were queued in.</li>
+     *   <li><b>Depth.</b> A real thread that holds no turn runs at most 32
+     *       tasks of other callers nested in its stack. A task it runs can wait in the same way and run
+     *       another, and so on; at the limit the real thread runs only what a real thread that holds a
+     *       turn runs. The stack therefore does not grow with the number of queued tasks, and grows
+     *       beyond the limit only along a chain of actors that wait for each other. A pool whose real
+     *       threads all stand at the limit, each waiting for a queued task that is not one of those,
+     *       makes no progress, as a pool without this wait would not.</li>
+     *   <li><b>Own actor.</b> Asked from inside the actor's own turn, an {@code ask} runs nested at once
+     *       (see {@code ActorRef}) and never waits here for its own actor's mailbox.</li>
+     *   <li><b>Interrupt.</b> The interrupt status of the real thread belongs to the caller that waits.
+     *       The tasks it runs start with the status cleared. After a task, an interrupt that came
+     *       while the task ran, or that the task left set, ends this wait with an
+     *       {@link InterruptedException} (the status is cleared, as for any thrown
+     *       {@code InterruptedException}); in the waits that are not interruptible the interrupt is
+     *       remembered and set again when the wait returns.</li>
+     *   <li><b>Thread.</b> A task run here runs on the waiting real thread, which is a real thread of
+     *       this pool: {@link #ownsCurrentThread()} is true inside it.</li>
+     * </ul>
+     *
+     * <p>A task that has started runs to its end. When the future completes while the real thread
+     * is inside a task, this method returns after that task, so a long task delays the return.</p>
+     *
+     * <p>Called from a thread that is not a real thread of this pool, it just waits.</p>
      *
      * @param future the future to wait for
      * @throws InterruptedException if the calling thread is interrupted while it waits
      * @since 5.0.0
      */
     public void awaitHelping(CompletableFuture<?> future) throws InterruptedException {
-        awaitHelping(future, null, true, false, 0L);
+        awaitHelping(future, null, null, true, false, 0L);
+    }
+
+    /**
+     * Waits like {@link #awaitHelping(CompletableFuture)}, for at most {@code timeout}.
+     *
+     * <p>The time limit is checked between the tasks the real thread runs. A task that has started
+     * is not cut short, so the call can return after the limit by as long as the task runs.</p>
+     *
+     * @param future the future to wait for
+     * @param timeout how long to wait at most; zero or negative: do not wait
+     * @return true when the future has completed, false when the time ran out first
+     * @throws InterruptedException if the calling thread is interrupted while it waits
+     * @since 5.0.0
+     */
+    public boolean awaitHelping(CompletableFuture<?> future, Duration timeout) throws InterruptedException {
+        long deadline;
+        try {
+            deadline = System.nanoTime() + Math.max(0L, timeout.toNanos());
+        } catch (ArithmeticException tooLong) {
+            // longer than a long holds in nanoseconds (about 292 years): wait without a limit
+            awaitHelping(future, null, null, true, false, 0L);
+            return true;
+        }
+        return awaitHelping(future, null, null, true, true, deadline);
     }
 
     /**
      * Waits until {@code future} completes, helping when the caller is one of this pool's real
      * threads: first runs the task handed back in {@code handedBack}, if any, then queued tasks of
-     * this pool.
+     * this pool, under the rules of {@link #awaitHelping(CompletableFuture)}.
      *
      * @param future the future to wait for
      * @param handedBack a task handed to this waiter in particular, or null
-     * @param interruptible whether an interrupt ends the wait; when false, the interrupt flag is set again afterwards
+     * @param waitedActor the name of the actor whose message {@code future} answers, or null
+     * @param interruptible whether an interrupt ends the wait; when false, the interrupt is set again afterwards
      * @param timed whether {@code deadline} applies
      * @param deadline the {@link System#nanoTime()} at which to give up, when {@code timed}
      * @return true when the future has completed, false when the deadline passed first
      * @throws InterruptedException when {@code interruptible} and the caller is interrupted
      */
-    boolean awaitHelping(CompletableFuture<?> future, AtomicReference<Runnable> handedBack,
+    boolean awaitHelping(CompletableFuture<?> future, AtomicReference<Runnable> handedBack, String waitedActor,
                          boolean interruptible, boolean timed, long deadline) throws InterruptedException {
         if (!ownsCurrentThread()) {
             return awaitWithoutHelping(future, interruptible, timed, deadline);
@@ -160,17 +247,32 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
         boolean interrupted = false;
         try {
             while (!future.isDone()) {
-                Runnable task = handedBack == null ? null : handedBack.getAndSet(null);
-                if (task == null) {
-                    task = getQueue().poll();
+                // The interrupt status is the waiting caller's, whoever set it: a helped task that
+                // ran, a shutdownNow of this pool, or the caller's own thread.
+                if (Thread.interrupted()) {
+                    if (interruptible) {
+                        throw new InterruptedException();
+                    }
+                    interrupted = true;
                 }
-                if (task != null) {
-                    runHere(task);
+                if (timed && deadline - System.nanoTime() <= 0) {
+                    return false;     // checked before every task, so that a long queue does not outlast the time limit
+                }
+                long seen = helpSignals.get();
+                Runnable own = handedBack == null ? null : handedBack.getAndSet(null);
+                if (own != null) {
+                    runHere(own);
+                    continue;
+                }
+                boolean onlyWhatTheWaitDependsOn = HELPING_DEPTH.get()[0] >= MAX_HELPING_DEPTH
+                        || ActorRef.currentThreadHoldsAnyTurn();
+                Runnable other = takeHelpable(waitedActor, onlyWhatTheWaitDependsOn);
+                if (other != null) {
+                    runHere(other);
                     continue;
                 }
                 synchronized (helpSignal) {
-                    if (future.isDone() || !getQueue().isEmpty()
-                            || (handedBack != null && handedBack.get() != null)) {
+                    if (future.isDone() || helpSignals.get() != seen) {
                         continue;
                     }
                     try {
@@ -233,19 +335,66 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
         }
     }
 
-    /** Runs a task taken from the queue on the waiting real thread, as a worker of the pool would. */
-    private static void runHere(Runnable task) {
+    /**
+     * Takes, out of the queue, the first task that the calling real thread may run while it waits:
+     * not a task of an actor whose turn this real thread holds; and, when {@code onlyWhatTheWaitDependsOn},
+     * only a task of the actor {@code waitedActor}.
+     *
+     * @param waitedActor the actor whose message the awaited future answers, or null
+     * @param onlyWhatTheWaitDependsOn whether the calling real thread holds a turn or has reached the depth limit
+     * @return the task, or null when the queue holds none the calling thread may run
+     */
+    private Runnable takeHelpable(String waitedActor, boolean onlyWhatTheWaitDependsOn) {
+        BlockingQueue<Runnable> queue = getQueue();
+        for (Runnable queued : queue) {
+            if (queued instanceof ActorTask actorTask) {
+                if (ActorRef.currentThreadHoldsTurnOf(actorTask.actorName)) {
+                    continue;
+                }
+                if (onlyWhatTheWaitDependsOn && !actorTask.actorName.equals(waitedActor)) {
+                    continue;
+                }
+            } else if (onlyWhatTheWaitDependsOn) {
+                continue;
+            }
+            if (queue.remove(queued)) {
+                return queued;
+            }
+        }
+        return null;
+    }
+
+    /** Runs a task on the waiting real thread, counting the nesting, as a worker of the pool would run it. */
+    private void runHere(Runnable task) {
+        int[] depth = HELPING_DEPTH.get();
+        depth[0]++;
+        deepestHelping.accumulateAndGet(depth[0], Math::max);
         try {
             task.run();
+        } catch (StackOverflowError overflow) {
+            logger.log(Level.WARNING, "A task run by a waiting real thread overflowed the stack", overflow);
         } catch (VirtualMachineError fatal) {
             throw fatal;
         } catch (Throwable t) {
             logger.log(Level.WARNING, "A task run by a waiting real thread threw", t);
+        } finally {
+            depth[0]--;
         }
+    }
+
+    /**
+     * The deepest nesting that a real thread of this pool has reached while it waited: the number of
+     * tasks, its own handed-back action included, run one inside another on one stack. For the tests.
+     *
+     * @return the deepest nesting so far
+     */
+    int deepestHelpingDepth() {
+        return deepestHelping.get();
     }
 
     /** Wakes the real threads waiting in {@link #awaitHelping}: there may be work for them. */
     void wakeHelpers() {
+        helpSignals.incrementAndGet();
         if (helpersWaiting.get() > 0) {
             synchronized (helpSignal) {
                 helpSignal.notifyAll();
@@ -253,7 +402,7 @@ public class ManagedThreadPool extends ThreadPoolExecutor implements WorkerPool 
         }
     }
 
-    /** Queues a task as {@link ThreadPoolExecutor#execute} does, and wakes waiting helpers. */
+    /** Queues a task as {@link ThreadPoolExecutor#execute} does, and wakes waiting real threads. */
     @Override
     public void execute(Runnable command) {
         super.execute(command);
