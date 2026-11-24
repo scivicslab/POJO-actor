@@ -1,10 +1,18 @@
 # Changelog
 
-## 5.0.0 (draft)
+## 5.0.0
 
 Changes since `v4.8.0` (`74f0894`). In 5.0.0 no message is left with a future that never completes: every message an actor or pool accepts gets a completed future. That future completes normally, completes exceptionally, or is cancelled. The specifications are `ActorRef_260509_oo01`, `ManagedThreadPool_260508_oo01`, `ClearPendingMessages_260509_oo01` and `Scheduler_260508_oo01`.
 
-There is one new public class (`ActorClosedException`) and one new public method (`ManagedThreadPool.ownsCurrentThread()`). Four deprecated `ActorSystem` methods are removed (`7f04220`, below); apart from those, no public class or method was removed or renamed, and no signature changed. Code compiled against 4.8.0 that does not call the four still compiles. What changed is the behaviour below, and code that waited on futures or relied on the old behaviour has to be checked.
+Changes to the public API:
+
+- New class `ActorClosedException`.
+- New methods `ManagedThreadPool.ownsCurrentThread()`, `ManagedThreadPool.awaitHelping(CompletableFuture)`, `ManagedThreadPool.awaitHelping(CompletableFuture, Duration)` and `ActorRef.ownsCurrentThread()`.
+- `ActorRef.tell(Consumer, …)` and `ActorRef.ask(Function, …)` take a `ManagedThreadPool` where they took an `ExecutorService`, and `ActorSystem.getManagedThreadPool()` and `getManagedThreadPool(int)` return `ManagedThreadPool` (`9e20b10`, below).
+- `ForkJoinPoolWrapper` is removed (`9e20b10`).
+- Four deprecated `ActorSystem` methods are removed (`7f04220`, below).
+
+Code compiled against 4.8.0 that passes the actor system's own pool to `tell`/`ask`, and calls none of the removed methods, still compiles. The rest is behaviour, below; code that waited on futures or relied on the old behaviour has to be checked.
 
 ### An `Error` thrown by an action completes its future; only a fatal error is rethrown
 
@@ -97,23 +105,28 @@ Now:
 
 **What 4.8 code must change:** code that called `close()` and then looked the actor up under an alias, relying on the stale entry, now gets `null` from `getActor(alias)` and `false` from `hasActor(alias)`. Code that expected `close()` on one actor to free a name another actor also held must call `removeActor(name)` for that other actor.
 
-### Work given to a `ManagedThreadPool` from one of its own real threads runs inline
+### `tell(action, pool)` and `ask(action, pool)` take a `ManagedThreadPool`; `ForkJoinPoolWrapper` is removed
 
-Commit `ff3f569`. New public method `ManagedThreadPool.ownsCurrentThread()`.
+Commit `9e20b10`.
 
-Up to 4.8.0, `ask(action, pool)` and `tell(action, pool)` always queued the action on the pool. A task running on a real thread of that pool that called them and waited on the future queued the action behind itself. Once every real thread of the pool waited that way (with a 1-thread pool, at the first call), nothing was left to run the actions, and the pool deadlocked.
+Up to 4.8.0 these overloads took any `ExecutorService`, so an action could be handed to `ForkJoinPool.commonPool()` or to a pool of real threads made anywhere. Real threads outside the system's one `ManagedThreadPool` are outside POJO-actor's control: nobody knows how many there are or whose work they run. Now the parameter type is `ManagedThreadPool`, and `ActorSystem.getManagedThreadPool()` returns that type.
+
+**What 4.8 code must change:** a call that passes `system.getManagedThreadPool()` compiles unchanged. A call that passes another executor no longer compiles; pass the system's `ManagedThreadPool`, or use `tell(action)` / `ask(action)`, which run on the actor's receive loop. A variable declared `ExecutorService pool = system.getManagedThreadPool()` still compiles but cannot be passed to `tell`/`ask`; declare it `ManagedThreadPool`.
+
+### Work given to a `ManagedThreadPool` runs in the actor's turn; a real thread of the pool that waits runs queued pool tasks
+
+Commits `472ec6b`, `5bd464c`, `dedafb9`. New public methods `ManagedThreadPool.ownsCurrentThread()`, `ManagedThreadPool.awaitHelping(CompletableFuture)` and `awaitHelping(CompletableFuture, Duration)`, `ActorRef.ownsCurrentThread()`.
+
+Up to 4.8.0, `tell(action, pool)` and `ask(action, pool)` handed the action straight to the pool. It ran on a real thread while the actor's receive loop could be running another message of the same actor, so two threads could be inside the actor's object at once. And a task on a real thread of the pool that waited for such a future queued the action behind itself; once every real thread of the pool waited that way (with a 1-thread pool, at the first call), the pool deadlocked.
 
 Now:
 
-- `ManagedThreadPool` makes its real threads through its own thread factory.
-- `ownsCurrentThread()` returns `true` only when the caller is on one of this pool's real threads.
-- When it returns `true`, `ask(action, pool)` and `tell(action, pool)` run the action on the caller's real thread and return a future that is already complete. An action that throws completes that future exceptionally under the rules above.
-- Called from anywhere else (a virtual thread, another pool's real thread), they queue the action on the pool as before.
-- These paths never go through the actor's virtual-thread message loop, so the order of the actor's queued messages does not change.
+- The message is queued like any other and taken in the actor's turn: the receive loop hands the action to a real thread of the pool and waits, on its virtual thread, until the action has ended. At most one thread is inside the object at any time, and the object sees the messages in the order they were sent, whichever path each took. Only `tellNow` and `askNow` run outside the turn.
+- A real thread of the pool that waits in `get` or `join` of such a future runs queued tasks of its pool meanwhile (`awaitHelping`). A real thread that holds no actor's turn runs any queued task, nested at most 32 deep; a real thread inside an actor's action runs only the tasks its wait depends on, the queued tasks of the actor it waits for. `awaitHelping(future, Duration)` adds a time limit. The interrupt status belongs to the waiting caller.
+- When the caller is itself one of the pool's real threads, the receive loop hands the action back to that caller when it waits, so no real thread waits for work queued behind itself.
+- `ManagedThreadPool` makes its real threads through its own thread factory, named `managed-pool-<pool number>-thread-<number>`; `ownsCurrentThread()` is `true` only on them.
 
-The real threads of a `ManagedThreadPool` are now named `managed-pool-<pool number>-thread-<number>`.
-
-**What 4.8 code must change:** nothing for callers. Code that assumed `ask(action, pool)` always returns before the action runs must not assume it when the caller is on the pool's own real thread. An action called that way runs on the calling real thread, under the caller's locks.
+**What 4.8 code must change:** an action given to the pool no longer runs at the same time as another message of the same actor; code that relied on that has to change. A real thread of the pool must wait on the returned future itself (or through `awaitHelping`), not on a stage derived from it with `thenApply` or `allOf`: a derived stage does not run queued tasks while it waits.
 
 ### `Scheduler` does not wait on its real thread; late fixed-rate ticks are skipped; fixed delay counts from the end of an execution
 
